@@ -334,6 +334,30 @@ app.post('/api/patients', async (req, res) => {
             return res.status(400).json({ error: "Name and DNI are required" });
         }
 
+        // --- AUTO-GENERATE HISTORY NUMBER ---
+        if (!data.historyNumber) {
+            const supabase = getSupabase();
+            // Get the highest existing history number
+            const { data: existingPatients, error: countError } = await supabase
+                .from('Patient')
+                .select('historyNumber')
+                .not('historyNumber', 'is', null)
+                .order('historyNumber', { ascending: false })
+                .limit(1);
+
+            let nextNumber = 1;
+            if (!countError && existingPatients && existingPatients.length > 0) {
+                // Parse the number from HCL-0001 format
+                const lastNumber = existingPatients[0].historyNumber;
+                const match = lastNumber?.match(/HCL-(\d+)/);
+                if (match) {
+                    nextNumber = parseInt(match[1], 10) + 1;
+                }
+            }
+            data.historyNumber = `HCL-${String(nextNumber).padStart(4, '0')}`;
+            console.log(`📋 Generated history number: ${data.historyNumber}`);
+        }
+
         // Explicitly insert the modified object 'data' NOT req.body
         const { data: created, error } = await getSupabase().from('Patient').insert(data).select().single();
 
@@ -1060,30 +1084,46 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
             const { data: doctor } = await supabase.from('Doctor').select('commissionPercentage').eq('id', doctorId).single();
             const commissionRate = doctor?.commissionPercentage || 0;
 
-            // Get treatment details to calculate labCost
+            // Get patient name for display
+            const { data: patientData } = await supabase.from('Patient').select('name').eq('id', patientId).single();
+            const patientName = patientData?.name || 'Paciente';
+
+            // Get treatment details to calculate labCost and get treatment names
             let totalLabCost = 0;
+            let treatmentNames = [];
             if (treatmentIds && treatmentIds.length > 0) {
-                // Try to get treatments from PatientTreatment
+                // Get treatments from PatientTreatment with their service details
                 const { data: treatmentData } = await supabase
                     .from('PatientTreatment')
-                    .select('serviceId, price')
+                    .select('id, serviceId, price, tooth')
                     .in('id', treatmentIds);
 
                 if (treatmentData && treatmentData.length > 0) {
-                    // Get lab costs from Treatment table if serviceId exists
+                    // Get service names and lab costs from Treatment table
                     const serviceIds = treatmentData.map(t => t.serviceId).filter(id => id);
                     if (serviceIds.length > 0) {
                         const { data: services } = await supabase
                             .from('Treatment')
-                            .select('id, labCost')
+                            .select('id, name, labCost')
                             .in('id', serviceIds);
 
                         if (services) {
                             totalLabCost = services.reduce((sum, s) => sum + (s.labCost || 0), 0);
+                            treatmentNames = services.map(s => s.name);
                         }
+                    }
+
+                    // If no service names found, try to use tooth info
+                    if (treatmentNames.length === 0) {
+                        treatmentNames = treatmentData.map(t => `Tratamiento Diente ${t.tooth || 'N/A'}`);
                     }
                 }
             }
+
+            // Build treatment name string for display
+            const treatmentNameStr = treatmentNames.length > 0
+                ? treatmentNames.join(', ')
+                : 'Pago de tratamiento';
 
             // Create a shadow appointment for the liquidation (required by schema)
             const appointmentId = crypto.randomUUID();
@@ -1102,6 +1142,7 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
                 const finalAmount = netAmount > 0 ? netAmount * commissionRate : 0;
 
                 console.log(`💰 Liquidation: Gross=${amount}, LabCost=${totalLabCost}, Net=${netAmount}, Rate=${commissionRate}, Final=${finalAmount}`);
+                console.log(`📋 Treatment: ${treatmentNameStr}, Patient: ${patientName}`);
 
                 await supabase.from('Liquidation').insert([{
                     id: crypto.randomUUID(),
@@ -1111,6 +1152,9 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
                     labCost: totalLabCost,
                     commissionRate,
                     finalAmount,
+                    treatmentName: treatmentNameStr,
+                    patientName: patientName,
+                    paymentMethod: 'wallet',
                     status: 'PENDING',
                     createdAt: new Date().toISOString()
                 }]);

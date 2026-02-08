@@ -72,6 +72,37 @@ export const AppointmentDetails: React.FC = () => {
         }
     };
 
+    // Helper to get status styles
+    const getStatusStyle = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'completed':
+            case 'realizada':
+                return { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200', label: 'Realizada' };
+            case 'canceled':
+            case 'cancelled':
+            case 'anulada':
+                return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', label: 'Anulada' };
+            case 'noshow':
+            case 'no vino':
+                return { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', label: 'No Vino' };
+            default:
+                return { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', label: 'Pendiente' };
+        }
+    };
+
+    // Handle status update
+    const updateAppointmentStatus = async (newStatus: string) => {
+        if (!appointment) return;
+        try {
+            await api.appointments.update(appointment.id, { status: newStatus });
+            setAppointment({ ...appointment, status: newStatus });
+            alert(`✅ Estado actualizado a: ${newStatus}`);
+        } catch (error) {
+            console.error('Error updating status:', error);
+            alert('Error al actualizar el estado');
+        }
+    };
+
     if (!appointment || !patient) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -134,6 +165,83 @@ export const AppointmentDetails: React.FC = () => {
                                     <p className="text-sm font-black text-green-600 mt-1">{patient.wallet || 0}€</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Status & Actions Card */}
+                <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-lg font-black text-slate-900">Estado de la Cita</h3>
+                            {(() => {
+                                const style = getStatusStyle(appointment.status);
+                                return (
+                                    <span className={`px-4 py-2 rounded-xl text-sm font-black uppercase ${style.bg} ${style.text} border ${style.border}`}>
+                                        {style.label}
+                                    </span>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Action buttons - only show if not already completed/cancelled */}
+                        {!['completed', 'realizada', 'canceled', 'cancelled', 'anulada', 'noshow', 'no vino'].includes(appointment.status?.toLowerCase() || '') && (
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => updateAppointmentStatus('Completed')}
+                                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase shadow-lg transition-all flex items-center gap-2"
+                                >
+                                    ✓ Realizada
+                                </button>
+                                <button
+                                    onClick={() => updateAppointmentStatus('Canceled')}
+                                    className="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase shadow-lg transition-all flex items-center gap-2"
+                                >
+                                    ✕ Anulada
+                                </button>
+                                <button
+                                    onClick={() => updateAppointmentStatus('NoShow')}
+                                    className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase shadow-lg transition-all flex items-center gap-2"
+                                >
+                                    ⚠ No Vino
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Show reset button if appointment was already marked */}
+                        {['completed', 'realizada', 'canceled', 'cancelled', 'anulada', 'noshow', 'no vino'].includes(appointment.status?.toLowerCase() || '') && (
+                            <button
+                                onClick={() => updateAppointmentStatus('Scheduled')}
+                                className="bg-slate-500 hover:bg-slate-600 text-white px-6 py-3 rounded-xl text-xs font-black uppercase shadow-lg transition-all"
+                            >
+                                ↺ Restablecer Pendiente
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Appointment Details */}
+                    <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-400">Fecha</p>
+                            <p className="text-sm font-bold text-slate-900 mt-1">
+                                {new Date(appointment.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-400">Hora</p>
+                            <p className="text-sm font-bold text-slate-900 mt-1">{appointment.time}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-400">Tratamiento</p>
+                            <p className="text-sm font-bold text-slate-900 mt-1">
+                                {typeof appointment.treatment === 'object' && appointment.treatment !== null
+                                    ? (appointment.treatment as any).name || '-'
+                                    : appointment.treatment || '-'}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-400">N° Historia</p>
+                            <p className="text-sm font-bold text-blue-600 mt-1">{patient.historyNumber || '-'}</p>
                         </div>
                     </div>
                 </div>

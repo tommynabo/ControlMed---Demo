@@ -441,7 +441,7 @@ const Patients: React.FC = () => {
                                         </h4>
                                         <div className="flex items-center gap-2 mt-1">
                                             <span className={`text-[10px] font-bold uppercase tracking-wider ${selectedPatient?.id === patient.id ? 'text-slate-400' : 'text-slate-400'} `}>
-                                                ID: {patient.id.slice(0, 6)}...
+                                                {patient.historyNumber || `ID: ${patient.id.slice(0, 6)}...`}
                                             </span>
                                             {patient.insurance === 'Privado' && <span className="w-2 h-2 rounded-full bg-amber-400"></span>}
                                             {(patient.insurance === 'Sanitas' || patient.insurance === 'Adeslas') && <span className="w-2 h-2 rounded-full bg-blue-400"></span>}
@@ -546,6 +546,16 @@ const Patients: React.FC = () => {
                                 )}
 
                                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm grid grid-cols-2 gap-8">
+                                    {/* History Number Badge */}
+                                    {selectedPatient.historyNumber && (
+                                        <div className="col-span-2 flex items-center gap-3 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl border border-blue-100">
+                                            <div className="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black text-sm">#</div>
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase text-blue-400">Número de Historia</p>
+                                                <p className="text-lg font-black text-blue-900">{selectedPatient.historyNumber}</p>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="col-span-2">
                                         <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Nombre</label>
                                         <input disabled={!isEditingPatient} value={selectedPatient.name} onChange={(e) => setSelectedPatient({ ...selectedPatient, name: e.target.value })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" />

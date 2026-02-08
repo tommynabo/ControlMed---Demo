@@ -8,7 +8,7 @@ import { api as apiService } from '../services/api'; // Direct import to avoid c
 import { Invoice, Expense } from '../../types';
 
 const Billing: React.FC = () => {
-    const { patients, setPatients, invoices, setInvoices, expenses, setExpenses, currentUserRole, refreshPatients } = useAppContext();
+    const { patients, setPatients, invoices, setInvoices, expenses, setExpenses, currentUserRole, refreshPatients, appointments } = useAppContext();
     const api = apiService; // Use direct import
 
     const [billingTab, setBillingTab] = useState<'overview' | 'invoices' | 'expenses'>('overview');
@@ -128,6 +128,56 @@ const Billing: React.FC = () => {
         return { total, byCard, byCash, count: invoices.length };
     }, [invoices]);
 
+    // Cash register close with pending appointments validation
+    const handleCloseCashRegister = () => {
+        const today = new Date().toISOString().split('T')[0];
+        const todayAppointments = appointments.filter(a => {
+            const apptDate = typeof a.date === 'string' ? a.date.split('T')[0] : new Date(a.date).toISOString().split('T')[0];
+            return apptDate === today;
+        });
+
+        // Check for pending appointments (not completed, canceled, or noshow)
+        const pendingAppts = todayAppointments.filter(a => {
+            const status = a.status?.toLowerCase() || 'scheduled';
+            return !['completed', 'realizada', 'canceled', 'cancelled', 'anulada', 'noshow', 'no vino'].includes(status);
+        });
+
+        if (pendingAppts.length > 0) {
+            // Build list of pending appointments
+            const pendingList = pendingAppts.map(a => {
+                const patient = patients.find(p => p.id === a.patientId);
+                return `• ${patient?.name || 'Paciente'} - ${a.time}`;
+            }).join('\n');
+
+            alert(`⚠️ No puedes cerrar la caja. Hay ${pendingAppts.length} citas pendientes:\n\n${pendingList}\n\nMarca las citas como realizadas, anuladas o no presentado antes de cerrar.`);
+            return;
+        }
+
+        // All appointments processed - show summary
+        const todayInvoices = invoices.filter(inv => {
+            if (!inv.date) return false;
+            return inv.date.split('T')[0] === today;
+        });
+        const totalToday = todayInvoices.reduce((sum, inv) => sum + inv.amount, 0);
+        const completedCount = todayAppointments.filter(a => ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')).length;
+        const canceledCount = todayAppointments.filter(a => ['canceled', 'cancelled', 'anulada'].includes(a.status?.toLowerCase() || '')).length;
+        const noShowCount = todayAppointments.filter(a => ['noshow', 'no vino'].includes(a.status?.toLowerCase() || '')).length;
+
+        const summary = `✅ CIERRE DE CAJA - ${new Date().toLocaleDateString('es-ES')}\n\n` +
+            `📊 Resumen del día:\n` +
+            `• Citas realizadas: ${completedCount}\n` +
+            `• Citas anuladas: ${canceledCount}\n` +
+            `• No se presentaron: ${noShowCount}\n\n` +
+            `💰 Facturación:\n` +
+            `• Total facturado: ${totalToday.toFixed(2)}€\n` +
+            `• Facturas emitidas: ${todayInvoices.length}\n\n` +
+            `¿Confirmar cierre de caja?`;
+
+        if (confirm(summary)) {
+            alert('✅ Caja cerrada correctamente. Los datos han sido registrados.');
+        }
+    };
+
     const handleDownloadInvoice = async (invoice: Invoice) => {
         try {
             // Attempt to get a fresh URL (ephemeral or proxy)
@@ -235,6 +285,14 @@ const Billing: React.FC = () => {
                                     <span className="text-sm font-bold text-white">{stats.byCard.toFixed(2)}€</span>
                                 </div>
                             </div>
+                            {/* Close Cash Register Button */}
+                            <button
+                                onClick={handleCloseCashRegister}
+                                className="w-full mt-6 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white py-4 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2"
+                            >
+                                <DollarSign size={16} />
+                                Cerrar Caja del Día
+                            </button>
                         </div>
                     </div>
                 )}

@@ -1,5 +1,6 @@
 export interface Patient {
     id: string;
+    historyNumber?: string; // Auto-generated: HCL-0001, etc.
     name: string;
     dni: string;
     email: string;

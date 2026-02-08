@@ -30,6 +30,7 @@ model User {
 // --- CORE ---
 model Patient {
   id             String           @id @default(uuid())
+  historyNumber  String?          @unique // Auto-generated: HCL-0001, HCL-0002, etc.
   name           String
   dni            String           @unique
   birthDate      DateTime
@@ -139,6 +140,11 @@ model Liquidation {
   labCost         Float       // Lab Cost deducted
   commissionRate  Float       // Applied %
   finalAmount     Float       // (Gross - Lab) * Rate
+  
+  // Additional context for display in payroll
+  treatmentName   String?     // Name of treatment(s) for display
+  patientName     String?     // Patient name for display
+  paymentMethod   String?     // How it was paid (wallet, cash, card, etc)
   
   status          String      @default("PENDING") // PENDING, PAID
   doctorInvoiceUrl String?    // URL of PDF invoice sent by doctor

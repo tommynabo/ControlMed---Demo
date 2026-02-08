@@ -10,6 +10,7 @@ export enum Specialization {
 
 export interface Patient {
   id: string;
+  historyNumber?: string; // Auto-generated: HCL-0001, etc.
   name: string;
   dni: string;
   birthDate: string;

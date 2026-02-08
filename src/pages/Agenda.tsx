@@ -82,6 +82,24 @@ const Agenda: React.FC = () => {
         return true;
     }
 
+    // Helper to get appointment color classes based on status
+    const getAppointmentColors = (status: string) => {
+        switch (status?.toLowerCase()) {
+            case 'completed':
+            case 'realizada':
+                return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+            case 'canceled':
+            case 'cancelled':
+            case 'anulada':
+                return 'bg-red-100 text-red-700 border-red-200';
+            case 'noshow':
+            case 'no vino':
+                return 'bg-amber-100 text-amber-700 border-amber-200';
+            default: // Scheduled, Pendiente
+                return 'bg-blue-100 text-blue-700 border-blue-200';
+        }
+    };
+
     // Handle Click on Existing Appointment
     const handleAppointmentClick = (e: React.MouseEvent, appt: Appointment) => {
         e.stopPropagation();
@@ -272,7 +290,7 @@ const Agenda: React.FC = () => {
                                                         <div
                                                             key={a.id}
                                                             onClick={(e) => handleAppointmentClick(e, a)}
-                                                            className="absolute inset-2 bg-blue-100 text-blue-700 p-2 rounded-xl text-[10px] font-bold border border-blue-200 overflow-hidden leading-tight hover:scale-[1.02] transition-transform cursor-pointer shadow-sm hover:shadow-md"
+                                                            className={`absolute inset-2 ${getAppointmentColors(a.status)} p-2 rounded-xl text-[10px] font-bold border overflow-hidden leading-tight hover:scale-[1.02] transition-transform cursor-pointer shadow-sm hover:shadow-md`}
                                                         >
                                                             {patients.find(p => p.id === a.patientId)?.name || 'Paciente'}
                                                         </div>
@@ -293,7 +311,7 @@ const Agenda: React.FC = () => {
                                                     <div
                                                         key={a.id}
                                                         onClick={(e) => handleAppointmentClick(e, a)}
-                                                        className="absolute inset-2 bg-blue-100 text-blue-700 p-2 rounded-xl text-xs font-bold border border-blue-200 flex flex-col justify-center hover:scale-[1.02] transition-transform cursor-pointer shadow-sm hover:shadow-md"
+                                                        className={`absolute inset-2 ${getAppointmentColors(a.status)} p-2 rounded-xl text-xs font-bold border flex flex-col justify-center hover:scale-[1.02] transition-transform cursor-pointer shadow-sm hover:shadow-md`}
                                                     >
                                                         <span>{patients.find(p => p.id === a.patientId)?.name || 'Paciente'}</span>
                                                         <span className="text-[10px] opacity-70">
@@ -339,7 +357,7 @@ const Agenda: React.FC = () => {
                                                     <div
                                                         key={a.id}
                                                         onClick={(e) => handleAppointmentClick(e, a)}
-                                                        className="absolute inset-1 bg-blue-100 text-blue-700 p-1 rounded-lg text-[9px] font-bold border border-blue-200 overflow-hidden leading-tight hover:scale-105 transition-transform shadow-sm"
+                                                        className={`absolute inset-1 ${getAppointmentColors(a.status)} p-1 rounded-lg text-[9px] font-bold border overflow-hidden leading-tight hover:scale-105 transition-transform shadow-sm`}
                                                     >
                                                         {patients.find(p => p.id === a.patientId)?.name?.split(' ')[0] || 'Pct'}
                                                     </div>
@@ -360,15 +378,36 @@ const Agenda: React.FC = () => {
                     <div className="bg-white max-w-lg w-full rounded-[2rem] p-8 shadow-2xl space-y-6">
                         <div className="flex justify-between items-center">
                             <h3 className="text-2xl font-black text-slate-900">{selectedAppt ? 'Detalles Cita' : 'Nueva Cita'}</h3>
-                            {selectedAppt && (
-                                <button
-                                    onClick={() => navigate(`/appointment/${selectedAppt.id}`)}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
-                                >
-                                    <ExternalLink size={16} />
-                                    <span>Ver Cita (Box)</span>
-                                </button>
-                            )}
+                            {selectedAppt && (() => {
+                                const patient = patients.find(p => p.id === selectedAppt.patientId);
+                                return (
+                                    <div className="flex gap-2">
+                                        {/* IR A FICHA button */}
+                                        <button
+                                            onClick={() => {
+                                                setIsAppointmentModalOpen(false);
+                                                navigate(`/patients`);
+                                                // Also set selected patient in context if possible
+                                                // For now, just navigate to patients page
+                                            }}
+                                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
+                                        >
+                                            <User size={16} />
+                                            <span>Ir a Ficha</span>
+                                        </button>
+                                        {/* VER CITA button */}
+                                        <button
+                                            onClick={() => navigate(`/appointment/${selectedAppt.id}`, {
+                                                state: { appointment: selectedAppt, patient }
+                                            })}
+                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
+                                        >
+                                            <ExternalLink size={16} />
+                                            <span>Ver Cita</span>
+                                        </button>
+                                    </div>
+                                );
+                            })()}
                         </div>
 
                         <p className="text-sm text-slate-500">
