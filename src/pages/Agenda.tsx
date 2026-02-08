@@ -286,7 +286,7 @@ const Agenda: React.FC = () => {
                                                         setIsAppointmentModalOpen(true);
                                                     }}
                                                 >
-                                                    {appointments.filter(a => a.time === time && a.date === currentDate.toISOString().split('T')[0] && a.doctorId === doc.id).map(a => (
+                                                    {appointments.filter(a => a.time === time && (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) && a.doctorId === doc.id).map(a => (
                                                         <div
                                                             key={a.id}
                                                             onClick={(e) => handleAppointmentClick(e, a)}
@@ -307,7 +307,7 @@ const Agenda: React.FC = () => {
                                                 }}
                                             >
                                                 {/* Show existing appointments */}
-                                                {appointments.filter(a => a.time === time && a.date === currentDate.toISOString().split('T')[0] && (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)).map(a => (
+                                                {appointments.filter(a => a.time === time && (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) && (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)).map(a => (
                                                     <div
                                                         key={a.id}
                                                         onClick={(e) => handleAppointmentClick(e, a)}
@@ -322,7 +322,7 @@ const Agenda: React.FC = () => {
                                                     </div>
                                                 ))}
                                                 {/* Empty State Plus */}
-                                                {appointments.filter(a => a.time === time && a.date === currentDate.toISOString().split('T')[0] && (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)).length === 0 && (
+                                                {appointments.filter(a => a.time === time && (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) && (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)).length === 0 && (
                                                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-2 text-blue-500 font-bold text-xs uppercase tracking-wide">
                                                         <Plus size={16} />
                                                     </div>
@@ -342,7 +342,7 @@ const Agenda: React.FC = () => {
                                         d.setDate(diff);
                                         const dateStr = d.toISOString().split('T')[0];
 
-                                        const cellAppts = appointments.filter(a => a.time === time && a.date === dateStr && (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId));
+                                        const cellAppts = appointments.filter(a => a.time === time && (a.date === dateStr || a.date.startsWith(dateStr)) && (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId));
 
                                         return (
                                             <div key={i} className="col-span-1 h-24 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 hover:bg-white hover:border-solid hover:border-blue-400 transition-all cursor-pointer relative"
