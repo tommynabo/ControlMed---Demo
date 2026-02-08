@@ -390,7 +390,7 @@ const Agenda: React.FC = () => {
                                                     const patient = patients.find(p => p.id === selectedAppt.patientId);
                                                     if (patient) setSelectedPatient(patient);
                                                 }
-                                                navigate(`/patients`);
+                                                navigate(`/pacientes`);
                                             }}
                                             className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
                                         >

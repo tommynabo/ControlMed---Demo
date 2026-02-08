@@ -227,6 +227,18 @@ export const api = {
                 throw new Error(errData.error || 'Failed to create appointment');
             }
             return res.json();
+        },
+        update: async (id: string, updates: Partial<Appointment>): Promise<Appointment> => {
+            const res = await fetch(`${API_URL}/appointments/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(updates)
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to update appointment');
+            }
+            return res.json();
         }
     },
 
