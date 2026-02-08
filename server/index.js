@@ -1123,7 +1123,7 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
             let treatmentNames = [];
             if (treatmentIds && treatmentIds.length > 0) {
                 // Get treatments from PatientTreatment with their service details
-                const { data: treatmentData } = await supabase
+                const { data: treatmentData, error: tError } = await supabase
                     .from('PatientTreatment')
                     .select('id, serviceId, price, toothId, serviceName') // Fetch serviceName column
                     .in('id', treatmentIds);
@@ -1161,10 +1161,19 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
                 }
             }
 
-            // Build treatment name string for display
-            const treatmentNameStr = treatmentNames.length > 0
-                ? treatmentNames.join(', ')
-                : 'Pago de tratamiento';
+            // Build treatment name string for display with grouping (e.g., "Treatment x2")
+            let treatmentNameStr = 'Pago de tratamiento';
+
+            if (treatmentNames.length > 0) {
+                const counts = {};
+                treatmentNames.forEach(name => {
+                    counts[name] = (counts[name] || 0) + 1;
+                });
+
+                treatmentNameStr = Object.entries(counts)
+                    .map(([name, count]) => count > 1 ? `${name} x${count}` : name)
+                    .join(', ');
+            }
 
             // Create a shadow appointment for the liquidation (required by schema)
             const appointmentId = crypto.randomUUID();
@@ -1438,6 +1447,27 @@ app.post('/api/patients/:patientId/treatments/batch', async (req, res) => {
         res.json(data);
     } catch (e) {
         console.error("❌ Batch treatments error:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- DEBUG ENDPOINT ---
+app.get('/api/debug-latest-data', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const ids = ["dc2d03e8-209d-4309-b772-68f009082b28", "659d9108-28d4-4c60-8389-7aa2c300c0f1"];
+
+        const { data: treatments, error } = await supabase
+            .from('PatientTreatment')
+            .select('*')
+            .in('id', ids);
+
+        if (error) throw error;
+
+        res.json({ treatments });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
