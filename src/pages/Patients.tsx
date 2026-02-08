@@ -1560,7 +1560,7 @@ const Patients: React.FC = () => {
                             <Odontogram
                                 patientId={selectedPatient.id}
                                 isEditable={true}
-                                onTreatmentsChange={(treatments) => console.log('Treatments updated:', treatments)}
+                                onTreatmentsChange={setTreatments}
                             />
                         </div>
                     </div>

@@ -1416,6 +1416,24 @@ app.post('/api/patients/:patientId/treatments/batch', async (req, res) => {
             return res.status(500).json({ error: `DB Error: ${error.message} - ${error.details || ''}` });
         }
 
+        // Add to Clinical Audit/History
+        try {
+            const summary = data.map(t => t.serviceName + (t.toothId ? ` (Diente ${t.toothId})` : '')).join(', ');
+            await supabase.from('ClinicalRecord').insert([{
+                id: crypto.randomUUID(),
+                patientId: req.params.patientId,
+                date: new Date().toISOString(),
+                treatment: 'Planificación de Tratamientos',
+                observation: `Se han añadido ${data.length} tratamientos: ${summary}`,
+                specialization: 'Odontología',
+                price: data.reduce((sum, t) => sum + (t.price || 0), 0),
+                authorId: 'system' // Or user ID if available
+            }]);
+        } catch (auditError) {
+            console.error("⚠️ Error saving clinical history:", auditError);
+            // Don't fail the request
+        }
+
         console.log(`✅ Created ${data.length} treatments`);
         res.json(data);
     } catch (e) {
