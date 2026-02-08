@@ -12,7 +12,7 @@ const TIME_SLOTS = ["09:00", "10:00", "11:00", "12:00", "13:00", "16:00", "17:00
 
 const Agenda: React.FC = () => {
     const {
-        appointments, addAppointment, patients, currentUser, currentUserRole, api
+        appointments, addAppointment, patients, currentUser, currentUserRole, api, setSelectedPatient
     } = useAppContext();
     const navigate = useNavigate();
 
@@ -386,9 +386,11 @@ const Agenda: React.FC = () => {
                                         <button
                                             onClick={() => {
                                                 setIsAppointmentModalOpen(false);
+                                                if (selectedAppt) {
+                                                    const patient = patients.find(p => p.id === selectedAppt.patientId);
+                                                    if (patient) setSelectedPatient(patient);
+                                                }
                                                 navigate(`/patients`);
-                                                // Also set selected patient in context if possible
-                                                // For now, just navigate to patients page
                                             }}
                                             className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
                                         >

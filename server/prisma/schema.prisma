@@ -112,6 +112,20 @@ model PatientTreatment {
   @@index([serviceId])
 }
 
+// Services Catalog (for Settings > Services and Odontogram)
+model Service {
+  id              String    @id @default(uuid())
+  name            String
+  specialty_name  String?   // Mapped to specialty_name column
+  specialty_color String?   @default("#888888")
+  final_price     Float?    @default(0) // Mapped to final_price column, Float for JS compatibility
+  is_active       Boolean?  @default(true)
+  created_at      DateTime? @default(now())
+  updated_at      DateTime? @default(now()) @updatedAt
+
+  @@map("services") // Map to 'services' table to match legacy/supa-direct code
+}
+
 
 model Appointment {
   id          String    @id @default(uuid())

@@ -11,7 +11,7 @@ const Billing: React.FC = () => {
     const { patients, setPatients, invoices, setInvoices, expenses, setExpenses, currentUserRole, refreshPatients, appointments } = useAppContext();
     const api = apiService; // Use direct import
 
-    const [billingTab, setBillingTab] = useState<'overview' | 'invoices' | 'expenses'>('overview');
+    const [billingTab, setBillingTab] = useState<'invoices' | 'expenses'>('invoices');
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
     const [exportDate, setExportDate] = useState('');
 
@@ -114,70 +114,6 @@ const Billing: React.FC = () => {
         }
     };
 
-    // Mock Data for Revenue History (Should be dynamic or from context)
-    const REVENUE_HISTORY = [
-        { day: 'Lun', amount: 1240 }, { day: 'Mar', amount: 1890 }, { day: 'Mie', amount: 1450 },
-        { day: 'Jue', amount: 2420 }, { day: 'Vie', amount: 2110 }, { day: 'Sab', amount: 790 }, { day: 'Dom', amount: 0 }
-    ];
-
-    // Computed Stats
-    const stats = React.useMemo(() => {
-        const total = invoices.reduce((acc, curr) => acc + curr.amount, 0);
-        const byCard = invoices.filter(i => i.paymentMethod === 'card').reduce((acc, curr) => acc + curr.amount, 0);
-        const byCash = invoices.filter(i => i.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
-        return { total, byCard, byCash, count: invoices.length };
-    }, [invoices]);
-
-    // Cash register close with pending appointments validation
-    const handleCloseCashRegister = () => {
-        const today = new Date().toISOString().split('T')[0];
-        const todayAppointments = appointments.filter(a => {
-            const apptDate = typeof a.date === 'string' ? a.date.split('T')[0] : new Date(a.date).toISOString().split('T')[0];
-            return apptDate === today;
-        });
-
-        // Check for pending appointments (not completed, canceled, or noshow)
-        const pendingAppts = todayAppointments.filter(a => {
-            const status = a.status?.toLowerCase() || 'scheduled';
-            return !['completed', 'realizada', 'canceled', 'cancelled', 'anulada', 'noshow', 'no vino'].includes(status);
-        });
-
-        if (pendingAppts.length > 0) {
-            // Build list of pending appointments
-            const pendingList = pendingAppts.map(a => {
-                const patient = patients.find(p => p.id === a.patientId);
-                return `• ${patient?.name || 'Paciente'} - ${a.time}`;
-            }).join('\n');
-
-            alert(`⚠️ No puedes cerrar la caja. Hay ${pendingAppts.length} citas pendientes:\n\n${pendingList}\n\nMarca las citas como realizadas, anuladas o no presentado antes de cerrar.`);
-            return;
-        }
-
-        // All appointments processed - show summary
-        const todayInvoices = invoices.filter(inv => {
-            if (!inv.date) return false;
-            return inv.date.split('T')[0] === today;
-        });
-        const totalToday = todayInvoices.reduce((sum, inv) => sum + inv.amount, 0);
-        const completedCount = todayAppointments.filter(a => ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')).length;
-        const canceledCount = todayAppointments.filter(a => ['canceled', 'cancelled', 'anulada'].includes(a.status?.toLowerCase() || '')).length;
-        const noShowCount = todayAppointments.filter(a => ['noshow', 'no vino'].includes(a.status?.toLowerCase() || '')).length;
-
-        const summary = `✅ CIERRE DE CAJA - ${new Date().toLocaleDateString('es-ES')}\n\n` +
-            `📊 Resumen del día:\n` +
-            `• Citas realizadas: ${completedCount}\n` +
-            `• Citas anuladas: ${canceledCount}\n` +
-            `• No se presentaron: ${noShowCount}\n\n` +
-            `💰 Facturación:\n` +
-            `• Total facturado: ${totalToday.toFixed(2)}€\n` +
-            `• Facturas emitidas: ${todayInvoices.length}\n\n` +
-            `¿Confirmar cierre de caja?`;
-
-        if (confirm(summary)) {
-            alert('✅ Caja cerrada correctamente. Los datos han sido registrados.');
-        }
-    };
-
     const handleDownloadInvoice = async (invoice: Invoice) => {
         try {
             // Attempt to get a fresh URL (ephemeral or proxy)
@@ -239,63 +175,18 @@ const Billing: React.FC = () => {
                 </div>
 
                 <div className="flex gap-8 border-b border-slate-100 mb-8">
-                    {(['overview', 'invoices', 'expenses'] as const).map(tab => (
+                    {(['invoices', 'expenses'] as const).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setBillingTab(tab)}
                             className={`pb-4 text-[10px] font-black uppercase tracking-widest transition-colors ${billingTab === tab ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-300'}`}
                         >
-                            {tab === 'overview' ? 'Vista General' : tab === 'invoices' ? 'Facturación' : 'Gastos'}
+                            {tab === 'invoices' ? 'Facturación' : 'Gastos'}
                         </button>
                     ))}
                 </div>
 
-                {billingTab === 'overview' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <div className="col-span-2 bg-white p-10 rounded-2xl border border-slate-200 shadow-sm relative">
-                            <div className="flex justify-between items-center mb-10">
-                                <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900 flex items-center gap-3"><BarChart3 className="text-blue-500" /> Ingresos Semanales</h4>
-                            </div>
-                            <div className="flex items-end justify-between gap-4 min-h-[160px]">
-                                {REVENUE_HISTORY.map(data => (
-                                    <div key={data.day} className="flex-1 flex flex-col items-center gap-3 group relative cursor-pointer">
-                                        <div className="w-full bg-slate-100 rounded-xl relative overflow-hidden flex flex-col justify-end" style={{ height: '140px' }}>
-                                            <div className="bg-blue-600 rounded-t-xl group-hover:bg-blue-700 transition-all duration-500" style={{ height: `${(data.amount / 2400) * 100}%` }}></div>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">{data.day}</span>
-                                        <div className="absolute -top-12 opacity-0 group-hover:opacity-100 bg-slate-900 text-white text-[10px] font-bold px-4 py-2 rounded-xl transition-all shadow-xl pointer-events-none">
-                                            {data.amount.toFixed(2)}€
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="bg-slate-900 p-10 rounded-2xl text-white shadow-2xl flex flex-col justify-between">
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Recaudación Real Hoy</p>
-                                <p className="text-4xl font-bold text-blue-400">{stats.total.toFixed(2)}€</p>
-                            </div>
-                            <div className="space-y-4 pt-10 border-t border-white/10">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500"></div><span className="text-xs font-bold text-slate-400">Efectivo</span></div>
-                                    <span className="text-sm font-bold text-white">{stats.byCash.toFixed(2)}€</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500"></div><span className="text-xs font-bold text-slate-400">Tarjeta</span></div>
-                                    <span className="text-sm font-bold text-white">{stats.byCard.toFixed(2)}€</span>
-                                </div>
-                            </div>
-                            {/* Close Cash Register Button */}
-                            <button
-                                onClick={handleCloseCashRegister}
-                                className="w-full mt-6 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white py-4 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2"
-                            >
-                                <DollarSign size={16} />
-                                Cerrar Caja del Día
-                            </button>
-                        </div>
-                    </div>
-                )}
+
 
                 {billingTab === 'invoices' && (
                     <div className="space-y-8 animate-in fade-in duration-700">

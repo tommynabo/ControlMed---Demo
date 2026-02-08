@@ -62,10 +62,12 @@ async function getPayroll(prisma, doctorId, monthStr) {
         finalAmount: r.finalAmount,
         status: r.status,
         date: r.createdAt || r.appointment?.date,
-        treatmentName: r.appointment?.treatment?.name ||
+        treatmentName: r.treatmentName ||
+            r.appointment?.treatment?.name ||
             r.appointment?.notes ||
             'Pago con Saldo',
-        patientName: r.appointment?.patient?.name || 'Paciente'
+        patientName: r.patientName || r.appointment?.patient?.name || 'Paciente',
+        paymentMethod: r.paymentMethod // Pass payment method for badge
     }));
 
     const total = formattedRecords.reduce((sum, r) => sum + r.finalAmount, 0);

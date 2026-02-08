@@ -9,6 +9,7 @@ import Billing from './src/pages/Billing';
 import Stock from './src/pages/Stock';
 import AI from './src/pages/AI';
 import Payroll from './src/pages/Payroll';
+import CashRegister from './src/pages/CashRegister';
 import Settings from './src/pages/Settings';
 import Login from './src/pages/Login';
 
@@ -26,6 +27,7 @@ const App: React.FC = () => {
             <Route path="agenda" element={<Agenda />} />
             <Route path="appointment/:appointmentId" element={<AppointmentDetails />} />
             <Route path="pacientes" element={<Patients />} />
+            <Route path="caja" element={<CashRegister />} />
             <Route path="billing" element={<Billing />} />
             <Route path="stock" element={<Stock />} />
             <Route path="ai" element={<AI />} />
