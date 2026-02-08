@@ -1131,22 +1131,33 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
                 if (treatmentData && treatmentData.length > 0) {
                     // Get service names and lab costs from Treatment table
                     const serviceIds = treatmentData.map(t => t.serviceId).filter(id => id);
+                    let services = [];
+
                     if (serviceIds.length > 0) {
-                        const { data: services } = await supabase
+                        const { data: cols } = await supabase
                             .from('Treatment')
                             .select('id, name, labCost')
                             .in('id', serviceIds);
-
-                        if (services) {
-                            totalLabCost = services.reduce((sum, s) => sum + (s.labCost || 0), 0);
-                            treatmentNames = services.map(s => s.name);
-                        }
+                        services = cols || [];
                     }
 
-                    // If no service names found, try to use tooth info
-                    if (treatmentNames.length === 0) {
-                        treatmentNames = treatmentData.map(t => t.name || `Tratamiento Diente ${t.tooth || 'N/A'}`);
+                    // Calculate total lab cost
+                    if (services.length > 0) {
+                        // We need to map lab cost per treatment usage
+                        // If multiple treatments use same service, we add lab cost for each
+                        treatmentData.forEach(t => {
+                            const svc = services.find(s => s.id === t.serviceId);
+                            if (svc) {
+                                totalLabCost += (svc.labCost || 0);
+                            }
+                        });
                     }
+
+                    // Resolve names for EACH treatment
+                    treatmentNames = treatmentData.map(t => {
+                        const svc = services.find(s => s.id === t.serviceId);
+                        return svc ? svc.name : (t.name || `Tratamiento Diente ${t.tooth || 'N/A'}`);
+                    });
                 }
             }
 
