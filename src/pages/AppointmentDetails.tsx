@@ -10,7 +10,7 @@ export const AppointmentDetails: React.FC = () => {
     const { appointmentId } = useParams<{ appointmentId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
-    const { patients, api } = useAppContext();
+    const { patients, api, refreshAppointments } = useAppContext();
 
     const [appointment, setAppointment] = useState<Appointment | null>(null);
     const [patient, setPatient] = useState<Patient | null>(null);
@@ -96,6 +96,7 @@ export const AppointmentDetails: React.FC = () => {
         try {
             await api.appointments.update(appointment.id, { status: newStatus });
             setAppointment({ ...appointment, status: newStatus });
+            await refreshAppointments();
             alert(`✅ Estado actualizado a: ${newStatus}`);
         } catch (error) {
             console.error('Error updating status:', error);

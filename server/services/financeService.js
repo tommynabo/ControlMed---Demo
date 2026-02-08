@@ -27,7 +27,9 @@ async function calculateLiquidation(prisma, appointment) {
             labCost,
             commissionRate,
             finalAmount,
-            status: 'PENDING'
+
+            status: 'PENDING',
+            treatmentName: treatment.name // Save treatment name explicitly
         }
     });
 }

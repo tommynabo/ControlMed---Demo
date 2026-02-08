@@ -27,6 +27,7 @@ interface AppContextProps {
 
     // Actions
     refreshPatients: () => Promise<void>;
+    refreshAppointments: () => Promise<void>;
     addPatient: (p: Patient) => void;
     addAppointment: (a: Appointment) => void;
     addInvoice: (i: Invoice) => void;
@@ -104,6 +105,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const refreshAppointments = async () => {
+        try {
+            const appts = await api.appointments.getAll();
+            setAppointments(appts);
+        } catch (e) {
+            console.error("Error refreshing appointments", e);
+        }
+    };
+
     const addPatient = (p: Patient) => setPatients(prev => [p, ...prev]);
     const addAppointment = (a: Appointment) => setAppointments(prev => [...prev, a]);
     const addInvoice = (i: Invoice) => setInvoices(prev => [i, ...prev]);
@@ -113,7 +123,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             currentUser, currentUserRole: role, isAuthenticated, login, logout,
             patients, setPatients, appointments, setAppointments, invoices, setInvoices,
             stock, setStock, clinicalRecords, setClinicalRecords, expenses, setExpenses,
-            refreshPatients, addPatient, addAppointment, addInvoice, api,
+            refreshPatients, refreshAppointments, addPatient, addAppointment, addInvoice, api,
             searchQuery, setSearchQuery, selectedPatient, setSelectedPatient
         }}>
             {children}
