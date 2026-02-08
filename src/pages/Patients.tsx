@@ -1560,7 +1560,15 @@ const Patients: React.FC = () => {
                             <Odontogram
                                 patientId={selectedPatient.id}
                                 isEditable={true}
-                                onTreatmentsChange={setTreatments}
+                                onTreatmentsChange={(newTreatments) => {
+                                    setTreatments(newTreatments);
+                                    // Also refresh clinical records to show the new history entry
+                                    if (selectedPatient) {
+                                        api.clinicalRecords.getByPatient(selectedPatient.id)
+                                            .then(setClinicalRecords)
+                                            .catch(e => console.error("Error refreshing history", e));
+                                    }
+                                }}
                             />
                         </div>
                     </div>

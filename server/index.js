@@ -1125,7 +1125,7 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
                 // Get treatments from PatientTreatment with their service details
                 const { data: treatmentData } = await supabase
                     .from('PatientTreatment')
-                    .select('id, serviceId, price, tooth, name')
+                    .select('id, serviceId, price, tooth, serviceName') // Fetch serviceName
                     .in('id', treatmentIds);
 
                 if (treatmentData && treatmentData.length > 0) {
@@ -1156,7 +1156,7 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
                     // Resolve names for EACH treatment
                     treatmentNames = treatmentData.map(t => {
                         const svc = services.find(s => s.id === t.serviceId);
-                        return svc ? svc.name : (t.name || `Tratamiento Diente ${t.tooth || 'N/A'}`);
+                        return svc ? svc.name : (t.serviceName || `Tratamiento Diente ${t.tooth || 'N/A'}`);
                     });
                 }
             }
