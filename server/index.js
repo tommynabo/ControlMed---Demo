@@ -531,6 +531,31 @@ app.get('/api/appointments/:id', async (req, res) => {
     }
 });
 
+app.put('/api/appointments/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const updates = req.body;
+
+        const { data, error } = await supabase
+            .from('Appointment')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error("❌ Error updating appointment:", error);
+            return res.status(500).json({ error: error.message });
+        }
+
+        res.json(data);
+    } catch (e) {
+        console.error("Error updating appointment:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- ODONTOGRAM (Module 2) ---
 app.get('/api/patients/:patientId/odontogram', async (req, res) => {
     try {

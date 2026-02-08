@@ -159,8 +159,8 @@ const Agenda: React.FC = () => {
         };
 
         try {
-            await api.appointments.create(newAppt);
-            addAppointment(newAppt);
+            const createdAppt = await api.appointments.create(newAppt);
+            addAppointment(createdAppt);
             setIsAppointmentModalOpen(false);
             setActiveSlot(null);
             setApptSearch('');
