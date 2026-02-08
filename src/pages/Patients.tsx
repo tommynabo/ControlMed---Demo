@@ -305,10 +305,28 @@ const Patients: React.FC = () => {
         try {
             const payload = { ...newEntryForm, patientId: selectedPatient.id };
             const rec = await api.clinicalRecords.create(payload);
+
+            // AUTO-CREATE BILLABLE TREATMENT IF PRICE > 0
+            if (Number(newEntryForm.price) > 0) {
+                try {
+                    await api.treatments.createBatch(selectedPatient.id, [{
+                        serviceName: newEntryForm.treatment,
+                        price: Number(newEntryForm.price),
+                        status: 'PENDIENTE',
+                        serviceId: 'srv-manual-' + Date.now(), // Temporary ID for manual entry
+                        toothId: null
+                    }]);
+                    console.log("✅ Created billable treatment from clinical note");
+                } catch (tErr) {
+                    console.error("⚠️ Failed to create billable treatment:", tErr);
+                    // Don't alert user, as note was saved. Just log.
+                }
+            }
+
             setClinicalRecords(prev => [rec, ...prev]);
             setIsNewEntryModalOpen(false);
-            setNewEntryForm({ treatment: '', observation: '', specialization: 'General' });
-        } catch (e) {
+            setNewEntryForm({ treatment: '', observation: '', specialization: 'General', price: '' }); // Reset form
+        } catch (e: any) {
             console.error(e);
             alert("Error al guardar: " + e.message);
         }

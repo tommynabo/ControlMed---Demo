@@ -21,6 +21,11 @@ const schedulerService = require('./services/schedulerService');
 
 const prisma = new PrismaClient({
     log: ['query', 'info', 'warn', 'error'],
+    datasources: {
+        db: {
+            url: process.env.DIRECT_URL || process.env.DATABASE_URL
+        },
+    },
 });
 
 // Global Error Handler for Prisma Connection
@@ -2050,10 +2055,64 @@ app.post('/api/services', async (req, res) => {
             .select()
             .single();
 
-        if (error) throw error;
-        res.status(201).json(data);
+        if (error) {
+            console.error('❌ Error creating service:', error);
+            return res.status(500).json({ error: error.message });
+        }
+
+        res.json(data);
     } catch (e) {
-        console.error('Error creating service:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/fix-services', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+
+        // 1. Check if services exist
+        const { count, error: countErr } = await supabase
+            .from('services')
+            .select('*', { count: 'exact', head: true });
+
+        if (countErr) throw countErr;
+
+        if (count > 0) {
+            return res.json({ message: `Services table already has ${count} items. No action taken.` });
+        }
+
+        // 2. Seed Data
+        const DENTAL_SERVICES = [
+            { name: 'Limpieza Dental', price: 50, insurancePrice: { 'Sanitas': 0, 'Adeslas': 10 }, specialty_name: 'General' },
+            { name: 'Obturación Simple', price: 60, insurancePrice: { 'Sanitas': 40, 'Adeslas': 45 }, specialty_name: 'General' },
+            { name: 'Endodoncia Unirradicular', price: 120, insurancePrice: { 'Sanitas': 90, 'Adeslas': 100 }, specialty_name: 'General' },
+            { name: 'Implante Titanio', price: 1200, specialty_name: 'Implantología' },
+            { name: 'Ortodoncia Brackets (Mensual)', price: 100, specialty_name: 'Ortodoncia' },
+            { name: 'Invisalign Full', price: 3500, specialty_name: 'Ortodoncia' },
+            { name: 'Blanqueamiento Zoom', price: 300, specialty_name: 'Estética' },
+            { name: 'Corona Zirconio', price: 350, specialty_name: 'Estética' },
+            { name: 'Extracción Simple', price: 40, specialty_name: 'General' },
+            { name: 'Curetaje por Cuadrante', price: 70, specialty_name: 'Periodoncia' }
+        ];
+
+        const toInsert = DENTAL_SERVICES.map(s => ({
+            id: crypto.randomUUID(),
+            name: s.name,
+            final_price: s.price, // Map price to final_price
+            specialty_name: s.specialty_name || 'General',
+            specialty_color: '#3b82f6', // Default blue
+            is_active: true,
+            created_at: new Date().toISOString()
+        }));
+
+        const { data, error } = await supabase.from('services').insert(toInsert).select();
+
+        if (error) throw error;
+
+        res.json({ success: true, count: data.length, message: "Services seeded successfully" });
+
+    } catch (e) {
+        console.error("Fix Services Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
