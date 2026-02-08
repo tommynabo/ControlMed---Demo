@@ -1125,7 +1125,7 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
                 // Get treatments from PatientTreatment with their service details
                 const { data: treatmentData } = await supabase
                     .from('PatientTreatment')
-                    .select('id, serviceId, price, tooth, serviceName') // Fetch serviceName
+                    .select('id, serviceId, price, toothId, serviceName') // Fetch serviceName column
                     .in('id', treatmentIds);
 
                 if (treatmentData && treatmentData.length > 0) {
