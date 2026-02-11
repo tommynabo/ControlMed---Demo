@@ -250,6 +250,7 @@ model Budget {
   status         String           @default("DRAFT") // DRAFT, ACCEPTED, REJECTED, CONVERTED
   totalAmount    Float            @default(0.0)
   items          BudgetLineItem[]
+  appointments   Appointment[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 }
