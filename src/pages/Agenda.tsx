@@ -33,6 +33,22 @@ const Agenda: React.FC = () => {
     const [bookingPrice, setBookingPrice] = useState<number>(0);
     const [bookingDuration, setBookingDuration] = useState<number>(30);
 
+    // Budget & Patient State
+    const [bookingPatientId, setBookingPatientId] = useState<string>('');
+    const [patientBudgets, setPatientBudgets] = useState<any[]>([]);
+    const [bookingBudgetId, setBookingBudgetId] = useState<string>('');
+
+    // Fetch Budgets
+    React.useEffect(() => {
+        if (bookingPatientId) {
+            api.budget.getByPatient(bookingPatientId)
+                .then(setPatientBudgets)
+                .catch(err => console.error(err));
+        } else {
+            setPatientBudgets([]);
+        }
+    }, [bookingPatientId]);
+
     // Helpers
     const getWeekRange = (d: Date) => {
         const day = d.getDay();
@@ -108,10 +124,10 @@ const Agenda: React.FC = () => {
         // Pre-fill modal for viewing details
         const patientName = patients.find(p => p.id === appt.patientId)?.name || '';
         setApptSearch(patientName);
+        setBookingPatientId(appt.patientId); // Set Patient ID for budgets
         setBookingDoctorId(appt.doctorId);
         setBookingTreatment(typeof appt.treatment === 'string' ? appt.treatment : (appt.treatment as any)?.id || '');
-        // Other fields would need to be in Appointment type to prefill correctly (price, duration, obs etc.)
-        // Assuming default for now if missing
+        setBookingBudgetId((appt as any).budgetId || ''); // Set Budget ID
 
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
@@ -155,6 +171,7 @@ const Agenda: React.FC = () => {
             patientId: patient.id,
             doctorId: bookingDoctorId,
             treatmentId: bookingTreatment || null,
+            budgetId: bookingBudgetId || null,
             status: 'Scheduled'
         };
 
@@ -164,7 +181,9 @@ const Agenda: React.FC = () => {
             setIsAppointmentModalOpen(false);
             setActiveSlot(null);
             setApptSearch('');
+            setBookingPatientId('');
             setBookingTreatment('');
+            setBookingBudgetId('');
             setBookingObservation('');
             setBookingPrice(0);
             setBookingDuration(30);
@@ -423,7 +442,13 @@ const Agenda: React.FC = () => {
                                 className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold"
                                 placeholder="Buscar paciente (Nombre)"
                                 value={apptSearch}
-                                onChange={(e) => setApptSearch(e.target.value)}
+                                onChange={(e) => {
+                                    setApptSearch(e.target.value);
+                                    if (bookingPatientId) {
+                                        setBookingPatientId('');
+                                        setPatientBudgets([]);
+                                    }
+                                }}
                                 disabled={!!selectedAppt} // Readonly if viewing
                             />
                             {/* Suggestions - Solo mostrar si NO hay coincidencia exacta y NO estamos en modo ver */}
@@ -435,7 +460,10 @@ const Agenda: React.FC = () => {
                                         .map(p => (
                                             <div
                                                 key={p.id}
-                                                onClick={() => setApptSearch(p.name)}
+                                                onClick={() => {
+                                                    setApptSearch(p.name);
+                                                    setBookingPatientId(p.id);
+                                                }}
                                                 className="p-3 hover:bg-slate-50 cursor-pointer text-xs font-bold text-slate-600 border-b border-slate-50 last:border-0"
                                             >
                                                 {p.name}
@@ -446,6 +474,26 @@ const Agenda: React.FC = () => {
                             )}
                         </div>
 
+                        {/* Budget Selection (Optional) */}
+                        {patientBudgets.length > 0 && (
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-400">Vincular a Presupuesto (Opcional)</label>
+                                <select
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                    value={bookingBudgetId}
+                                    onChange={(e) => setBookingBudgetId(e.target.value)}
+                                    disabled={!!selectedAppt}
+                                >
+                                    <option value="">-- Sin vincular --</option>
+                                    {patientBudgets.map(b => (
+                                        <option key={b.id} value={b.id}>
+                                            {b.title} ({b.totalAmount}€) - {new Date(b.date).toLocaleDateString()}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         {/* Doctor Selection */}
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-400">Doctor</label>
@@ -454,7 +502,7 @@ const Agenda: React.FC = () => {
                                 value={bookingDoctorId}
                                 onChange={(e) => {
                                     setBookingDoctorId(e.target.value);
-                                    setBookingTreatment(''); // Reset treatment when doctor changes
+                                    // Removed: setBookingTreatment(''); 
                                 }}
                                 disabled={!!selectedAppt}
                             >
@@ -472,20 +520,10 @@ const Agenda: React.FC = () => {
                                 className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
                                 value={bookingTreatment}
                                 onChange={(e) => setBookingTreatment(e.target.value)}
-                                disabled={!bookingDoctorId || !!selectedAppt}
+                                disabled={!!selectedAppt}
                             >
                                 <option value="">Seleccionar Tratamiento...</option>
                                 {DENTAL_SERVICES
-                                    .filter(t => {
-                                        if (!bookingDoctorId) return true;
-                                        const doc = DOCTORS.find(d => d.id === bookingDoctorId);
-                                        // Allow General doctors to see General treatments
-                                        // Allow Specialists to see ONLY their specialty (or maybe General too? strict: only theirs)
-                                        // Let's go strict as requested.
-                                        // If Doctor is General, show General.
-                                        if (!doc) return true;
-                                        return t.specialization === doc.specialization;
-                                    })
                                     .map(t => (
                                         <option key={t.id} value={t.id}>{t.name} ({t.price}€)</option>
                                     ))

@@ -3,7 +3,7 @@ import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle
+    QrCode, Wallet, AlertTriangle, Printer
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment } from '../../types';
@@ -13,6 +13,8 @@ import { TransferBalanceModal } from '../components/TransferBalanceModal';
 import { TreatmentsList } from '../components/TreatmentsList';
 import { PaymentsList } from '../components/PaymentsList';
 import { FinanceModal } from '../../components/FinanceModal';
+import { BudgetModal } from '../components/BudgetModal';
+import { PrescriptionModal } from '../components/PrescriptionModal';
 import { DOCTORS, DENTAL_SERVICES } from '../constants';
 
 const Patients: React.FC = () => {
@@ -165,13 +167,126 @@ const Patients: React.FC = () => {
     const [prescriptionText, setPrescriptionText] = useState("");
     const prescriptionInputRef = useRef<HTMLInputElement>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [editingPrescriptionIndex, setEditingPrescriptionIndex] = useState<number | null>(null);
+
+    const handleSavePrescription = async () => {
+        if (!prescriptionText || !selectedPatient) return;
+
+        try {
+            const currentRecetas = [...(selectedPatient.prescriptions || [])];
+
+            if (editingPrescriptionIndex !== null) {
+                currentRecetas[editingPrescriptionIndex] = prescriptionText;
+            } else {
+                currentRecetas.push(prescriptionText);
+            }
+
+            const updated = await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
+            setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
+            setSelectedPatient(updated);
+
+            // Log to clinical records too for audit
+            await api.clinicalRecords.create({
+                patientId: selectedPatient.id,
+                treatment: 'RECETA (Guardada)',
+                observation: prescriptionText,
+                specialization: 'General'
+            });
+
+            setPrescriptionText("");
+            setEditingPrescriptionIndex(null);
+            setIsPrescriptionOpen(false);
+            alert("✅ Receta guardada correctame.");
+        } catch (e) {
+            console.error(e);
+            alert("Error al guardar receta");
+        }
+    };
+
+    const handleDeletePrescription = async (idx: number) => {
+        if (!confirm("¿Borrar esta receta?")) return;
+        if (!selectedPatient) return;
+
+        try {
+            const currentRecetas = [...(selectedPatient.prescriptions || [])];
+            currentRecetas.splice(idx, 1);
+
+            const updated = await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
+            setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
+            setSelectedPatient(updated);
+        } catch (e) {
+            console.error(e);
+            alert("Error borrando receta");
+        }
+    };
+
+    const handlePrintPrescription = (text: string) => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return alert("Habilite ventanas emergentes");
+
+        const html = `
+            <html>
+            <head>
+                <title>Receta Médica - ${selectedPatient?.name}</title>
+                <style>
+                    body { font-family: 'Arial', sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+                    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 40px; }
+                    .logo { font-size: 24px; font-weight: bold; text-transform: uppercase; }
+                    .info { display: flex; justify-content: space-between; margin-bottom: 40px; }
+                    .content { font-size: 16px; line-height: 1.6; min-height: 400px; }
+                    .signature { margin-top: 60px; text-align: right; }
+                    .footer { border-top: 1px solid #ccc; padding-top: 20px; text-align: center; font-size: 12px; color: #666; margin-top: 60px; }
+                    @media print { .no-print { display: none; } }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="logo">CLÍNICA DENTAL MEDI-CORE</div>
+                    <p>C/ Ejemplo 123, Madrid - Tel: 91 123 45 67</p>
+                </div>
+                
+                <div class="info">
+                    <div>
+                        <strong>Paciente:</strong> ${selectedPatient?.name}<br>
+                        <strong>DNI:</strong> ${selectedPatient?.dni}<br>
+                         <strong>Fecha:</strong> ${new Date().toLocaleDateString()}
+                    </div>
+                    <div>
+                        <strong>Dr/a:</strong> Fdez. Martín<br>
+                        <strong>Colegiado:</strong> 28001234
+                    </div>
+                </div>
+
+                <div class="content">
+                    <h3>RECETA MÉDICA / PRESCRIPCIÓN</h3>
+                    <div style="white-space: pre-wrap;">${text}</div>
+                </div>
+
+                <div class="signature">
+                    <p>__________________________</p>
+                    <p>Firma y Sello</p>
+                </div>
+
+                <div class="footer">
+                    <p>Validez de la receta: 10 días desde la fecha de expedición.</p>
+                </div>
+
+                <script>
+                    window.print();
+                </script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
 
     // Odontogram
     const [isOdontogramOpen, setIsOdontogramOpen] = useState(false);
 
     // Budget
     const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
-    const [budgetForm, setBudgetForm] = useState({ title: '', totalPrice: '', installments: 1 });
 
     // Wallet / Payment Modal
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -745,29 +860,60 @@ const Patients: React.FC = () => {
                             <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
                                 <div className="flex justify-between items-center">
                                     <h2 className="text-3xl font-black text-slate-900 tracking-tight">Recetas</h2>
-                                    <button onClick={() => setIsPrescriptionOpen(true)} className="bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg"><Plus size={16} /> Nueva Receta</button>
+                                    <button onClick={() => {
+                                        setIsPrescriptionOpen(true);
+                                        setEditingPrescriptionIndex(null);
+                                        setPrescriptionText('');
+                                    }} className="bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg"><Plus size={16} /> Nueva Receta</button>
                                 </div>
-                                {isPrescriptionOpen && (
-                                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-200">
-                                        <div className="flex gap-2 mb-4">
-                                            <input ref={prescriptionInputRef} className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none" placeholder="Medicamento..." onKeyDown={e => { if (e.key === 'Enter') handleGenerateReceta((e.target as HTMLInputElement).value); }} />
-                                            <button onClick={() => handleGenerateReceta(prescriptionInputRef.current?.value || '')} className="bg-slate-900 text-white p-3 rounded-xl hover:bg-slate-800 transition-colors"><Zap size={16} /></button>
-                                        </div>
-                                        {isProcessing && <div className="text-center p-4 text-xs font-bold text-blue-500">Generando...</div>}
-                                        {prescriptionText && (
-                                            <div className="bg-white p-6 rounded-2xl text-xs font-mono mb-4 whitespace-pre-wrap">{prescriptionText}</div>
-                                        )}
-                                    </div>
-                                )}
+
+
+
                                 <div className="space-y-4">
-                                    {(selectedPatient.prescriptions || []).map((receta, idx) => (
-                                        <div key={idx} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex justify-between items-center">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center"><FileTextIcon size={24} /></div>
-                                                <div><p className="font-bold text-slate-900 text-sm line-clamp-1">{receta}</p></div>
+                                    {(selectedPatient.prescriptions || []).length === 0 ? (
+                                        <div className="text-center p-10 opacity-50 font-bold uppercase text-xs">No hay recetas guardadas</div>
+                                    ) : (
+                                        (selectedPatient.prescriptions || []).map((receta, idx) => (
+                                            <div key={idx} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                                                <div className="flex justify-between items-start gap-4">
+                                                    <div className="flex items-start gap-4 flex-1">
+                                                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
+                                                            <FileTextIcon size={24} />
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Receta #{idx + 1}</span>
+                                                            </div>
+                                                            <p className="font-medium text-slate-600 text-sm whitespace-pre-wrap leading-relaxed">{receta}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => handlePrintPrescription(receta)}
+                                                            className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                                                            title="Imprimir"
+                                                        >
+                                                            <Printer size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => { setPrescriptionText(receta); setEditingPrescriptionIndex(idx); setIsPrescriptionOpen(true); }}
+                                                            className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
+                                                            title="Editar"
+                                                        >
+                                                            <Edit3 size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeletePrescription(idx)}
+                                                            className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                                                            title="Borrar"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1346,72 +1492,64 @@ const Patients: React.FC = () => {
                 )
             }
 
-            {/* BUDGET MODAL */}
-            {
-                isBudgetModalOpen && (
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
-                        <div className="bg-white max-w-lg w-full rounded-[2rem] p-8 shadow-2xl">
-                            <h3 className="text-2xl font-black text-slate-900 mb-6">Nuevo Presupuesto</h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400">Concepto / Título</label>
-                                    <input
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
-                                        placeholder="Ej. Implante completo"
-                                        value={budgetForm.title}
-                                        onChange={e => setBudgetForm({ ...budgetForm, title: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400">Importe Total (€)</label>
-                                    <input
-                                        type="number"
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xl font-black text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
-                                        placeholder="0.00"
-                                        value={budgetForm.totalPrice}
-                                        onChange={e => setBudgetForm({ ...budgetForm, totalPrice: e.target.value })}
-                                    />
-                                </div>
+            {/* BUDGET MODAL (New Component) */}
+            <BudgetModal
+                isOpen={isBudgetModalOpen}
+                onClose={() => setIsBudgetModalOpen(false)}
+                patientId={selectedPatient?.id || ''}
+                onSave={async () => {
+                    // Refresh Budgets List
+                    if (selectedPatient) {
+                        const updatedBudgets = await api.budget.getByPatient(selectedPatient.id);
+                        setBudgets(updatedBudgets);
+                        setPatientTab('budget');
+                    }
+                }}
+            />
 
-                                <div className="flex gap-4 mt-8">
-                                    <button onClick={() => setIsBudgetModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">Cancelar</button>
-                                    <button
-                                        onClick={async () => {
-                                            if (!budgetForm.title || !budgetForm.totalPrice) return alert("Indique título e importe");
-                                            try {
-                                                // Create items array from single price
-                                                const items = [{
-                                                    name: budgetForm.title,
-                                                    price: parseFloat(budgetForm.totalPrice)
-                                                }];
+            {/* Prescription Modal (New Component) */}
+            <PrescriptionModal
+                isOpen={isPrescriptionOpen}
+                onClose={() => setIsPrescriptionOpen(false)}
+                patientName={selectedPatient?.name || ''}
+                initialText={prescriptionText}
+                onSave={async (text) => {
+                    setPrescriptionText(text);
+                    setIsPrescriptionOpen(false);
 
-                                                // Note: Installments info is currently just for calculation, 
-                                                // unless we append it to description or backend supports it.
-                                                // For now, we save the simple budget.
+                    if (selectedPatient && text) {
+                        try {
+                            // Save to clinical records
+                            await api.clinicalRecords.create({
+                                patientId: selectedPatient.id,
+                                treatment: 'Receta Médica',
+                                observation: text,
+                                specialization: 'General'
+                            });
 
-                                                await api.budget.create(
-                                                    selectedPatient?.id,
-                                                    items
-                                                );
+                            // Legacy: also update patient prescriptions array
+                            const currentRecetas = [...(selectedPatient.prescriptions || [])];
+                            currentRecetas.push(text);
+                            await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
 
-                                                alert("✅ Presupuesto Creado Correctamente");
-                                                setIsBudgetModalOpen(false);
-                                                // Refresh Budgets List
-                                                const updatedBudgets = await api.budget.getByPatient(selectedPatient?.id);
-                                                setBudgets(updatedBudgets);
-                                                setPatientTab('budget');
-                                            } catch (e) { alert("Error al crear: " + e.message); }
-                                        }}
-                                        className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg hover:bg-black transition-all transform active:scale-95"
-                                    >
-                                        Crear Presupuesto
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+
+                            // Refresh
+                            const records = await api.clinicalRecords.getByPatient(selectedPatient.id);
+                            setClinicalRecords(records);
+
+                            const updatedList = await api.getPatients();
+                            setPatients(updatedList);
+                            const updatedPatient = updatedList.find(p => p.id === selectedPatient.id);
+                            if (updatedPatient) setSelectedPatient(updatedPatient);
+
+                            alert("✅ Receta guardada e historial actualizado");
+                        } catch (e) {
+                            console.error(e);
+                            alert("Error guardando receta");
+                        }
+                    }
+                }}
+            />
             {/* Payment Modal */}
             <PaymentModal
                 isOpen={isPaymentModalOpen}

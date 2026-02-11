@@ -34,6 +34,7 @@ export interface Appointment {
     date: string; // ISO string
     time: string;
     treatment: string;
+    budgetId?: string;
     status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'PRESUPUESTADO' | 'Scheduled';
 }
 

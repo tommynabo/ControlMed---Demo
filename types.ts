@@ -145,6 +145,7 @@ export interface Appointment {
   dayIdx: number; // Nuevo campo para diferenciar días en la vista semanal
   time: string;
   treatment?: string;
+  budgetId?: string; // Optional link to a budget
 }
 
 export interface InventoryItem {
