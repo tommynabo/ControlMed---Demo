@@ -481,7 +481,17 @@ const Agenda: React.FC = () => {
                                 <select
                                     className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
                                     value={bookingBudgetId}
-                                    onChange={(e) => setBookingBudgetId(e.target.value)}
+                                    onChange={(e) => {
+                                        const bId = e.target.value;
+                                        setBookingBudgetId(bId);
+                                        if (bId) {
+                                            const budget = patientBudgets.find(b => b.id === bId);
+                                            if (budget) {
+                                                setBookingPrice(budget.totalAmount || 0);
+                                                setBookingTreatment(''); // Clear treatment strict link
+                                            }
+                                        }
+                                    }}
                                     disabled={!!selectedAppt}
                                 >
                                     <option value="">-- Sin vincular --</option>
@@ -519,7 +529,16 @@ const Agenda: React.FC = () => {
                             <select
                                 className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
                                 value={bookingTreatment}
-                                onChange={(e) => setBookingTreatment(e.target.value)}
+                                onChange={(e) => {
+                                    const tId = e.target.value;
+                                    setBookingTreatment(tId);
+                                    if (tId) {
+                                        const t = DENTAL_SERVICES.find(s => s.id === tId);
+                                        if (t) setBookingPrice(t.price);
+                                        // Optional: Clear budget if we want strict OR logic
+                                        // setBookingBudgetId(''); 
+                                    }
+                                }}
                                 disabled={!!selectedAppt}
                             >
                                 <option value="">Seleccionar Tratamiento...</option>

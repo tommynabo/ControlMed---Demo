@@ -436,7 +436,8 @@ app.post('/api/appointments', async (req, res) => {
         const safeTreatmentId = (treatmentId && treatmentId !== 'undefined' && treatmentId.trim().length > 0) ? treatmentId : null;
         const safeDoctorId = (doctorId && doctorId !== 'undefined' && doctorId.trim().length > 0) ? doctorId : null;
 
-        // VALIDATION: Specialization Check (Optional - skip if tables don't exist)
+        // VALIDATION: Specialization Check (REMOVED per user request to allow flexibility)
+        /*
         if (safeTreatmentId && safeDoctorId) {
             try {
                 const { data: treatment } = await supabase.from('Treatment').select('specialtyId').eq('id', safeTreatmentId).maybeSingle();
@@ -451,6 +452,7 @@ app.post('/api/appointments', async (req, res) => {
                 console.warn('⚠️ Specialization validation skipped:', validationErr.message);
             }
         }
+        */
 
         const appointmentId = crypto.randomUUID();
         const { data, error } = await supabase
@@ -537,6 +539,19 @@ app.put('/api/appointments/:id', async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
+        console.log(`📝 Updating Appointment ${id}:`, JSON.stringify(updates));
+
+        // Sanitization: Convert empty strings to null for UUID fields
+        if (typeof updates.budgetId === 'string' && updates.budgetId.trim() === '') updates.budgetId = null;
+        if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
+        if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
+
+        // Remove 'treatment' object if passed (Prisma/Frontend might send the relation object back)
+        delete updates.treatment;
+        delete updates.doctor;
+        delete updates.patient;
+        delete updates.budget;
+
         const { data, error } = await supabase
             .from('Appointment')
             .update(updates)
@@ -549,6 +564,7 @@ app.put('/api/appointments/:id', async (req, res) => {
             return res.status(500).json({ error: error.message });
         }
 
+        console.log("✅ Appointment Updated:", data.id);
         res.json(data);
     } catch (e) {
         console.error("Error updating appointment:", e);
