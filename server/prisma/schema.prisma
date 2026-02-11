@@ -31,7 +31,10 @@ model User {
 model Patient {
   id             String           @id @default(uuid())
   historyNumber  String?          @unique // Auto-generated: HCL-0001, HCL-0002, etc.
-  name           String
+  name           String           // Se construye automáticamente: firstName + lastName1 + lastName2
+  firstName      String?          // Nombre
+  lastName1      String?          // Primer apellido
+  lastName2      String?          // Segundo apellido
   dni            String           @unique
   birthDate      DateTime
   email          String
@@ -49,7 +52,10 @@ model Patient {
   balance        Float            @default(0.0) // Saldo a favor/contra
   wallet         Float            @default(0.0) // Pagos adelantados (Monedero Virtual)
   allergies      String?          // Alergias importantes
+  smoker         Boolean          @default(false) // Fumador
+  diseases       String?          // Enfermedades (JSON array)
   medications    String?          // Medicación crónica o relevante
+  criticalAlerts String?          // Alertas médicas críticas (JSON array)
   createdAt      DateTime         @default(now())
   payments       Payment[] // Historial de pagos
   whatsAppLogs   WhatsAppLog[]
@@ -128,20 +134,25 @@ model Service {
 
 
 model Appointment {
-  id          String    @id @default(uuid())
-  date        DateTime
-  time        String
-  status      String    @default("Scheduled") // Scheduled, Canceled, Completed, NoShow
-  patientId   String
-  patient     Patient   @relation(fields: [patientId], references: [id])
-  doctorId    String
-  doctor      Doctor    @relation(fields: [doctorId], references: [id])
-  treatmentId String?
-  treatment   Treatment? @relation(fields: [treatmentId], references: [id])
-  
+  id           String    @id @default(uuid())
+  date         DateTime
+  time         String
+  duration     Int       @default(60)       // Duración en minutos (15, 30, 45, 60, 90, 120)
+  observations String?                      // Notas/Observaciones de la cita
+  status       String    @default("Scheduled") // Scheduled, Canceled, Completed, NoShow
+  paid         Boolean   @default(false)    // Para diferenciación de colores (verde=pagada, naranja=no pagada)
+  patientId    String
+  patient      Patient   @relation(fields: [patientId], references: [id])
+  doctorId     String
+  doctor       Doctor    @relation(fields: [doctorId], references: [id])
+  treatmentId  String?
+  treatment    Treatment? @relation(fields: [treatmentId], references: [id])
+
   // Link to Budget
-  budgetId    String?
-  budget      Budget?   @relation(fields: [budgetId], references: [id])
+  budgetId     String?
+  budget       Budget?   @relation(fields: [budgetId], references: [id])
+  budgetItemId String?                      // Concepto específico del presupuesto
+  amount       Float?                       // Importe editable del tratamiento/concepto
 
   // Liquidation trigger
   liquidation Liquidation?

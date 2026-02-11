@@ -2,6 +2,9 @@ export interface Patient {
     id: string;
     historyNumber?: string; // Auto-generated: HCL-0001, etc.
     name: string;
+    firstName?: string; // New
+    lastName1?: string; // New
+    lastName2?: string; // New
     dni: string;
     email: string;
     phone?: string;
@@ -10,6 +13,9 @@ export interface Patient {
     assignedDoctorId?: string;
     clinicalHistory?: ClinicalRecord[];
     prescriptions?: string[];
+
+    // Medical Info
+    smoker?: boolean; // New
     allergies?: string;
     medications?: string;
     medicalHistory?: string[];
@@ -33,6 +39,7 @@ export interface Appointment {
     doctorId: string;
     date: string; // ISO string
     time: string;
+    duration?: number; // Minutes
     treatment: string;
     budgetId?: string;
     status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'PRESUPUESTADO' | 'Scheduled';

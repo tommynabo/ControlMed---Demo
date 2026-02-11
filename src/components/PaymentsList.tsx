@@ -51,7 +51,10 @@ export const PaymentsList: React.FC<PaymentsListProps> = ({ patientId, invoices 
                                 {pay.method === 'cash' ? 'Efectivo' : pay.method === 'card' ? 'Tarjeta' : 'Transferencia'}
                             </p>
                             <p className="text-[10px] font-bold text-slate-400">
-                                {new Date(pay.createdAt).toLocaleDateString()} - {pay.type === 'ADVANCE_PAYMENT' ? 'Anticipo' : 'Pago Factura'}
+                                {new Date(pay.createdAt).toLocaleDateString()} - {
+                                    pay.type === 'ADVANCE_PAYMENT' ? 'Anticipo' :
+                                        (relatedInvoice?.items?.[0]?.name || 'Pago Factura')
+                                }
                             </p>
                         </div>
                         <div className="flex items-center gap-4">

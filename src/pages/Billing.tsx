@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Download, DollarSign, Calendar, User, FileText, Trash2,
     Plus, BarChart3, QrCode, TrendingDown, TrendingUp, CreditCard, Mail
@@ -14,6 +14,7 @@ const Billing: React.FC = () => {
     const [billingTab, setBillingTab] = useState<'invoices' | 'expenses'>('invoices');
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
     const [exportDate, setExportDate] = useState('');
+    const [filterDate, setFilterDate] = useState(''); // Filtro para la tabla de facturas
 
     // Refresh patients on mount to ensure search works with latest data
     useEffect(() => {
@@ -32,6 +33,28 @@ const Billing: React.FC = () => {
 
     const [isEmitting, setIsEmitting] = useState(false);
     const [emitError, setEmitError] = useState<string | null>(null);
+
+    // Filtrar y ordenar facturas
+    const filteredAndSortedInvoices = useMemo(() => {
+        let result = [...invoices];
+
+        // Filtrar por fecha si está seleccionada
+        if (filterDate) {
+            result = result.filter(inv => {
+                const invDate = inv.date ? inv.date.split('T')[0] : '';
+                return invDate === filterDate;
+            });
+        }
+
+        // Ordenar por número de factura (ascendente)
+        result.sort((a, b) => {
+            const numA = parseInt(a.invoiceNumber?.replace(/\D/g, '') || '0') || 0;
+            const numB = parseInt(b.invoiceNumber?.replace(/\D/g, '') || '0') || 0;
+            return numA - numB;
+        });
+
+        return result;
+    }, [invoices, filterDate]);
 
     const handleAddItem = () => {
         setInvoiceItems([...invoiceItems, { name: '', price: 0 }]);
@@ -194,10 +217,33 @@ const Billing: React.FC = () => {
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                             <div className="flex items-center gap-6">
                                 <div className="bg-slate-100 p-4 rounded-2xl text-slate-500">
+                                    <Calendar size={24} />
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Filtrar por Fecha</span>
+                                    <input
+                                        type="date"
+                                        value={filterDate}
+                                        onChange={e => setFilterDate(e.target.value)}
+                                        className="bg-transparent border-none text-xl font-bold text-slate-900 outline-none p-0 focus:ring-0"
+                                        placeholder="Seleccionar fecha"
+                                    />
+                                </div>
+                                {filterDate && (
+                                    <button
+                                        onClick={() => setFilterDate('')}
+                                        className="text-xs font-bold text-slate-400 hover:text-slate-900 uppercase"
+                                    >
+                                        Limpiar
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-6">
+                                <div className="bg-slate-100 p-4 rounded-2xl text-slate-500">
                                     <FileText size={24} />
                                 </div>
                                 <div className="space-y-1">
-                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Periodo Fiscal</span>
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Periodo Fiscal (Exportar)</span>
                                     <input
                                         type="date"
                                         value={exportDate}
@@ -220,6 +266,7 @@ const Billing: React.FC = () => {
                                 <thead className="bg-slate-50/50 text-[10px] font-black uppercase text-slate-400 tracking-widest">
                                     <tr>
                                         <th className="p-8 pl-10">Factura</th>
+                                        <th className="p-8">Concepto</th>
                                         <th className="p-8">Paciente</th>
                                         <th className="p-8 text-right">Importe</th>
                                         <th className="p-8 text-center">Método</th>
@@ -228,10 +275,12 @@ const Billing: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
-                                    {invoices.length === 0 ? (
-                                        <tr><td colSpan={6} className="p-16 text-center text-slate-400 font-bold uppercase tracking-widest opacity-50">No hay facturas emitidas</td></tr>
+                                    {filteredAndSortedInvoices.length === 0 ? (
+                                        <tr><td colSpan={7} className="p-16 text-center text-slate-400 font-bold uppercase tracking-widest opacity-50">
+                                            {filterDate ? 'No hay facturas para esta fecha' : 'No hay facturas emitidas'}
+                                        </td></tr>
                                     ) : (
-                                        invoices.map((inv, idx) => (
+                                        filteredAndSortedInvoices.map((inv, idx) => (
                                             <tr key={inv.id} className="group hover:bg-blue-50/30 transition-colors duration-300">
                                                 <td className="p-8 pl-10">
                                                     <div className="flex items-center gap-4">
@@ -240,6 +289,13 @@ const Billing: React.FC = () => {
                                                         </div>
                                                         <span className="font-bold text-slate-900 text-sm tracking-tight">{inv.invoiceNumber}</span>
                                                     </div>
+                                                </td>
+                                                <td className="p-8">
+                                                    <span className="font-bold text-slate-600 text-sm">
+                                                        {inv.items && inv.items.length > 0
+                                                            ? (inv.items[0].name || 'Concepto Genérico') + (inv.items.length > 1 ? ` (+${inv.items.length - 1})` : '')
+                                                            : 'Sin Concepto'}
+                                                    </span>
                                                 </td>
                                                 <td className="p-8">
                                                     <div className="flex flex-col">

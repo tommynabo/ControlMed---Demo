@@ -15,11 +15,16 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({ isOpen, on
     const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
     const [isGenerating, setIsGenerating] = useState(false);
 
+    // Doctor Details State
+    const [doctorName, setDoctorName] = useState('Dr. Genérico');
+    const [collegiateNumber, setCollegiateNumber] = useState('');
+
     // Reset state on open
     React.useEffect(() => {
         if (isOpen) {
             setText(initialText);
             setViewMode('edit');
+            // Reset doctor details if needed or keep last used
         }
     }, [isOpen, initialText]);
 
@@ -38,9 +43,6 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({ isOpen, on
     };
 
     const handlePrint = () => {
-        const printContent = document.getElementById('prescription-preview-content');
-        if (!printContent) return;
-
         const w = window.open('', '_blank');
         if (w) {
             w.document.write(`
@@ -60,12 +62,12 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({ isOpen, on
                         <div class="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8">
                             <div>
                                 <h1 class="text-3xl font-black text-slate-900 uppercase tracking-tighter">Clínica Dental</h1>
-                                <p class="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">Dr. Martin & Asociados</p>
+                                <p class="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">${doctorName}</p>
                             </div>
                             <div class="text-right text-xs font-bold text-slate-400 uppercase">
                                 <p>C/ Ejemplo 123, Madrid</p>
                                 <p>Tel: 91 123 45 67</p>
-                                <p>N.R.S: 12345678</p>
+                                <p>N. Colegiado: ${collegiateNumber || '------------'}</p>
                             </div>
                         </div>
 
@@ -96,7 +98,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({ isOpen, on
                             <div class="text-center">
                                 <div class="h-20 mb-2 flex items-center justify-center">
                                      <!-- Signature Placeholder -->
-                                    <span class="font-dancing-script text-2xl text-slate-400 italic">Fdo. El Doctor</span>
+                                    <span class="font-dancing-script text-2xl text-slate-400 italic">Fdo. ${doctorName}</span>
                                 </div>
                                 <div class="border-t border-slate-900 w-48 mx-auto pt-2">
                                     <p class="text-xs font-black uppercase text-slate-900">Firma y Sello</p>
@@ -154,6 +156,28 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({ isOpen, on
                                 className="w-full h-96 bg-white border border-slate-200 rounded-xl p-6 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 resize-none leading-relaxed"
                                 placeholder="Escribe aquí el medicamento, posología y duración..."
                             />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Doctor Firmante</label>
+                                    <input
+                                        type="text"
+                                        value={doctorName}
+                                        onChange={(e) => setDoctorName(e.target.value)}
+                                        className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold mt-1 outline-none focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                        placeholder="Dr. Nombre Apellidos"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Nº Colegiado</label>
+                                    <input
+                                        type="text"
+                                        value={collegiateNumber}
+                                        onChange={(e) => setCollegiateNumber(e.target.value)}
+                                        className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs font-bold mt-1 outline-none focus:ring-2 focus:ring-blue-500/10 transition-all"
+                                        placeholder="Ej. 28001234"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     ) : (
                         <div id="prescription-preview-content" className="bg-white shadow-lg p-12 min-h-[600px] relative max-w-[210mm] mx-auto">
@@ -161,11 +185,12 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({ isOpen, on
                             <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8 opacity-50 pointer-events-none select-none">
                                 <div>
                                     <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tighter">Clínica Dental</h1>
-                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">Dr. Martin & Asociados</p>
+                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-widest mt-1">{doctorName}</p>
                                 </div>
                                 <div className="text-right text-xs font-bold text-slate-400 uppercase">
                                     <p>C/ Ejemplo 123, Madrid</p>
                                     <p>Tel: 91 123 45 67</p>
+                                    <p>N. Colegiado: {collegiateNumber || '------------'}</p>
                                 </div>
                             </div>
 

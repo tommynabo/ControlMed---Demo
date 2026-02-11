@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
@@ -299,7 +299,29 @@ const Patients: React.FC = () => {
     }, []);
 
     // New Patient Form State
-    const [newPatient, setNewPatient] = useState({ name: '', dni: '', email: '', phone: '' });
+    const [newPatient, setNewPatient] = useState({
+        name: '',
+        firstName: '',
+        lastName1: '',
+        lastName2: '',
+        dni: '',
+        email: '',
+        phone: '',
+        birthDate: '',
+        smoker: false,
+        diseases: '',
+        allergies: '',
+        medications: '',
+        criticalAlerts: ''
+    });
+
+    // Effect to auto-generate full name
+    useEffect(() => {
+        const fullName = `${newPatient.firstName} ${newPatient.lastName1} ${newPatient.lastName2}`.trim();
+        if (fullName) {
+            setNewPatient(prev => ({ ...prev, name: fullName }));
+        }
+    }, [newPatient.firstName, newPatient.lastName1, newPatient.lastName2]);
 
     // WhatsApp Scheduling State
     const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
@@ -323,7 +345,7 @@ const Patients: React.FC = () => {
     }, [isWhatsAppModalOpen]);
 
     const handleCreatePatient = async () => {
-        if (!newPatient.name || !newPatient.dni) {
+        if ((!newPatient.firstName && !newPatient.name) || !newPatient.dni) {
             alert("Por favor rellene nombre y DNI.");
             return;
         }
@@ -674,6 +696,11 @@ const Patients: React.FC = () => {
                                                     ))}
                                                 </div>
                                             )}
+                                            {selectedPatient.smoker && (
+                                                <div className="mt-4 inline-block px-3 py-1 bg-slate-800 text-white rounded-lg text-xs font-black uppercase tracking-wider shadow-sm">
+                                                    Fumador
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -689,9 +716,23 @@ const Patients: React.FC = () => {
                                             </div>
                                         </div>
                                     )}
-                                    <div className="col-span-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Nombre</label>
-                                        <input disabled={!isEditingPatient} value={selectedPatient.name} onChange={(e) => setSelectedPatient({ ...selectedPatient, name: e.target.value })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" />
+                                    <div className="col-span-2 grid grid-cols-3 gap-4">
+                                        <div className="col-span-3 mb-2">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Nombre Completo (Auto-generado)</label>
+                                            <input disabled value={selectedPatient.name} className="w-full bg-slate-100/50 rounded-2xl p-4 text-sm font-bold opacity-70" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Nombre</label>
+                                            <input disabled={!isEditingPatient} value={selectedPatient.firstName || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, firstName: e.target.value, name: `${e.target.value} ${selectedPatient.lastName1 || ''} ${selectedPatient.lastName2 || ''}`.trim() })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">1er Apellido</label>
+                                            <input disabled={!isEditingPatient} value={selectedPatient.lastName1 || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, lastName1: e.target.value, name: `${selectedPatient.firstName || ''} ${e.target.value} ${selectedPatient.lastName2 || ''}`.trim() })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">2do Apellido</label>
+                                            <input disabled={!isEditingPatient} value={selectedPatient.lastName2 || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, lastName2: e.target.value, name: `${selectedPatient.firstName || ''} ${selectedPatient.lastName1 || ''} ${e.target.value}`.trim() })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" />
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">DNI</label>
@@ -732,6 +773,14 @@ const Patients: React.FC = () => {
                                                             </button>
                                                         ))}
                                                     </div>
+                                                </div>
+
+                                                {/* SMOKER TOGGLE */}
+                                                <div className="flex items-center gap-4 bg-white p-4 rounded-xl border border-slate-200">
+                                                    <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${selectedPatient.smoker ? 'bg-slate-900' : 'bg-slate-200'}`} onClick={() => setSelectedPatient({ ...selectedPatient, smoker: !selectedPatient.smoker })}>
+                                                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${selectedPatient.smoker ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                    </div>
+                                                    <span className="text-xs font-bold uppercase text-slate-600">Paciente Fumador</span>
                                                 </div>
 
                                                 <div>
@@ -1290,13 +1339,48 @@ const Patients: React.FC = () => {
                             <h3 className="text-2xl font-black text-slate-900 mb-6">Nuevo Paciente</h3>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400">Nombre Completo</label>
-                                    <input
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                        placeholder="Ej. Juan Pérez"
-                                        value={newPatient.name}
-                                        onChange={e => setNewPatient({ ...newPatient, name: e.target.value })}
-                                    />
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">Nombre</label>
+                                            <input
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                placeholder="Ej. Juan"
+                                                value={newPatient.firstName}
+                                                onChange={e => setNewPatient({ ...newPatient, firstName: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">1er Apellido</label>
+                                            <input
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                placeholder="Ej. Pérez"
+                                                value={newPatient.lastName1}
+                                                onChange={e => setNewPatient({ ...newPatient, lastName1: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">2do Apellido</label>
+                                            <input
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                placeholder="Ej. García"
+                                                value={newPatient.lastName2}
+                                                onChange={e => setNewPatient({ ...newPatient, lastName2: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">Fecha Nacimiento</label>
+                                            <input
+                                                type="date"
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                value={newPatient.birthDate}
+                                                onChange={e => setNewPatient({ ...newPatient, birthDate: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <input type="checkbox" checked={newPatient.smoker} onChange={e => setNewPatient({ ...newPatient, smoker: e.target.checked })} className="w-5 h-5 rounded hover:cursor-pointer" />
+                                        <label className="text-xs font-bold uppercase text-slate-600">Es Fumador</label>
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-400">DNI / NIE</label>

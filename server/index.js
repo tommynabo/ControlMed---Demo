@@ -333,6 +333,15 @@ app.post('/api/patients', async (req, res) => {
             data.birthDate = new Date().toISOString();
         }
 
+        // Auto-construir campo 'name' si se proporcionan firstName, lastName1, lastName2
+        if (data.firstName || data.lastName1 || data.lastName2) {
+            const firstName = data.firstName || '';
+            const lastName1 = data.lastName1 || '';
+            const lastName2 = data.lastName2 || '';
+            data.name = `${firstName} ${lastName1} ${lastName2}`.trim();
+            console.log(`🏷️ Auto-generated name: "${data.name}"`);
+        }
+
         // Validate
         if (!data.name || !data.dni) {
             console.error("❌ Missing name or dni");
@@ -395,6 +404,15 @@ app.put('/api/patients/:id', async (req, res) => {
             updates.birthDate = new Date(updates.birthDate).toISOString();
         }
 
+        // Auto-construir campo 'name' si se proporcionan firstName, lastName1, lastName2
+        if (updates.firstName || updates.lastName1 || updates.lastName2) {
+            const firstName = updates.firstName || '';
+            const lastName1 = updates.lastName1 || '';
+            const lastName2 = updates.lastName2 || '';
+            updates.name = `${firstName} ${lastName1} ${lastName2}`.trim();
+            console.log(`🏷️ Auto-generated name: "${updates.name}"`);
+        }
+
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
@@ -421,20 +439,20 @@ app.put('/api/patients/:id', async (req, res) => {
 // --- APPOINTMENTS ---
 app.post('/api/appointments', async (req, res) => {
     try {
-        const { date, time, patientId, doctorId, treatmentId } = req.body;
+        const { date, time, patientId, doctorId, treatmentId, duration, observations, budgetId, budgetItemId, amount } = req.body;
 
-        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId });
+        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId, duration, observations, budgetId, budgetItemId, amount });
 
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         // Sanitization: Ensure empty strings become null for UUID fields to prevent invalid input syntax
         // DB expects UUID or NULL. Empty string "" is not a valid UUID.
-        // Sanitization: Ensure empty strings become null for UUID fields to prevent invalid input syntax
-        // DB expects UUID or NULL. Empty string "" is not a valid UUID.
         // Also handle "undefined" string literal just in case
         const safeTreatmentId = (treatmentId && treatmentId !== 'undefined' && treatmentId.trim().length > 0) ? treatmentId : null;
         const safeDoctorId = (doctorId && doctorId !== 'undefined' && doctorId.trim().length > 0) ? doctorId : null;
+        const safeBudgetId = (budgetId && budgetId !== 'undefined' && budgetId.trim().length > 0) ? budgetId : null;
+        const safeBudgetItemId = (budgetItemId && budgetItemId !== 'undefined' && budgetItemId.trim().length > 0) ? budgetItemId : null;
 
         // VALIDATION: Specialization Check (REMOVED per user request to allow flexibility)
         /*
@@ -461,10 +479,16 @@ app.post('/api/appointments', async (req, res) => {
                 id: appointmentId, // Explicitly generate ID
                 date: new Date(date).toISOString(),
                 time,
+                duration: duration || 60, // Default 60 minutos
+                observations: observations || null,
                 patientId,
                 doctorId: safeDoctorId,
                 treatmentId: safeTreatmentId,
-                status: 'Scheduled'
+                budgetId: safeBudgetId,
+                budgetItemId: safeBudgetItemId,
+                amount: amount || null,
+                status: 'Scheduled',
+                paid: false
             }])
             .select()
             .single();
@@ -543,6 +567,7 @@ app.put('/api/appointments/:id', async (req, res) => {
 
         // Sanitization: Convert empty strings to null for UUID fields
         if (typeof updates.budgetId === 'string' && updates.budgetId.trim() === '') updates.budgetId = null;
+        if (typeof updates.budgetItemId === 'string' && updates.budgetItemId.trim() === '') updates.budgetItemId = null;
         if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
         if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
 
@@ -551,6 +576,7 @@ app.put('/api/appointments/:id', async (req, res) => {
         delete updates.doctor;
         delete updates.patient;
         delete updates.budget;
+        delete updates.liquidation;
 
         const { data, error } = await supabase
             .from('Appointment')

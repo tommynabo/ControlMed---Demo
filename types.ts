@@ -11,7 +11,10 @@ export enum Specialization {
 export interface Patient {
   id: string;
   historyNumber?: string; // Auto-generated: HCL-0001, etc.
-  name: string;
+  name: string; // Se construye automáticamente: firstName + lastName1 + lastName2
+  firstName?: string; // Nombre
+  lastName1?: string; // Primer apellido
+  lastName2?: string; // Segundo apellido
   dni: string;
   birthDate: string;
   email: string;
@@ -30,6 +33,12 @@ export interface Patient {
   assignedDoctorId?: string;
   prescriptions?: string[];
   wallet?: number; // Monedero Virtual - Pagos adelantados
+  allergies?: string; // Alergias importantes
+  smoker?: boolean; // Fumador
+  diseases?: string | string[]; // Enfermedades (puede ser string JSON o array)
+  medications?: string; // Medicación crónica o relevante
+  criticalAlerts?: string | string[]; // Alertas médicas críticas (puede ser string JSON o array)
+  medicalHistory?: string[]; // Historial médico (condiciones)
 }
 
 
@@ -142,10 +151,17 @@ export interface Appointment {
   doctorId: string;
   patientId: string;
   date: string;
-  dayIdx: number; // Nuevo campo para diferenciar días en la vista semanal
+  dayIdx?: number; // Nuevo campo para diferenciar días en la vista semanal
   time: string;
+  duration?: number; // Duración en minutos (15, 30, 45, 60, 90, 120)
+  observations?: string; // Notas/observaciones de la cita
+  status?: string; // Scheduled, Completed, Canceled, NoShow
+  paid?: boolean; // Para diferenciación de colores (verde=pagada, naranja=no pagada)
   treatment?: string;
+  treatmentId?: string;
   budgetId?: string; // Optional link to a budget
+  budgetItemId?: string; // Concepto específico del presupuesto
+  amount?: number; // Importe editable del tratamiento/concepto
 }
 
 export interface InventoryItem {

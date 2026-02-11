@@ -268,6 +268,75 @@ export const AppointmentDetails: React.FC = () => {
                                 ))}
                             </select>
                         </div>
+
+                        {/* Importe */}
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-400">Importe (€)</p>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={appointment.amount || ''}
+                                onChange={async (e) => {
+                                    const newAmount = parseFloat(e.target.value) || null;
+                                    try {
+                                        await api.appointments.update(appointment.id, { amount: newAmount });
+                                        setAppointment({ ...appointment, amount: newAmount || undefined });
+                                    } catch (err) {
+                                        console.error('Error al actualizar importe:', err);
+                                    }
+                                }}
+                                placeholder="Importe"
+                                className="w-full mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                            />
+                        </div>
+
+                        {/* Estado de Pago */}
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-400">Pagado</p>
+                            <label className="flex items-center gap-2 mt-2">
+                                <input
+                                    type="checkbox"
+                                    checked={appointment.paid || false}
+                                    onChange={async (e) => {
+                                        const newPaid = e.target.checked;
+                                        try {
+                                            await api.appointments.update(appointment.id, { paid: newPaid });
+                                            setAppointment({ ...appointment, paid: newPaid });
+                                        } catch (err) {
+                                            console.error('Error al actualizar estado de pago:', err);
+                                        }
+                                    }}
+                                    className="w-5 h-5 rounded border-slate-300"
+                                />
+                                <span className="text-sm font-bold text-slate-700">
+                                    {appointment.paid ? '✓ Pagada' : 'Pendiente'}
+                                </span>
+                            </label>
+                        </div>
+
+                        {/* Observaciones */}
+                        <div className="col-span-4">
+                            <p className="text-xs font-black uppercase text-slate-400 mb-2">
+                                Observaciones de la Cita
+                            </p>
+                            <textarea
+                                value={appointment.observations || ''}
+                                onChange={async (e) => {
+                                    const newObservations = e.target.value;
+                                    setAppointment({ ...appointment, observations: newObservations });
+                                }}
+                                onBlur={async (e) => {
+                                    try {
+                                        await api.appointments.update(appointment.id, { observations: e.target.value });
+                                    } catch (err) {
+                                        console.error('Error al guardar observaciones:', err);
+                                    }
+                                }}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-blue-100"
+                                rows={3}
+                                placeholder="Notas internas sobre esta cita..."
+                            />
+                        </div>
                     </div>
                 </div>
 
@@ -335,6 +404,9 @@ export const AppointmentDetails: React.FC = () => {
                 patient={patient}
                 budgets={budgets}
                 onPaymentComplete={handlePaymentComplete}
+                appointment={appointment}
+                defaultAmount={appointment.amount || (typeof appointment.treatment === 'object' ? (appointment.treatment as any).price : 0)}
+                defaultConcept={typeof appointment.treatment === 'object' ? (appointment.treatment as any).name : appointment.treatment || 'Consulta / Tratamiento'}
             />
         </div>
     );

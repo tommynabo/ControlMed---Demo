@@ -20,3 +20,18 @@ export const DENTAL_SERVICES = [
     { id: 'srv-9', name: 'Extracción Simple', price: 40, specialization: Specialization.GENERAL },
     { id: 'srv-10', name: 'Curetaje por Cuadrante', price: 70, specialization: Specialization.PERIODONTICS }
 ];
+
+// Bloques de tiempo para la agenda (cada 15 minutos)
+export const TIME_SLOTS = [
+  "09:00", "09:15", "09:30", "09:45",
+  "10:00", "10:15", "10:30", "10:45",
+  "11:00", "11:15", "11:30", "11:45",
+  "12:00", "12:15", "12:30", "12:45",
+  "13:00", "13:15", "13:30", "13:45",
+  "16:00", "16:15", "16:30", "16:45",
+  "17:00", "17:15", "17:30", "17:45",
+  "18:00", "18:15", "18:30", "18:45"
+];
+
+// Opciones de duración para las citas (en minutos)
+export const DURATION_OPTIONS = [15, 30, 45, 60, 90, 120];

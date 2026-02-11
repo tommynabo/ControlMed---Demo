@@ -9,6 +9,9 @@ interface PaymentModalProps {
     patient: Patient;
     budgets: Budget[];
     onPaymentComplete: (payment: Payment, invoice: any) => void;
+    appointment?: Appointment; // Context for direct payment
+    defaultAmount?: number;
+    defaultConcept?: string;
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({
@@ -16,28 +19,33 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     onClose,
     patient,
     budgets,
-    onPaymentComplete
+    onPaymentComplete,
+    appointment,
+    defaultAmount,
+    defaultConcept
 }) => {
-    // Only "ADVANCE_PAYMENT" logic remains ("Saldo de Cuenta")
-    const [advanceAmount, setAdvanceAmount] = useState('');
+    // Mode determination
+    const isDirectPayment = !!appointment || (!!defaultAmount && defaultAmount > 0);
+
+    const [amount, setAmount] = useState('');
     const [concept, setConcept] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('card');
+    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'wallet'>('card');
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
     const availableWallet = patient.wallet || 0;
 
     useEffect(() => {
-        if (!isOpen) {
-            setAdvanceAmount('');
-            setConcept('Anticipo / Saldo de Cuenta');
+        if (isOpen) {
+            setAmount(defaultAmount ? defaultAmount.toString() : '');
+            setConcept(defaultConcept || (appointment ? `Pago Cita ${appointment.date}` : 'Anticipo / Saldo de Cuenta'));
             setPaymentMethod('card');
             setNotes('');
         }
-    }, [isOpen]);
+    }, [isOpen, defaultAmount, defaultConcept, appointment]);
 
     const handleSubmit = async () => {
-        if (!advanceAmount || parseFloat(advanceAmount) <= 0) {
+        if (!amount || parseFloat(amount) <= 0) {
             alert('Introduce un importe válido');
             return;
         }
@@ -46,46 +54,61 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             return;
         }
 
+        const numericAmount = parseFloat(amount);
+
+        // Validation for wallet payment
+        if (paymentMethod === 'wallet' && numericAmount > availableWallet) {
+            alert(`Saldo insuficiente en monedero (${availableWallet}€ disponibles)`);
+            return;
+        }
+
         setIsProcessing(true);
 
         try {
-            const amount = parseFloat(advanceAmount);
-
-            // 1. Create Invoice (Type ADVANCE_PAYMENT triggers wallet update in backend)
+            // 1. Create Invoice
             const invoiceData = {
-                patientId: patient.id, // Ensure patientId is passed directly if backend expects it inside object
-                patient: patient, // Required by backend validation
-                amount: amount,
-                items: [{ name: concept, price: amount }],
+                patientId: patient.id,
+                patient: patient,
+                amount: numericAmount,
+                items: [{ name: concept, price: numericAmount }],
                 paymentMethod,
-                type: 'ADVANCE_PAYMENT'
+                type: isDirectPayment ? 'INVOICE' : 'ADVANCE_PAYMENT', // Direct charge vs Top-up
+                concept: concept,
+                appointmentId: appointment?.id
             };
+
+            // If paying with wallet, we might need a specific endpoint or logic
+            // Assuming api.invoices.create handles 'wallet' method correctly by deducting balance
 
             const response = await api.invoices.create(invoiceData) as any;
 
             if (!response || (!response.url && !response.previewUrl)) {
-                // Determine if failure
                 if (response.error) throw new Error(response.error);
-                // If it succeeded but no URL (unlikely with Quipu)
             }
 
             const invoiceUrl = response.previewUrl || response.url;
 
-            // 2. Create Payment Record (for local UI update)
+            // 2. Create Payment Record
             const payment: Payment = {
                 id: `pay_${Date.now()}`,
                 patientId: patient.id,
-                amount: amount,
+                amount: numericAmount,
                 method: paymentMethod,
-                type: 'ADVANCE_PAYMENT',
+                type: isDirectPayment ? 'DIRECT_CHARGE' : 'ADVANCE_PAYMENT',
                 notes: notes || undefined,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                budgetId: appointment?.budgetId
             };
 
-            // 3. Complete
+            // 3. Mark appointment as paid if applicable
+            if (appointment) {
+                await api.appointments.update(appointment.id, { paid: true, status: 'COMPLETADO' });
+            }
+
+            // 4. Complete
             onPaymentComplete(payment, response);
 
-            alert(`✅ Saldo añadido y factura generada.`);
+            alert(`✅ Operación realizada con éxito.`);
 
             if (invoiceUrl) {
                 window.open(invoiceUrl, '_blank');
@@ -109,9 +132,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 {/* Header */}
                 <div className="bg-gradient-to-r from-slate-900 to-slate-700 p-8 flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-black text-white tracking-tight">Añadir Saldo a Cuenta</h2>
+                        <h2 className="text-2xl font-black text-white tracking-tight">
+                            {isDirectPayment ? 'Cobrar / Pagar' : 'Añadir Saldo a Cuenta'}
+                        </h2>
                         <p className="text-sm text-slate-300 mt-1">
-                            Paciente: <strong>{patient.name}</strong> | Saldo Actual: <strong>{availableWallet}€</strong>
+                            Paciente: <strong>{patient.name}</strong> | Saldo Monedero: <strong>{availableWallet}€</strong>
                         </p>
                     </div>
                     <button
@@ -125,12 +150,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 {/* Content */}
                 <div className="p-8 space-y-6">
 
-                    <div className="bg-blue-50 p-4 rounded-xl text-xs text-blue-700 font-bold flex gap-2 items-start mb-4">
-                        <FileText size={18} className="flex-shrink-0 mt-0.5" />
-                        <div>
-                            Este proceso emitirá automáticamente una factura por el importe del anticipo y sumará la cantidad al monedero del paciente.
+                    {!isDirectPayment && (
+                        <div className="bg-blue-50 p-4 rounded-xl text-xs text-blue-700 font-bold flex gap-2 items-start mb-4">
+                            <FileText size={18} className="flex-shrink-0 mt-0.5" />
+                            <div>
+                                Este proceso emitirá una factura de anticipo y sumará el saldo al paciente.
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-6">
                         <div>
@@ -139,8 +166,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             </label>
                             <input
                                 type="number"
-                                value={advanceAmount}
-                                onChange={(e) => setAdvanceAmount(e.target.value)}
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
                                 placeholder="0.00"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xl font-bold outline-none focus:ring-2 focus:ring-blue-100"
                             />
@@ -153,7 +180,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 type="text"
                                 value={concept}
                                 onChange={(e) => setConcept(e.target.value)}
-                                placeholder="Ej. Anticipo Tratamiento"
+                                placeholder="Concepto del cobro"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
                             />
                         </div>
@@ -164,7 +191,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         <label className="text-[10px] font-black uppercase text-slate-400 mb-3 block">
                             Método de Pago
                         </label>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-4 gap-3">
                             <button
                                 onClick={() => setPaymentMethod('cash')}
                                 className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${paymentMethod === 'cash'
@@ -193,8 +220,21 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                     }`}
                             >
                                 <Wallet className="inline mb-1" size={18} />
-                                <br />Transferencia
+                                <br />Transfer
                             </button>
+                            {isDirectPayment && (
+                                <button
+                                    onClick={() => setPaymentMethod('wallet')}
+                                    disabled={availableWallet <= 0}
+                                    className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${paymentMethod === 'wallet'
+                                        ? 'bg-emerald-600 text-white border-emerald-600'
+                                        : availableWallet > 0 ? 'bg-white text-emerald-600 border-emerald-200 hover:border-emerald-400' : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                                        }`}
+                                >
+                                    <Wallet className="inline mb-1" size={18} />
+                                    <br />Monedero
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -222,16 +262,23 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={isProcessing || !advanceAmount}
+                        disabled={isProcessing || !amount}
                         className="flex-1 bg-slate-900 text-white py-4 rounded-xl text-sm font-black uppercase shadow-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {isProcessing ? (
-                            <>⏳ Emitiendo...</>
+                            <>⏳ Procesando...</>
                         ) : (
-                            <>
-                                <FileText size={20} />
-                                Emitir Factura y Añadir Saldo
-                            </>
+                            isDirectPayment ? (
+                                <>
+                                    <Check size={20} />
+                                    Cobrar {amount}€
+                                </>
+                            ) : (
+                                <>
+                                    <FileText size={20} />
+                                    Añadir Saldo
+                                </>
+                            )
                         )}
                     </button>
                 </div>
