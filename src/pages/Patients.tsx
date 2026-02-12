@@ -139,6 +139,35 @@ const Patients: React.FC = () => {
         }
     }, [selectedPatient, patientTab]);
 
+    const handlePrintBudget = (budget: any) => {
+        const w = window.open('', '_blank');
+        if (w) {
+            const total = budget.items?.reduce((sum: number, item: any) => sum + (Number(item.price) || 0), 0) || 0;
+            w.document.write(`
+                <html>
+                    <head>
+                        <title>Presupuesto #${budget.id}</title>
+                        <script src="https://cdn.tailwindcss.com"></script>
+                    </head>
+                    <body class="bg-white p-12 min-h-screen relative font-sans">
+                        <div class="flex justify-between items-start border-b-2 border-slate-900 pb-8 mb-8">
+                            <div><h1 class="text-4xl font-black text-slate-900 uppercase">Clínica Dental</h1><p class="text-sm font-bold text-slate-500 uppercase mt-2">Dr. Martin & Asociados</p></div>
+                            <div class="text-right text-xs font-bold text-slate-500 uppercase"><p>C/ Ejemplo 123, Madrid</p><p>Tel: 91 123 45 67</p></div>
+                        </div>
+                        <div class="flex justify-between items-start mb-12 bg-slate-50 p-8 rounded-xl border border-slate-100">
+                            <div><p class="text-[10px] font-black uppercase text-slate-400 mb-1">Paciente</p><h2 class="text-2xl font-bold text-slate-900">${selectedPatient?.name}</h2><p class="text-xs font-medium text-slate-500 mt-1">${selectedPatient?.dni || ''}</p></div>
+                            <div class="text-right"><p class="text-[10px] font-black uppercase text-slate-400 mb-1">Presupuesto</p><h2 class="text-xl font-black text-slate-900">${budget.id.substring(0, 8).toUpperCase()}</h2><p class="text-xs font-bold text-slate-500 mt-1">${new Date(budget.createdAt).toLocaleDateString('es-ES')}</p></div>
+                        </div>
+                        <div class="mb-12"><table class="w-full text-left"><thead><tr class="border-b-2 border-slate-900"><th class="py-4 text-xs font-black uppercase text-slate-900 w-16">Cant.</th><th class="py-4 text-xs font-black uppercase text-slate-900">Concepto</th><th class="py-4 text-xs font-black uppercase text-slate-900 w-24 text-right">Precio</th></tr></thead><tbody class="text-sm text-slate-700">${budget.items?.map((item: any) => `<tr class="border-b border-slate-100"><td class="py-4 font-bold text-slate-500">${item.quantity || 1}</td><td class="py-4 font-medium"><div class="font-bold text-slate-900">${item.name}</div>${item.tooth ? `<div class="text-xs text-slate-400 uppercase mt-1">Diente: ${item.tooth}</div>` : ''}</td><td class="py-4 font-bold text-slate-900 text-right">${item.price}€</td></tr>`).join('') || ''}</tbody><tfoot><tr><td colspan="2" class="pt-6 text-right text-xs font-black uppercase text-slate-400">Total</td><td class="pt-6 text-right text-2xl font-black text-slate-900">${total}€</td></tr></tfoot></table></div>
+                        <div class="mt-20 border-t border-slate-200 pt-8 flex justify-between items-end"><div class="text-[10px] font-bold text-slate-400 max-w-sm uppercase">Validez 30 días.</div><div class="text-center"><div class="h-24 w-48 border-b border-slate-900 mb-2"></div><p class="text-xs font-black uppercase text-slate-900">Firma / Conforme</p></div></div>
+                    </body>
+                </html>
+            `);
+            w.document.close();
+            setTimeout(() => { w.print(); w.close(); }, 500);
+        }
+    };
+
     const handleDeleteTreatment = async (id: string) => {
         if (confirm("¿Seguro que quieres borrar este tratamiento?")) {
             try {
@@ -1222,34 +1251,73 @@ const Patients: React.FC = () => {
                                                         </div>
 
                                                         {/* Actions - Only show for DRAFT/pending budgets */}
-                                                        <div className="flex gap-3">
+                                                        <div className="flex gap-2 flex-wrap justify-end">
                                                             <button
-                                                                onClick={() => handleDeleteBudget(budget.id)}
-                                                                className="px-4 py-2 rounded-xl bg-red-50 text-red-500 text-xs font-bold uppercase hover:bg-red-100 transition-colors flex items-center gap-2"
+                                                                onClick={() => handlePrintBudget(budget)}
+                                                                className="px-3 py-2 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                                                title="Imprimir"
                                                             >
-                                                                <Trash2 size={14} /> Borrar
+                                                                <Printer size={16} />
                                                             </button>
 
+                                                            <button
+                                                                onClick={() => handleDeleteBudget(budget.id)}
+                                                                className="px-3 py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+                                                                title="Borrar"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+
+                                                            {/* Status Actions */}
+                                                            {budget.status !== 'accepted' && budget.status !== 'CONVERTED' && budget.status !== 'REJECTED' && (
+                                                                <>
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (confirm("¿Aceptar presupuesto?")) {
+                                                                                await api.budget.updateStatus(budget.id, 'accepted');
+                                                                                const updated = await api.budget.getByPatient(selectedPatient!.id);
+                                                                                setBudgets(updated);
+                                                                            }
+                                                                        }}
+                                                                        className="px-3 py-2 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-bold uppercase hover:bg-emerald-100 transition-colors"
+                                                                    >
+                                                                        Aceptar
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={async () => {
+                                                                            if (confirm("¿Rechazar presupuesto?")) {
+                                                                                await api.budget.updateStatus(budget.id, 'REJECTED');
+                                                                                const updated = await api.budget.getByPatient(selectedPatient!.id);
+                                                                                setBudgets(updated);
+                                                                            }
+                                                                        }}
+                                                                        className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 text-xs font-bold uppercase hover:bg-slate-200 transition-colors"
+                                                                    >
+                                                                        Rechazar
+                                                                    </button>
+                                                                </>
+                                                            )}
+
                                                             {/* Only show Financiar if not already financed or converted */}
-                                                            {budget.status !== 'accepted' && budget.status !== 'CONVERTED' && (
+                                                            {(budget.status === 'accepted' || !budget.status || budget.status === 'DRAFT') && budget.status !== 'CONVERTED' && (
                                                                 <button
                                                                     onClick={() => {
                                                                         setSelectedBudgetForFinance(budget);
                                                                         setIsFinanceModalOpen(true);
                                                                     }}
-                                                                    className="px-6 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase hover:bg-slate-800 transition-colors flex items-center gap-2 shadow-lg shadow-slate-200"
+                                                                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-black uppercase hover:bg-slate-800 transition-colors flex items-center gap-2 shadow-lg shadow-slate-200"
                                                                 >
                                                                     Financiar
                                                                 </button>
                                                             )}
 
                                                             {/* Only show Convert to Invoice if NOT financed and NOT already converted */}
-                                                            {budget.status !== 'accepted' && budget.status !== 'CONVERTED' && (
+                                                            {(budget.status === 'accepted' || !budget.status || budget.status === 'DRAFT') && budget.status !== 'CONVERTED' && (
                                                                 <button
                                                                     onClick={() => handleConvertToInvoice(budget)}
-                                                                    className="px-6 py-2 rounded-xl bg-purple-50 text-purple-600 text-xs font-black uppercase hover:bg-purple-100 transition-colors flex items-center gap-2"
+                                                                    className="px-4 py-2 rounded-xl bg-purple-50 text-purple-600 text-xs font-black uppercase hover:bg-purple-100 transition-colors flex items-center gap-2"
                                                                 >
-                                                                    Convertir a Factura
+                                                                    Facturar
                                                                 </button>
                                                             )}
                                                         </div>
@@ -1382,6 +1450,50 @@ const Patients: React.FC = () => {
                                         <label className="text-xs font-bold uppercase text-slate-600">Es Fumador</label>
                                     </div>
                                 </div>
+
+                                {/* Medical History Section */}
+                                <div className="border-t border-slate-100 pt-4">
+                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-3">Historial Medico</p>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">Alergias</label>
+                                            <input
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                placeholder="Ej. Penicilina, Latex, Anestesia..."
+                                                value={newPatient.allergies}
+                                                onChange={e => setNewPatient({ ...newPatient, allergies: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">Enfermedades</label>
+                                            <input
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                placeholder="Ej. Diabetes, Hipertension, Cardiopatia..."
+                                                value={newPatient.diseases}
+                                                onChange={e => setNewPatient({ ...newPatient, diseases: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">Medicacion Habitual</label>
+                                            <input
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                placeholder="Ej. Sintrom, Metformina, Enalapril..."
+                                                value={newPatient.medications}
+                                                onChange={e => setNewPatient({ ...newPatient, medications: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400">Alertas Medicas Criticas</label>
+                                            <input
+                                                className="w-full bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm font-bold text-rose-700"
+                                                placeholder="Ej. Anticoagulante, Protesis valvular, Bisfosfanatos..."
+                                                value={newPatient.criticalAlerts}
+                                                onChange={e => setNewPatient({ ...newPatient, criticalAlerts: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-400">DNI / NIE</label>
                                     <input
@@ -1407,6 +1519,15 @@ const Patients: React.FC = () => {
                                         placeholder="+34 600 000 000"
                                         value={newPatient.phone || ''}
                                         onChange={e => setNewPatient({ ...newPatient, phone: e.target.value })}
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Nº Historia (Obligatorio)</label>
+                                    <input
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                        placeholder="Ej. HC-2024-001"
+                                        value={newPatient.historyNumber || ''}
+                                        onChange={e => setNewPatient({ ...newPatient, historyNumber: e.target.value })}
                                     />
                                 </div>
                             </div>

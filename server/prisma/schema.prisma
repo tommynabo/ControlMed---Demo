@@ -56,6 +56,8 @@ model Patient {
   diseases       String?          // Enfermedades (JSON array)
   medications    String?          // Medicación crónica o relevante
   criticalAlerts String?          // Alertas médicas críticas (JSON array)
+  prescriptions  String?          // Recetas guardadas (JSON array)
+  medicalHistory String?          // Historial médico general (JSON array)
   createdAt      DateTime         @default(now())
   payments       Payment[] // Historial de pagos
   whatsAppLogs   WhatsAppLog[]

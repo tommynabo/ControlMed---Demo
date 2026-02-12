@@ -34,6 +34,32 @@ const Billing: React.FC = () => {
     const [isEmitting, setIsEmitting] = useState(false);
     const [emitError, setEmitError] = useState<string | null>(null);
 
+    // Treatment search for invoice items
+    const [treatmentSuggestions, setTreatmentSuggestions] = useState<any[]>([]);
+    const [activeSuggestionIdx, setActiveSuggestionIdx] = useState<number | null>(null);
+
+    const handleTreatmentSearch = async (idx: number, query: string) => {
+        handleItemChange(idx, 'name', query);
+        setActiveSuggestionIdx(idx);
+        if (query.length >= 2) {
+            try {
+                const results = await apiService.services.getAll({ search: query });
+                setTreatmentSuggestions(results || []);
+            } catch { setTreatmentSuggestions([]); }
+        } else {
+            setTreatmentSuggestions([]);
+        }
+    };
+
+    const selectTreatmentSuggestion = (idx: number, service: any) => {
+        const newItems = [...invoiceItems];
+        newItems[idx].name = service.name;
+        newItems[idx].price = service.final_price || 0;
+        setInvoiceItems(newItems);
+        setTreatmentSuggestions([]);
+        setActiveSuggestionIdx(null);
+    };
+
     // Filtrar y ordenar facturas
     const filteredAndSortedInvoices = useMemo(() => {
         let result = [...invoices];
@@ -502,13 +528,31 @@ const Billing: React.FC = () => {
                                     <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
                                         {invoiceItems.map((item, idx) => (
                                             <div key={idx} className="flex gap-2 items-center">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Descripción"
-                                                    className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none"
-                                                    value={item.name}
-                                                    onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                                                />
+                                                <div className="flex-1 relative">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Buscar tratamiento..."
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none"
+                                                        value={item.name}
+                                                        onChange={(e) => handleTreatmentSearch(idx, e.target.value)}
+                                                        onFocus={() => { setActiveSuggestionIdx(idx); if (item.name.length >= 2) handleTreatmentSearch(idx, item.name); }}
+                                                        onBlur={() => setTimeout(() => setActiveSuggestionIdx(null), 200)}
+                                                    />
+                                                    {activeSuggestionIdx === idx && treatmentSuggestions.length > 0 && (
+                                                        <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto mt-1">
+                                                            {treatmentSuggestions.map((svc: any) => (
+                                                                <div
+                                                                    key={svc.id}
+                                                                    onMouseDown={() => selectTreatmentSuggestion(idx, svc)}
+                                                                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs font-bold text-slate-700 border-b border-slate-50 last:border-0 flex justify-between"
+                                                                >
+                                                                    <span>{svc.name}</span>
+                                                                    <span className="text-slate-400">{svc.final_price}€</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <input
                                                     type="number"
                                                     placeholder="€"

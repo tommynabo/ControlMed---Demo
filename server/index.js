@@ -413,12 +413,35 @@ app.put('/api/patients/:id', async (req, res) => {
             console.log(`🏷️ Auto-generated name: "${updates.name}"`);
         }
 
+        // Convert arrays to JSON strings for Supabase storage
+        if (Array.isArray(updates.prescriptions)) {
+            updates.prescriptions = JSON.stringify(updates.prescriptions);
+        }
+        if (Array.isArray(updates.medicalHistory)) {
+            updates.medicalHistory = JSON.stringify(updates.medicalHistory);
+        }
+        if (Array.isArray(updates.criticalAlerts)) {
+            updates.criticalAlerts = JSON.stringify(updates.criticalAlerts);
+        }
+
+        // Sanitize: only allow known Patient columns to avoid Supabase errors
+        const allowedColumns = [
+            'name', 'firstName', 'lastName1', 'lastName2', 'dni', 'birthDate',
+            'email', 'phone', 'insurance', 'assignedDoctorId', 'balance', 'wallet',
+            'allergies', 'smoker', 'diseases', 'medications', 'criticalAlerts',
+            'prescriptions', 'medicalHistory', 'historyNumber'
+        ];
+        const sanitized = {};
+        for (const key of allowedColumns) {
+            if (updates[key] !== undefined) sanitized[key] = updates[key];
+        }
+
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         const { data, error } = await supabase
             .from('Patient')
-            .update(updates)
+            .update(sanitized)
             .eq('id', id)
             .select()
             .single();

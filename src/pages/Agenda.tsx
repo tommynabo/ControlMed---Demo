@@ -34,6 +34,8 @@ const Agenda: React.FC = () => {
     const [bookingPatientId, setBookingPatientId] = useState<string>('');
     const [patientBudgets, setPatientBudgets] = useState<any[]>([]);
     const [bookingBudgetId, setBookingBudgetId] = useState<string>('');
+    const [bookingBudgetItemId, setBookingBudgetItemId] = useState<string>('');
+    const [selectedBudgetItems, setSelectedBudgetItems] = useState<any[]>([]);
 
     // Fetch Budgets
     React.useEffect(() => {
@@ -195,6 +197,7 @@ const Agenda: React.FC = () => {
             setBookingTreatment('');
             setBookingBudgetId('');
             setBookingBudgetItemId('');
+            setSelectedBudgetItems([]);
             setBookingObservation('');
             setBookingPrice(0);
             setBookingDuration(30);
@@ -280,14 +283,16 @@ const Agenda: React.FC = () => {
                         <div className="relative">
 
                             {/* 1. Background Grid (Lines & Times) */}
-                            {TIME_SLOTS.map((time, idx) => (
-                                <div key={time} className="flex h-24 border-t border-slate-100/50 relative group">
-                                    {/* Time Label */}
-                                    <div className="absolute -left-14 -top-3 w-10 text-right text-xs font-bold text-slate-300 group-hover:text-blue-400 transition-colors">
+                            {TIME_SLOTS.map((time, idx) => {
+                                const isHourStart = time.endsWith(':00');
+                                return (
+                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-200' : 'border-t border-slate-100/60 border-dashed'}`}>
+                                    {/* Time Label - only show on hour marks */}
+                                    {isHourStart && (
+                                    <div className="absolute -left-14 -top-3 w-10 text-right text-xs font-bold text-slate-400 group-hover:text-blue-500 transition-colors">
                                         {time}
                                     </div>
-                                    {/* Horizontal Line guide */}
-                                    <div className="w-full h-px bg-slate-50 absolute top-0 left-0"></div>
+                                    )}
 
                                     {/* Clickable Slots for New Appt (Invisible overlay) */}
                                     {viewMode === 'daily' ? (
@@ -331,22 +336,16 @@ const Agenda: React.FC = () => {
                                         ))
                                     )}
                                 </div>
-                            ))}
+                                );
+                            })}
 
                             {/* 2. Appointments Overlay */}
                             <div className="absolute inset-0 z-10 pointer-events-none flex ml-0">
                                 {(() => {
-                                    // Helper constants
-                                    const PIXELS_PER_MINUTE = 96 / 60; // 96px (h-24) per 60 min -> 1.6 px/min. Note: h-24 is 6rem = 96px in Tailwind default? No, h-24 is 6rem = 96px.
-                                    // Wait, Tailwind h-24 is 6rem. 1rem = 16px usually. 6 * 16 = 96px.
-                                    // Slot duration = 60 mins (based on TIME_SLOTS usually being hourly or 30 mins).
-                                    // Assuming TIME_SLOTS are ["09:00", "10:00", ...] -> 60 min gap.
-                                    // If TIME_SLOTS are ["09:00", "09:30"] -> 30 min gap.
-                                    // Let's assume 60 min slots based on typical CRM, but check constants later. "h-24" suggests large slots.
-                                    // Let's check logic: We map TIME_SLOTS.
-                                    // If I put an appt at 09:30, it should be at top: 50% of the 09:00 slot.
+                                    // Each TIME_SLOT = 15 min, rendered as h-12 (3rem = 48px)
+                                    const PIXELS_PER_MINUTE = 48 / 15; // 48px per 15-min slot = 3.2 px/min
 
-                                    // We need to calculate columns content.
+                                    // Build columns for overlay positioning
                                     const columns = [];
 
                                     if (viewMode === 'daily') {
@@ -584,8 +583,10 @@ const Agenda: React.FC = () => {
                                     onChange={(e) => {
                                         const bId = e.target.value;
                                         setBookingBudgetId(bId);
-                                        setBookingTreatment(''); // Reset treatment when changing budget
-                                        // Auto-select price not needed here, will be done in item selection
+                                        setBookingTreatment('');
+                                        setSelectedBudgetItems([]);
+                                        setBookingBudgetItemId('');
+                                        setBookingPrice(0);
                                     }}
                                     disabled={!!selectedAppt}
                                 >
@@ -599,31 +600,45 @@ const Agenda: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Budget Item Selection (If Budget Selected) */}
+                        {/* Budget Item Selection (If Budget Selected) - Multi-select */}
                         {bookingBudgetId && (
                             <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Concepto del Presupuesto</label>
-                                <select
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                    onChange={(e) => {
-                                        const itemIndex = parseInt(e.target.value);
-                                        const budget = patientBudgets.find(b => b.id === bookingBudgetId);
-                                        if (budget && budget.items && budget.items[itemIndex]) {
-                                            const item = budget.items[itemIndex];
-                                            setBookingTreatment(item.name); // Use item name as treatment
-                                            setBookingPrice(item.price);
-                                            setBookingBudgetItemId(item.id || itemIndex.toString()); // Store ID or index
-                                        }
-                                    }}
-                                    disabled={!!selectedAppt}
-                                >
-                                    <option value="">-- Seleccionar item --</option>
-                                    {patientBudgets.find(b => b.id === bookingBudgetId)?.items.map((item: any, idx: number) => (
-                                        <option key={idx} value={idx}>
-                                            {item.name} ({item.price}€)
-                                        </option>
-                                    ))}
-                                </select>
+                                <label className="text-xs font-bold uppercase text-slate-400">Conceptos del Presupuesto</label>
+                                <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 max-h-40 overflow-y-auto">
+                                    {patientBudgets.find(b => b.id === bookingBudgetId)?.items.map((item: any, idx: number) => {
+                                        const isChecked = selectedBudgetItems.some((si: any) => (si.id || idx.toString()) === (item.id || idx.toString()));
+                                        return (
+                                            <label key={idx} className="flex items-center gap-2 cursor-pointer hover:bg-white rounded-lg p-1 transition-colors">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-4 h-4 rounded"
+                                                    checked={isChecked}
+                                                    disabled={!!selectedAppt}
+                                                    onChange={() => {
+                                                        let newSelected;
+                                                        if (isChecked) {
+                                                            newSelected = selectedBudgetItems.filter((si: any) => (si.id || '') !== (item.id || idx.toString()));
+                                                        } else {
+                                                            newSelected = [...selectedBudgetItems, { ...item, _idx: idx }];
+                                                        }
+                                                        setSelectedBudgetItems(newSelected);
+                                                        // Auto-fill treatment names and total price
+                                                        setBookingTreatment(newSelected.map((i: any) => i.name).join(', '));
+                                                        setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + (i.price || 0), 0));
+                                                        setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
+                                                    }}
+                                                />
+                                                <span className="text-xs font-bold text-slate-600 flex-1">{item.name}</span>
+                                                <span className="text-xs font-bold text-slate-400">{item.price}€</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                                {selectedBudgetItems.length > 0 && (
+                                    <div className="mt-2 text-right text-xs font-black text-blue-600">
+                                        Total: {selectedBudgetItems.reduce((sum: number, i: any) => sum + (i.price || 0), 0).toFixed(2)}€
+                                    </div>
+                                )}
                             </div>
                         )}
 

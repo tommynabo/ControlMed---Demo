@@ -92,6 +92,10 @@ export const api = {
             });
             if (!res.ok) throw new Error('Failed to get download URL');
             return res.json();
+        },
+        getByPatient: async (patientId: string): Promise<Invoice[]> => {
+            const all = await api.invoices.getAll();
+            return all.filter((inv: any) => inv.patientId === patientId);
         }
     },
 
