@@ -508,7 +508,6 @@ app.post('/api/appointments', async (req, res) => {
                 patientId,
                 doctorId: safeDoctorId,
                 treatmentId: safeTreatmentId,
-                treatmentName: treatmentName || null,
                 budgetId: safeBudgetId,
                 budgetItemId: safeBudgetItemId,
                 amount: amount || null,

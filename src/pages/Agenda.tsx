@@ -174,21 +174,18 @@ const Agenda: React.FC = () => {
             dateToSave.setDate(diff);
         }
 
-        // Resolve treatment name from DENTAL_SERVICES or budget items
-        const selectedService = DENTAL_SERVICES.find(s => s.id === bookingTreatment);
-        const resolvedTreatmentName = selectedService?.name || bookingTreatment || null;
-
         const newAppt: any = {
             date: dateToSave.toISOString().split('T')[0],
             time: activeSlot.time,
             patientId: patient.id,
             doctorId: bookingDoctorId,
-            treatmentId: null, // Don't send fake IDs (srv-1 etc.) - backend validates UUID
-            treatmentName: resolvedTreatmentName,
+            treatmentId: null, // Don't send fake srv-X IDs - backend validates UUID
             budgetId: bookingBudgetId || null,
-            budgetItemId: bookingBudgetItemId || null, // Save specific item ID
+            budgetItemId: bookingBudgetItemId || null,
+            amount: bookingPrice || null,
+            observations: bookingObservation || null,
             status: 'Scheduled',
-            duration: bookingDuration // Save duration
+            duration: bookingDuration
         };
 
         try {
