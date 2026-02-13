@@ -147,8 +147,9 @@ model Appointment {
   patient      Patient   @relation(fields: [patientId], references: [id])
   doctorId     String
   doctor       Doctor    @relation(fields: [doctorId], references: [id])
-  treatmentId  String?
-  treatment    Treatment? @relation(fields: [treatmentId], references: [id])
+  treatmentId   String?
+  treatment     Treatment? @relation(fields: [treatmentId], references: [id])
+  treatmentName String?
 
   // Link to Budget
   budgetId     String?

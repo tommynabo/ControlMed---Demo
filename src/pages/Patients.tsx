@@ -142,27 +142,133 @@ const Patients: React.FC = () => {
     const handlePrintBudget = (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
-            const total = budget.items?.reduce((sum: number, item: any) => sum + (Number(item.price) || 0), 0) || 0;
-            w.document.write(`
-                <html>
-                    <head>
-                        <title>Presupuesto #${budget.id}</title>
-                        <script src="https://cdn.tailwindcss.com"></script>
-                    </head>
-                    <body class="bg-white p-12 min-h-screen relative font-sans">
-                        <div class="flex justify-between items-start border-b-2 border-slate-900 pb-8 mb-8">
-                            <div><h1 class="text-4xl font-black text-slate-900 uppercase">Clínica Dental</h1><p class="text-sm font-bold text-slate-500 uppercase mt-2">Dr. Martin & Asociados</p></div>
-                            <div class="text-right text-xs font-bold text-slate-500 uppercase"><p>C/ Ejemplo 123, Madrid</p><p>Tel: 91 123 45 67</p></div>
-                        </div>
-                        <div class="flex justify-between items-start mb-12 bg-slate-50 p-8 rounded-xl border border-slate-100">
-                            <div><p class="text-[10px] font-black uppercase text-slate-400 mb-1">Paciente</p><h2 class="text-2xl font-bold text-slate-900">${selectedPatient?.name}</h2><p class="text-xs font-medium text-slate-500 mt-1">${selectedPatient?.dni || ''}</p></div>
-                            <div class="text-right"><p class="text-[10px] font-black uppercase text-slate-400 mb-1">Presupuesto</p><h2 class="text-xl font-black text-slate-900">${budget.id.substring(0, 8).toUpperCase()}</h2><p class="text-xs font-bold text-slate-500 mt-1">${new Date(budget.createdAt).toLocaleDateString('es-ES')}</p></div>
-                        </div>
-                        <div class="mb-12"><table class="w-full text-left"><thead><tr class="border-b-2 border-slate-900"><th class="py-4 text-xs font-black uppercase text-slate-900 w-16">Cant.</th><th class="py-4 text-xs font-black uppercase text-slate-900">Concepto</th><th class="py-4 text-xs font-black uppercase text-slate-900 w-24 text-right">Precio</th></tr></thead><tbody class="text-sm text-slate-700">${budget.items?.map((item: any) => `<tr class="border-b border-slate-100"><td class="py-4 font-bold text-slate-500">${item.quantity || 1}</td><td class="py-4 font-medium"><div class="font-bold text-slate-900">${item.name}</div>${item.tooth ? `<div class="text-xs text-slate-400 uppercase mt-1">Diente: ${item.tooth}</div>` : ''}</td><td class="py-4 font-bold text-slate-900 text-right">${item.price}€</td></tr>`).join('') || ''}</tbody><tfoot><tr><td colspan="2" class="pt-6 text-right text-xs font-black uppercase text-slate-400">Total</td><td class="pt-6 text-right text-2xl font-black text-slate-900">${total}€</td></tr></tfoot></table></div>
-                        <div class="mt-20 border-t border-slate-200 pt-8 flex justify-between items-end"><div class="text-[10px] font-bold text-slate-400 max-w-sm uppercase">Validez 30 días.</div><div class="text-center"><div class="h-24 w-48 border-b border-slate-900 mb-2"></div><p class="text-xs font-black uppercase text-slate-900">Firma / Conforme</p></div></div>
-                    </body>
-                </html>
-            `);
+            const total = budget.items?.reduce((sum: number, item: any) => sum + ((Number(item.price) || 0) * (item.quantity || 1)), 0) || 0;
+            const statusLabel = budget.status === 'ACCEPTED' ? 'ACEPTADO' : budget.status === 'REJECTED' ? 'RECHAZADO' : budget.status === 'CONVERTED' ? 'CONVERTIDO' : 'PENDIENTE';
+            const statusColor = budget.status === 'ACCEPTED' ? '#16a34a' : budget.status === 'REJECTED' ? '#dc2626' : '#94a3b8';
+            const budgetDate = new Date(budget.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+
+            const itemsHtml = budget.items?.map((item: any, idx: number) => `
+                <tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}">
+                    <td style="padding:14px 12px;font-size:13px;color:#64748b;text-align:center;border-bottom:1px solid #e2e8f0">${item.quantity || 1}</td>
+                    <td style="padding:14px 12px;border-bottom:1px solid #e2e8f0">
+                        <div style="font-weight:700;font-size:14px;color:#0f172a">${item.name}</div>
+                        ${item.tooth ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px">Pieza dental: ${item.tooth}</div>` : ''}
+                    </td>
+                    <td style="padding:14px 12px;font-size:14px;font-weight:700;color:#0f172a;text-align:right;border-bottom:1px solid #e2e8f0">${(Number(item.price) || 0).toFixed(2)} &euro;</td>
+                    <td style="padding:14px 12px;font-size:14px;font-weight:700;color:#0f172a;text-align:right;border-bottom:1px solid #e2e8f0">${((Number(item.price) || 0) * (item.quantity || 1)).toFixed(2)} &euro;</td>
+                </tr>
+            `).join('') || '';
+
+            w.document.write(`<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Presupuesto - ${selectedPatient?.name || 'Paciente'}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter',system-ui,sans-serif; color:#0f172a; background:#fff; }
+        @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+    </style>
+</head>
+<body>
+    <div style="max-width:800px;margin:0 auto;padding:48px 40px">
+        <!-- HEADER -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;border-bottom:3px solid #0f172a">
+            <div>
+                <h1 style="font-size:28px;font-weight:900;letter-spacing:-0.5px;color:#0f172a">CLINICA DENTAL</h1>
+                <p style="font-size:13px;font-weight:600;color:#64748b;margin-top:4px">Dr. Martin & Asociados</p>
+                <p style="font-size:11px;color:#94a3b8;margin-top:2px">CIF: B-12345678</p>
+            </div>
+            <div style="text-align:right">
+                <p style="font-size:11px;color:#94a3b8;line-height:1.6">C/ Ejemplo 123, 28001 Madrid</p>
+                <p style="font-size:11px;color:#94a3b8;line-height:1.6">Tel: 91 123 45 67</p>
+                <p style="font-size:11px;color:#94a3b8;line-height:1.6">info@clinicadental.es</p>
+            </div>
+        </div>
+
+        <!-- DOCUMENT TITLE + STATUS -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:32px 0 24px">
+            <div>
+                <p style="font-size:11px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase">Presupuesto Dental</p>
+                <p style="font-size:22px;font-weight:900;color:#0f172a;margin-top:4px">#${budget.id.substring(0, 8).toUpperCase()}</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+                <span style="background:${statusColor}15;color:${statusColor};font-size:11px;font-weight:800;padding:6px 16px;border-radius:20px;letter-spacing:0.5px">${statusLabel}</span>
+            </div>
+        </div>
+
+        <!-- PATIENT & DATE INFO -->
+        <div style="display:flex;gap:24px;margin-bottom:32px">
+            <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+                <p style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:8px">Datos del Paciente</p>
+                <p style="font-size:16px;font-weight:800;color:#0f172a">${selectedPatient?.name || ''}</p>
+                <p style="font-size:12px;color:#64748b;margin-top:4px">DNI/NIE: ${selectedPatient?.dni || 'N/A'}</p>
+                ${selectedPatient?.phone ? `<p style="font-size:12px;color:#64748b;margin-top:2px">Tel: ${selectedPatient.phone}</p>` : ''}
+            </div>
+            <div style="width:200px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
+                <p style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:8px">Fecha</p>
+                <p style="font-size:14px;font-weight:700;color:#0f172a">${budgetDate}</p>
+                <p style="font-size:11px;color:#94a3b8;margin-top:6px">Validez: 30 dias</p>
+            </div>
+        </div>
+
+        <!-- ITEMS TABLE -->
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+            <thead>
+                <tr style="background:#0f172a">
+                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:center;width:60px;border-radius:8px 0 0 0">Cant.</th>
+                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:left">Tratamiento</th>
+                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:right;width:100px">Precio Ud.</th>
+                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:right;width:100px;border-radius:0 8px 0 0">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+        </table>
+
+        <!-- TOTALS -->
+        <div style="display:flex;justify-content:flex-end;margin-bottom:40px">
+            <div style="width:280px;background:#f8fafc;border:2px solid #e2e8f0;border-radius:12px;padding:20px">
+                <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                    <span style="font-size:12px;color:#64748b;font-weight:600">Subtotal</span>
+                    <span style="font-size:13px;font-weight:700;color:#0f172a">${total.toFixed(2)} &euro;</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding-bottom:12px;border-bottom:2px solid #e2e8f0;margin-bottom:12px">
+                    <span style="font-size:12px;color:#64748b;font-weight:600">IVA (exento sanitario)</span>
+                    <span style="font-size:13px;font-weight:700;color:#0f172a">0,00 &euro;</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <span style="font-size:14px;font-weight:900;color:#0f172a;text-transform:uppercase">Total</span>
+                    <span style="font-size:24px;font-weight:900;color:#0f172a">${total.toFixed(2)} &euro;</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONDITIONS -->
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:40px">
+            <p style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:10px">Condiciones</p>
+            <ul style="font-size:11px;color:#64748b;line-height:1.8;padding-left:16px">
+                <li>Este presupuesto tiene una validez de 30 dias desde la fecha de emision.</li>
+                <li>Los precios incluyen todos los materiales necesarios para el tratamiento.</li>
+                <li>El pago puede realizarse en efectivo, tarjeta o financiacion sin intereses.</li>
+                <li>Las sesiones de revision post-tratamiento estan incluidas en el precio.</li>
+            </ul>
+        </div>
+
+        <!-- SIGNATURES -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:48px;padding-top:24px">
+            <div style="text-align:center">
+                <div style="width:200px;border-bottom:2px solid #0f172a;margin-bottom:8px;height:60px"></div>
+                <p style="font-size:10px;font-weight:800;letter-spacing:1px;color:#0f172a;text-transform:uppercase">La Clinica</p>
+            </div>
+            <div style="text-align:center">
+                <div style="width:200px;border-bottom:2px solid #0f172a;margin-bottom:8px;height:60px"></div>
+                <p style="font-size:10px;font-weight:800;letter-spacing:1px;color:#0f172a;text-transform:uppercase">El Paciente (Conforme)</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>`);
             w.document.close();
             setTimeout(() => { w.print(); w.close(); }, 500);
         }
@@ -1403,7 +1509,8 @@ const Patients: React.FC = () => {
             {
                 isNewPatientModalOpen && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
-                        <div className="bg-white max-w-lg w-full rounded-[2rem] p-8 shadow-2xl">
+                        <div className="bg-white max-w-lg w-full rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh]">
+                          <div className="p-8 pb-0 overflow-y-auto flex-1">
                             <h3 className="text-2xl font-black text-slate-900 mb-6">Nuevo Paciente</h3>
                             <div className="space-y-4">
                                 <div>
@@ -1531,10 +1638,11 @@ const Patients: React.FC = () => {
                                     />
                                 </div>
                             </div>
-                            <div className="flex gap-4 mt-6">
+                          </div>{/* end scrollable area */}
+                          <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                                 <button onClick={() => setIsNewPatientModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
                                 <button onClick={handleCreatePatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg">Guardar</button>
-                            </div>
+                          </div>
                         </div>
                     </div>
                 )

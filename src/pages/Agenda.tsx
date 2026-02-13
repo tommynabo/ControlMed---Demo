@@ -174,13 +174,17 @@ const Agenda: React.FC = () => {
             dateToSave.setDate(diff);
         }
 
+        // Resolve treatment name from DENTAL_SERVICES or budget items
+        const selectedService = DENTAL_SERVICES.find(s => s.id === bookingTreatment);
+        const resolvedTreatmentName = selectedService?.name || bookingTreatment || null;
+
         const newAppt: any = {
             date: dateToSave.toISOString().split('T')[0],
             time: activeSlot.time,
             patientId: patient.id,
             doctorId: bookingDoctorId,
-            treatmentId: bookingTreatment || null,
-            treatment: bookingTreatment || null, // Guardar nombre del tratamiento también para visualización rápida
+            treatmentId: null, // Don't send fake IDs (srv-1 etc.) - backend validates UUID
+            treatmentName: resolvedTreatmentName,
             budgetId: bookingBudgetId || null,
             budgetItemId: bookingBudgetItemId || null, // Save specific item ID
             status: 'Scheduled',
@@ -286,7 +290,7 @@ const Agenda: React.FC = () => {
                             {TIME_SLOTS.map((time, idx) => {
                                 const isHourStart = time.endsWith(':00');
                                 return (
-                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-200' : 'border-t border-slate-100/60 border-dashed'}`}>
+                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
                                     {/* Time Label - only show on hour marks */}
                                     {isHourStart && (
                                     <div className="absolute -left-14 -top-3 w-10 text-right text-xs font-bold text-slate-400 group-hover:text-blue-500 transition-colors">
@@ -493,7 +497,8 @@ const Agenda: React.FC = () => {
             {/* APPOINTMENT MODAL */}
             {isAppointmentModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in">
-                    <div className="bg-white max-w-lg w-full rounded-[2rem] p-8 shadow-2xl space-y-6">
+                    <div className="bg-white max-w-lg w-full rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh]">
+                      <div className="p-8 space-y-6 overflow-y-auto flex-1">
                         <div className="flex justify-between items-center">
                             <h3 className="text-2xl font-black text-slate-900">{selectedAppt ? 'Detalles Cita' : 'Nueva Cita'}</h3>
                             {selectedAppt && (() => {
@@ -728,7 +733,8 @@ const Agenda: React.FC = () => {
                             />
                         </div>
 
-                        <div className="flex gap-4 pt-4">
+                      </div>{/* end scrollable area */}
+                      <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                             <button onClick={() => setIsAppointmentModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">
                                 {selectedAppt ? 'Cerrar' : 'Cancelar'}
                             </button>
@@ -737,7 +743,7 @@ const Agenda: React.FC = () => {
                                     Confirmar
                                 </button>
                             )}
-                        </div>
+                      </div>
                     </div>
                 </div>
             )

@@ -13,7 +13,8 @@ const Billing: React.FC = () => {
 
     const [billingTab, setBillingTab] = useState<'invoices' | 'expenses'>('invoices');
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
-    const [exportDate, setExportDate] = useState('');
+    const [exportDateFrom, setExportDateFrom] = useState('');
+    const [exportDateTo, setExportDateTo] = useState('');
     const [filterDate, setFilterDate] = useState(''); // Filtro para la tabla de facturas
 
     // Refresh patients on mount to ensure search works with latest data
@@ -183,24 +184,21 @@ const Billing: React.FC = () => {
         }
     };
 
-    const handleDownloadZip = async (date: string) => {
-        // Logic from App.tsx
-        // Fix: Compare only the YYYY-MM-DD part of the ISO string
-        const dailyInvoices = invoices.filter(inv => {
+    const handleDownloadZip = async (from: string, to: string) => {
+        const filteredInvoices = invoices.filter(inv => {
             if (!inv.date) return false;
-            // Handle both ISO strings and plain dates
-            return inv.date.split('T')[0] === date;
+            const invDate = inv.date.split('T')[0];
+            return invDate >= from && invDate <= to;
         });
 
-        if (dailyInvoices.length === 0) {
-            alert(`No hay facturas emitidas el día ${date}.`);
+        if (filteredInvoices.length === 0) {
+            alert(`No hay facturas en el periodo ${from} a ${to}.`);
             return;
         }
         try {
             if (api.downloadBatchZip) {
-                await api.downloadBatchZip(dailyInvoices, date);
-                localStorage.setItem('lastBatchDownloadDate', date);
-                // Notification handled by browser download
+                await api.downloadBatchZip(filteredInvoices, `${from}_${to}`);
+                localStorage.setItem('lastBatchDownloadDate', to);
             } else {
                 alert("Función de descarga no disponible.");
             }
@@ -270,17 +268,32 @@ const Billing: React.FC = () => {
                                 </div>
                                 <div className="space-y-1">
                                     <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Periodo Fiscal (Exportar)</span>
-                                    <input
-                                        type="date"
-                                        value={exportDate}
-                                        onChange={e => setExportDate(e.target.value)}
-                                        className="bg-transparent border-none text-xl font-bold text-slate-900 outline-none p-0 focus:ring-0"
-                                    />
+                                    <div className="flex items-center gap-3">
+                                        <div>
+                                            <span className="text-[9px] font-bold text-slate-300 uppercase">Desde</span>
+                                            <input
+                                                type="date"
+                                                value={exportDateFrom}
+                                                onChange={e => setExportDateFrom(e.target.value)}
+                                                className="bg-transparent border-none text-lg font-bold text-slate-900 outline-none p-0 focus:ring-0 block"
+                                            />
+                                        </div>
+                                        <span className="text-slate-300 font-bold mt-3">—</span>
+                                        <div>
+                                            <span className="text-[9px] font-bold text-slate-300 uppercase">Hasta</span>
+                                            <input
+                                                type="date"
+                                                value={exportDateTo}
+                                                onChange={e => setExportDateTo(e.target.value)}
+                                                className="bg-transparent border-none text-lg font-bold text-slate-900 outline-none p-0 focus:ring-0 block"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <button
-                                onClick={() => handleDownloadZip(exportDate)}
-                                disabled={!exportDate}
+                                onClick={() => handleDownloadZip(exportDateFrom, exportDateTo)}
+                                disabled={!exportDateFrom || !exportDateTo}
                                 className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-[11px] font-black uppercase tracking-widest hover:bg-black hover:scale-105 transition-all flex items-center gap-3 disabled:opacity-50 shadow-xl disabled:shadow-none"
                             >
                                 <Download size={18} /> Descargar ZIP Gestoría

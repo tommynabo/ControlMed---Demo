@@ -462,9 +462,9 @@ app.put('/api/patients/:id', async (req, res) => {
 // --- APPOINTMENTS ---
 app.post('/api/appointments', async (req, res) => {
     try {
-        const { date, time, patientId, doctorId, treatmentId, duration, observations, budgetId, budgetItemId, amount } = req.body;
+        const { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, amount } = req.body;
 
-        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId, duration, observations, budgetId, budgetItemId, amount });
+        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, amount });
 
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
@@ -472,7 +472,8 @@ app.post('/api/appointments', async (req, res) => {
         // Sanitization: Ensure empty strings become null for UUID fields to prevent invalid input syntax
         // DB expects UUID or NULL. Empty string "" is not a valid UUID.
         // Also handle "undefined" string literal just in case
-        const safeTreatmentId = (treatmentId && treatmentId !== 'undefined' && treatmentId.trim().length > 0) ? treatmentId : null;
+        const isValidUUID = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+        const safeTreatmentId = (treatmentId && isValidUUID(treatmentId)) ? treatmentId : null;
         const safeDoctorId = (doctorId && doctorId !== 'undefined' && doctorId.trim().length > 0) ? doctorId : null;
         const safeBudgetId = (budgetId && budgetId !== 'undefined' && budgetId.trim().length > 0) ? budgetId : null;
         const safeBudgetItemId = (budgetItemId && budgetItemId !== 'undefined' && budgetItemId.trim().length > 0) ? budgetItemId : null;
@@ -507,6 +508,7 @@ app.post('/api/appointments', async (req, res) => {
                 patientId,
                 doctorId: safeDoctorId,
                 treatmentId: safeTreatmentId,
+                treatmentName: treatmentName || null,
                 budgetId: safeBudgetId,
                 budgetItemId: safeBudgetItemId,
                 amount: amount || null,
