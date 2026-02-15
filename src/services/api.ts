@@ -1,4 +1,5 @@
 import { Patient, Appointment, Invoice, ClinicalRecord, InventoryItem, Doctor } from '../types';
+import { supabase } from './supabase';
 
 // Use relative path in production (Vercel), localhost in dev
 // @ts-ignore - Vite env
@@ -721,6 +722,250 @@ export const api = {
         delete: async (id: string) => {
             const res = await fetch(`${API_URL}/users/${id}`, { method: 'DELETE', headers });
             if (!res.ok) throw new Error('Failed to delete user');
+        }
+    },
+
+    // Clinic Info (Supabase Direct)
+    clinic: {
+        getInfo: async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('clinic_info')
+                    .select('*')
+                    .single();
+                
+                if (error && error.code !== 'PGRST116') throw error;
+                return data || null;
+            } catch (error) {
+                console.error('Error fetching clinic info:', error);
+                return null;
+            }
+        },
+        
+        getAddresses: async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('clinic_addresses')
+                    .select('*');
+                
+                if (error) throw error;
+                return data || [];
+            } catch (error) {
+                console.error('Error fetching clinic addresses:', error);
+                return [];
+            }
+        },
+        
+        getBillingInfo: async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('clinic_billing_info')
+                    .select('*')
+                    .single();
+                
+                if (error && error.code !== 'PGRST116') throw error;
+                return data || null;
+            } catch (error) {
+                console.error('Error fetching billing info:', error);
+                return null;
+            }
+        },
+
+        create: async (clinicData: any) => {
+            try {
+                const { data, error } = await supabase
+                    .from('clinic_info')
+                    .insert([clinicData])
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.error('Error creating clinic info:', error);
+                throw error;
+            }
+        },
+
+        update: async (id: string, clinicData: any) => {
+            try {
+                const { data, error } = await supabase
+                    .from('clinic_info')
+                    .update(clinicData)
+                    .eq('id', id)
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.error('Error updating clinic info:', error);
+                throw error;
+            }
+        }
+    },
+
+    // Doctor Schedules (Supabase Direct)
+    doctorSchedules: {
+        getAll: async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('doctor_schedules')
+                    .select('*')
+                    .eq('is_active', true);
+                
+                if (error) throw error;
+                return data || [];
+            } catch (error) {
+                console.error('Error fetching doctor schedules:', error);
+                return [];
+            }
+        },
+
+        getByDoctor: async (doctorId: string) => {
+            try {
+                const { data, error } = await supabase
+                    .from('doctor_schedules')
+                    .select('*')
+                    .eq('doctor_id', doctorId)
+                    .single();
+                
+                if (error && error.code !== 'PGRST116') throw error;
+                return data || null;
+            } catch (error) {
+                console.error('Error fetching doctor schedule:', error);
+                return null;
+            }
+        },
+
+        create: async (scheduleData: any) => {
+            try {
+                const { data, error } = await supabase
+                    .from('doctor_schedules')
+                    .insert([scheduleData])
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.error('Error creating doctor schedule:', error);
+                throw error;
+            }
+        },
+
+        update: async (id: string, scheduleData: any) => {
+            try {
+                const { data, error } = await supabase
+                    .from('doctor_schedules')
+                    .update(scheduleData)
+                    .eq('id', id)
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.error('Error updating doctor schedule:', error);
+                throw error;
+            }
+        }
+    },
+
+    // System Users (Supabase Direct)
+    systemUsers: {
+        getAll: async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_users')
+                    .select('*')
+                    .eq('is_active', true);
+                
+                if (error) throw error;
+                return data || [];
+            } catch (error) {
+                console.error('Error fetching system users:', error);
+                return [];
+            }
+        },
+
+        getAllIncludeInactive: async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_users')
+                    .select('*')
+                    .order('role', { ascending: true })
+                    .order('full_name', { ascending: true });
+                
+                if (error) throw error;
+                return data || [];
+            } catch (error) {
+                console.error('Error fetching all system users:', error);
+                return [];
+            }
+        },
+
+        getById: async (id: string) => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_users')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+                
+                if (error && error.code !== 'PGRST116') throw error;
+                return data || null;
+            } catch (error) {
+                console.error('Error fetching system user:', error);
+                return null;
+            }
+        },
+
+        create: async (userData: any) => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_users')
+                    .insert([userData])
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.error('Error creating system user:', error);
+                throw error;
+            }
+        },
+
+        update: async (id: string, userData: any) => {
+            try {
+                const { data, error } = await supabase
+                    .from('system_users')
+                    .update(userData)
+                    .eq('id', id)
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                return data;
+            } catch (error) {
+                console.error('Error updating system user:', error);
+                throw error;
+            }
+        },
+
+        delete: async (id: string) => {
+            try {
+                const { error } = await supabase
+                    .from('system_users')
+                    .delete()
+                    .eq('id', id);
+                
+                if (error) throw error;
+            } catch (error) {
+                console.error('Error deleting system user:', error);
+                throw error;
+            }
         }
     }
 };

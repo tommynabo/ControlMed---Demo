@@ -66,7 +66,7 @@ const ScheduleAvailability: React.FC = () => {
   const loadScheduleData = async () => {
     setIsLoadingDoctors(true);
     try {
-      const doctorsData = await api.schedule.getDoctors();
+      const doctorsData = await api.doctorSchedules.getAll();
       const durationsData = await api.schedule.getServiceDurations();
       setDoctors(doctorsData || []);
       setServiceDurations(durationsData || []);

@@ -41,7 +41,7 @@ const Users: React.FC = () => {
   const loadUsers = async () => {
     setIsLoading(true);
     try {
-      const data = await api.users.getAll();
+      const data = await api.systemUsers.getAllIncludeInactive();
       setUsers(data || []);
     } catch (e) {
       console.error('Error loading users:', e);
@@ -105,9 +105,9 @@ const Users: React.FC = () => {
         if (userForm.password) {
           updateData.password = userForm.password;
         }
-        await api.users.update(editingUser.id, updateData);
+        await api.systemUsers.update(editingUser.id, updateData);
       } else {
-        await api.users.create({
+        await api.systemUsers.create({
           email: userForm.email,
           full_name: userForm.full_name,
           role: userForm.role,
@@ -132,7 +132,7 @@ const Users: React.FC = () => {
     if (!confirm(`¿Eliminar usuario ${name}? Esta acción es irreversible.`)) return;
 
     try {
-      await api.users.delete(id);
+      await api.systemUsers.delete(id);
       loadUsers();
       setSuccessMessage('Usuario eliminado');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -144,7 +144,7 @@ const Users: React.FC = () => {
 
   const handleToggleActive = async (user: User) => {
     try {
-      await api.users.update(user.id!, {
+      await api.systemUsers.update(user.id!, {
         ...user,
         is_active: !user.is_active
       });

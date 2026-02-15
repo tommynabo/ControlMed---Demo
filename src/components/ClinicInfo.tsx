@@ -5,32 +5,26 @@ import { api } from '../services/api';
 interface ClinicData {
   id?: string;
   name: string;
-  street: string;
-  street_number: string;
-  city: string;
-  postal_code: string;
-  country: string;
-  phone: string;
   email: string;
+  phone: string;
+  web_url: string;
+  country: string;
   opening_time: string;
   closing_time: string;
 }
 
 const ClinicInfo: React.FC = () => {
   const [clinicData, setClinicData] = useState<ClinicData>({
-    name: '',
-    street: '',
-    street_number: '',
-    city: '',
-    postal_code: '',
+    name: 'CHC Clinica Dental',
+    email: 'Admin@chcclinicadental.com',
+    phone: '615049704',
+    web_url: 'www.chcclinicadental.com',
     country: 'España',
-    phone: '',
-    email: '',
-    opening_time: '08:00',
+    opening_time: '09:00',
     closing_time: '20:00'
   });
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -41,14 +35,21 @@ const ClinicInfo: React.FC = () => {
   const loadClinicInfo = async () => {
     setIsLoading(true);
     try {
-      // Intentar cargar del backend
       const data = await api.clinic.getInfo();
       if (data) {
-        setClinicData(data);
+        setClinicData({
+          id: data.id,
+          name: data.name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          web_url: data.web_url || '',
+          country: data.country || 'España',
+          opening_time: data.opening_time ? data.opening_time.substring(0, 5) : '09:00',
+          closing_time: data.closing_time ? data.closing_time.substring(0, 5) : '20:00'
+        });
       }
     } catch (e) {
       console.error('Error loading clinic info:', e);
-      // Usar datos por defecto si no existe
     } finally {
       setIsLoading(false);
     }
@@ -57,12 +58,22 @@ const ClinicInfo: React.FC = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      const timeData = {
+        ...clinicData,
+        opening_time: clinicData.opening_time.includes(':') 
+          ? `${clinicData.opening_time}:00` 
+          : `${clinicData.opening_time}:00`,
+        closing_time: clinicData.closing_time.includes(':')
+          ? `${clinicData.closing_time}:00`
+          : `${clinicData.closing_time}:00`
+      };
+
       if (clinicData.id) {
-        await api.clinic.update(clinicData.id, clinicData);
+        await api.clinic.update(clinicData.id, timeData);
       } else {
-        await api.clinic.create(clinicData);
+        await api.clinic.create(timeData);
       }
-      setSuccessMessage('Información de clínica guardada correctamente');
+      setSuccessMessage('✓ Información de clínica actualizada');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error saving clinic info:', error);
@@ -72,7 +83,7 @@ const ClinicInfo: React.FC = () => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setClinicData(prev => ({
       ...prev,
@@ -82,8 +93,11 @@ const ClinicInfo: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full"></div>
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"></div>
+          <p className="text-slate-500 font-semibold">Cargando información...</p>
+        </div>
       </div>
     );
   }
@@ -97,7 +111,7 @@ const ClinicInfo: React.FC = () => {
             <Building2 className="text-blue-500" size={32} />
             Información de la Clínica
           </h3>
-          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">Datos básicos y horarios</p>
+          <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">Datos básicos, dirección y horarios</p>
         </div>
         <button
           onClick={handleSave}
@@ -109,39 +123,79 @@ const ClinicInfo: React.FC = () => {
       </div>
 
       {successMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 animate-pulse">
           <AlertCircle className="text-green-600" size={20} />
           <p className="text-sm font-bold text-green-700">{successMessage}</p>
         </div>
       )}
 
-      {/* DATOS BÁSICOS */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+      {/* INFORMACIÓN GENERAL */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 hover:shadow-md transition-shadow">
         <h4 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
           <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
-          Datos Básicos
+          Información General
         </h4>
 
         <div className="grid grid-cols-2 gap-6">
           <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Nombre de la Clínica</label>
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">Nombre de la Clínica</label>
             <input
               type="text"
               name="name"
               value={clinicData.name}
               onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Ej: Clínica Dental Sonrisas"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+              placeholder="CHC Clinica Dental"
             />
           </div>
 
           <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">País</label>
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">Website</label>
+            <input
+              type="text"
+              name="web_url"
+              value={clinicData.web_url}
+              onChange={handleInputChange}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+              placeholder="www.chcclinicadental.com"
+            />
+          </div>
+
+          <div className="col-span-2">
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block flex items-center gap-2">
+              <Mail size={14} className="text-blue-500" /> Email Principal
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={clinicData.email}
+              onChange={handleInputChange}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+              placeholder="Admin@chcclinicadental.com"
+            />
+          </div>
+
+          <div className="col-span-2">
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block flex items-center gap-2">
+              <Phone size={14} className="text-blue-500" /> Teléfono Principal
+            </label>
+            <input
+              type="tel"
+              name="phone"
+              value={clinicData.phone}
+              onChange={handleInputChange}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
+              placeholder="+34 615049704"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">País</label>
             <select
               name="country"
               value={clinicData.country}
               onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
             >
               <option value="España">España</option>
               <option value="México">México</option>
@@ -152,139 +206,83 @@ const ClinicInfo: React.FC = () => {
             </select>
           </div>
         </div>
-
-        {/* DIRECCIÓN */}
-        <h4 className="text-sm font-bold text-slate-700 mt-8 mb-4 flex items-center gap-2">
-          <MapPin size={16} className="text-blue-500" />
-          Dirección
-        </h4>
-
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          <div className="col-span-2">
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Calle</label>
-            <input
-              type="text"
-              name="street"
-              value={clinicData.street}
-              onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Ej: Calle Principal"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Número</label>
-            <input
-              type="text"
-              name="street_number"
-              value={clinicData.street_number}
-              onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Ej: 123"
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Ciudad</label>
-            <input
-              type="text"
-              name="city"
-              value={clinicData.city}
-              onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Ej: Madrid"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Código Postal</label>
-            <input
-              type="text"
-              name="postal_code"
-              value={clinicData.postal_code}
-              onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Ej: 28001"
-            />
-          </div>
-        </div>
       </div>
 
-      {/* CONTACTO */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+      {/* DIRECCIÓN REGISTRADA */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 hover:shadow-md transition-shadow">
         <h4 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-          <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
-          Contacto
+          <MapPin className="text-blue-500" size={20} />
+          Dirección Principal
         </h4>
 
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block flex items-center gap-2">
-              <Phone size={14} /> Teléfono Principal
-            </label>
-            <input
-              type="tel"
-              name="phone"
-              value={clinicData.phone}
-              onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="+34 912 34 56 78"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block flex items-center gap-2">
-              <Mail size={14} /> Email Principal
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={clinicData.email}
-              onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="info@clinica.es"
-            />
-          </div>
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+          <p className="text-sm font-semibold text-slate-900">
+            📍 <strong>Carrer De La Foneria, 24</strong><br />
+            08038 Barcelona, España
+          </p>
         </div>
       </div>
 
-      {/* HORARIOS PRINCIPALES */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+      {/* HORARIOS */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 hover:shadow-md transition-shadow">
         <h4 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
           <Clock className="text-blue-500" size={20} />
           Horario de Operación
         </h4>
 
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-2 gap-6 mb-6">
           <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Hora de Apertura</label>
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">Apertura</label>
             <input
               type="time"
               name="opening_time"
               value={clinicData.opening_time}
               onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
             />
           </div>
 
           <div>
-            <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Hora de Cierre</label>
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">Cierre</label>
             <input
               type="time"
               name="closing_time"
               value={clinicData.closing_time}
               onChange={handleInputChange}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-200"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition"
             />
           </div>
         </div>
 
-        <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-          <p className="text-sm font-bold text-blue-700">
-            Horario: <span className="text-blue-900">{clinicData.opening_time} - {clinicData.closing_time}</span>
+        <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+          <p className="text-sm font-bold text-green-900">
+            🕒 Operativa: <span className="text-green-700">{clinicData.opening_time} a {clinicData.closing_time}</span>
           </p>
+          <p className="text-xs text-green-600 mt-1">De lunes a viernes, con horarios especiales por doctor</p>
+        </div>
+      </div>
+
+      {/* INFORMACIÓN DE FACTURACIÓN */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 hover:shadow-md transition-shadow">
+        <h4 className="text-lg font-bold text-slate-900 mb-6">💼 Información de Facturación</h4>
+
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-xs font-black uppercase text-slate-400 mb-2">Razón Social</p>
+            <p className="font-semibold text-slate-900">CHCMEDIC SL</p>
+          </div>
+          <div>
+            <p className="text-xs font-black uppercase text-slate-400 mb-2">CIF</p>
+            <p className="font-semibold text-slate-900">B75759746</p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-xs font-black uppercase text-slate-400 mb-2">IBAN</p>
+            <p className="font-semibold text-slate-900 font-mono">ES21 0030 1472 2201 0235 55</p>
+          </div>
+          <div className="col-span-2">
+            <p className="text-xs font-black uppercase text-slate-400 mb-2">Responsable</p>
+            <p className="font-semibold text-slate-900">Kevin Chrabieh</p>
+          </div>
         </div>
       </div>
     </div>
