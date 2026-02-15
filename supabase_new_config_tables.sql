@@ -419,5 +419,58 @@ CREATE TRIGGER update_specialties_updated_at BEFORE UPDATE ON specialties
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =============================================================================
+-- HORARIOS ESPECÍFICOS DE DOCTORES (se ejecuta después de crear usuarios)
+-- NOTA: Esta sección requiere que existan usuarios en system_users primero
+-- =============================================================================
+
+-- Dr. Chrabieh (ADMIN + DOCTOR) - Lunes a Viernes completo
+INSERT INTO doctor_schedules (doctor_id, doctor_name, monday, tuesday, wednesday, thursday, friday, saturday, sunday, 
+                              morning_start, morning_end, afternoon_start, afternoon_end, notes, is_active)
+SELECT id, full_name, true, true, true, true, true, false, false, 
+       '09:00:00', '13:00:00', '16:00:00', '20:00:00', 'Disponible a tiempo completo', true
+FROM system_users WHERE email = 'kevinchrabieh@gmail.com' AND role = 'DOCTOR'
+ON CONFLICT DO NOTHING;
+
+-- Dr. ROO (Pablo Roo Blanco) - Lunes a Viernes
+INSERT INTO doctor_schedules (doctor_id, doctor_name, monday, tuesday, wednesday, thursday, friday, saturday, sunday,
+                              morning_start, morning_end, afternoon_start, afternoon_end, notes, is_active)
+SELECT id, full_name, true, true, true, true, true, false, false,
+       '09:00:00', '13:00:00', '16:00:00', '20:00:00', 'Disponible de lunes a viernes', true
+FROM system_users WHERE email = 'pablorooblanco@gmail.com' AND role = 'DOCTOR'
+ON CONFLICT DO NOTHING;
+
+-- Dra. Concejero - Lunes a Viernes
+INSERT INTO doctor_schedules (doctor_id, doctor_name, monday, tuesday, wednesday, thursday, friday, saturday, sunday,
+                              morning_start, morning_end, afternoon_start, afternoon_end, notes, is_active)
+SELECT id, full_name, true, true, true, true, true, false, false,
+       '09:00:00', '13:00:00', '16:00:00', '20:00:00', 'Disponible de lunes a viernes', true
+FROM system_users WHERE email = 'blati98172023@hotmail.com' AND role = 'DOCTOR'
+ON CONFLICT DO NOTHING;
+
+-- Dra. Castay - Lunes, Martes, Jueves, Viernes (sin miércoles)
+INSERT INTO doctor_schedules (doctor_id, doctor_name, monday, tuesday, wednesday, thursday, friday, saturday, sunday,
+                              morning_start, morning_end, afternoon_start, afternoon_end, notes, is_active)
+SELECT id, full_name, true, true, false, true, true, false, false,
+       '09:00:00', '13:00:00', '16:00:00', '20:00:00', 'Disponible lunes, martes, jueves y viernes', true
+FROM system_users WHERE email = 'castaycaroline@gmail.com' AND role = 'DOCTOR'
+ON CONFLICT DO NOTHING;
+
+-- Alvaro Babiano - Lunes, Martes, Miércoles, Viernes (sin jueves)
+INSERT INTO doctor_schedules (doctor_id, doctor_name, monday, tuesday, wednesday, thursday, friday, saturday, sunday,
+                              morning_start, morning_end, afternoon_start, afternoon_end, notes, is_active)
+SELECT id, full_name, true, true, true, false, true, false, false,
+       '09:00:00', '13:00:00', '16:00:00', '20:00:00', 'Disponible lunes, martes, miércoles y viernes', true
+FROM system_users WHERE email = 'alvarobabianon@uic.es' AND role = 'DOCTOR'
+ON CONFLICT DO NOTHING;
+
+-- Elissa - Lunes a Viernes completo
+INSERT INTO doctor_schedules (doctor_id, doctor_name, monday, tuesday, wednesday, thursday, friday, saturday, sunday,
+                              morning_start, morning_end, afternoon_start, afternoon_end, notes, is_active)
+SELECT id, full_name, true, true, true, true, true, false, false,
+       '09:00:00', '13:00:00', '16:00:00', '20:00:00', 'Disponible de lunes a viernes', true
+FROM system_users WHERE email = 'elissaeid@uic.es' AND role = 'DOCTOR'
+ON CONFLICT DO NOTHING;
+
+-- =============================================================================
 -- FIN DEL SCRIPT SQL
 -- =============================================================================
