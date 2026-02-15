@@ -572,33 +572,6 @@ export const api = {
         }
     },
 
-    // Clinic Info
-    clinic: {
-        getInfo: async () => {
-            const res = await fetch(`${API_URL}/clinic/info`, { headers });
-            if (!res.ok) return null;
-            return res.json();
-        },
-        create: async (data: any) => {
-            const res = await fetch(`${API_URL}/clinic/info`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(data)
-            });
-            if (!res.ok) throw new Error('Failed to create clinic info');
-            return res.json();
-        },
-        update: async (id: string, data: any) => {
-            const res = await fetch(`${API_URL}/clinic/info/${id}`, {
-                method: 'PUT',
-                headers,
-                body: JSON.stringify(data)
-            });
-            if (!res.ok) throw new Error('Failed to update clinic info');
-            return res.json();
-        }
-    },
-
     // Schedule & Availability
     schedule: {
         getDoctors: async () => {

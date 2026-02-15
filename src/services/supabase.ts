@@ -4,12 +4,12 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
 
-let supabase: any = null;
+let supabaseClient: any = null;
 let isSupabaseConfigured = false;
 
 if (supabaseUrl && supabaseAnonKey) {
   try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
     isSupabaseConfigured = true;
   } catch (err) {
     console.error('❌ Error inicializando Supabase:', err);
@@ -40,12 +40,12 @@ const createSafeSupabaseProxy = () => {
         };
       }
       
-      return supabase?.[prop as string];
+      return supabaseClient?.[prop as string];
     }
   });
 };
 
-export const supabase = isSupabaseConfigured ? supabase : createSafeSupabaseProxy();
+export const supabase = isSupabaseConfigured ? supabaseClient : createSafeSupabaseProxy();
 export const isSupabaseConfigured_ = isSupabaseConfigured;
 
 export default supabase;
