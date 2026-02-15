@@ -1,8 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check } from 'lucide-react';
+import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { DocumentTemplate } from '../../types';
 import { api } from '../services/api';
+import ClinicInfo from '../components/ClinicInfo';
+import ScheduleAvailability from '../components/ScheduleAvailability';
+import Vacations from '../components/Vacations';
+import Users from '../components/Users';
 
 interface Service {
     id: string;
@@ -22,7 +26,7 @@ interface Service {
 
 const Settings: React.FC = () => {
     const { stock, setStock, currentUserRole } = useAppContext();
-    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services'>('templates');
+    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users'>('templates');
     const [templateSearch, setTemplateSearch] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -201,18 +205,40 @@ const Settings: React.FC = () => {
             {/* SETTINGS SIDEBAR */}
             <div className="w-64 bg-white border-r border-slate-200 p-6 flex flex-col gap-2 shrink-0">
                 <h3 className="text-xl font-bold text-slate-900 mb-6 px-2">Configuración</h3>
-                <button onClick={() => setSettingsTab('templates')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'templates' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-                    Plantillas
-                </button>
-                <button onClick={() => setSettingsTab('stock')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'stock' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-                    Inventario
-                </button>
-                <button onClick={() => setSettingsTab('services')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'services' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-                    Servicios / Tarifas
-                </button>
-                <button onClick={() => setSettingsTab('whatsapp')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'whatsapp' ? 'bg-green-50 text-green-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-                    WhatsApp & CRM
-                </button>
+                
+                {/* GRUPO 1: GENERAL */}
+                <div className="mb-4">
+                    <p className="text-[9px] font-black uppercase text-slate-400 px-2 mb-2">General</p>
+                    <button onClick={() => setSettingsTab('clinic')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'clinic' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <Building2 size={14} /> Clínica
+                    </button>
+                    <button onClick={() => setSettingsTab('schedule')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'schedule' ? 'bg-purple-50 text-purple-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <Calendar size={14} /> Horarios
+                    </button>
+                    <button onClick={() => setSettingsTab('vacations')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'vacations' ? 'bg-orange-50 text-orange-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <Calendar size={14} /> Vacaciones
+                    </button>
+                    <button onClick={() => setSettingsTab('users')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'users' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <UsersIcon size={14} /> Usuarios
+                    </button>
+                </div>
+
+                {/* GRUPO 2: OPERACIÓN */}
+                <div className="border-t border-slate-200 pt-4 mb-4">
+                    <p className="text-[9px] font-black uppercase text-slate-400 px-2 mb-2">Operación</p>
+                    <button onClick={() => setSettingsTab('templates')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'templates' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        Plantillas
+                    </button>
+                    <button onClick={() => setSettingsTab('stock')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'stock' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        Inventario
+                    </button>
+                    <button onClick={() => setSettingsTab('services')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'services' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        Servicios / Tarifas
+                    </button>
+                    <button onClick={() => setSettingsTab('whatsapp')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'whatsapp' ? 'bg-green-50 text-green-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        WhatsApp & CRM
+                    </button>
+                </div>
             </div>
 
             {/* SETTINGS CONTENT */}
@@ -757,6 +783,18 @@ const Settings: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* CLINIC INFO SECTION */}
+                {settingsTab === 'clinic' && <ClinicInfo />}
+
+                {/* SCHEDULE AVAILABILITY SECTION */}
+                {settingsTab === 'schedule' && <ScheduleAvailability />}
+
+                {/* VACATIONS SECTION */}
+                {settingsTab === 'vacations' && <Vacations />}
+
+                {/* USERS SECTION */}
+                {settingsTab === 'users' && <Users />}
             </div>
         </div >
     );

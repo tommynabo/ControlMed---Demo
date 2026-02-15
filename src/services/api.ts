@@ -569,6 +569,159 @@ export const api = {
             if (!res.ok) throw new Error('Failed to schedule message');
             return res.json();
         }
+    },
+
+    // Clinic Info
+    clinic: {
+        getInfo: async () => {
+            const res = await fetch(`${API_URL}/clinic/info`, { headers });
+            if (!res.ok) return null;
+            return res.json();
+        },
+        create: async (data: any) => {
+            const res = await fetch(`${API_URL}/clinic/info`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create clinic info');
+            return res.json();
+        },
+        update: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/clinic/info/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update clinic info');
+            return res.json();
+        }
+    },
+
+    // Schedule & Availability
+    schedule: {
+        getDoctors: async () => {
+            const res = await fetch(`${API_URL}/schedule/doctors`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        createDoctor: async (data: any) => {
+            const res = await fetch(`${API_URL}/schedule/doctors`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create doctor schedule');
+            return res.json();
+        },
+        updateDoctor: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/schedule/doctors/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update doctor schedule');
+            return res.json();
+        },
+        deleteDoctor: async (id: string) => {
+            const res = await fetch(`${API_URL}/schedule/doctors/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete doctor schedule');
+        },
+        getServiceDurations: async () => {
+            const res = await fetch(`${API_URL}/schedule/durations`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        createDuration: async (data: any) => {
+            const res = await fetch(`${API_URL}/schedule/durations`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create duration');
+            return res.json();
+        },
+        updateDuration: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/schedule/durations/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update duration');
+            return res.json();
+        },
+        deleteDuration: async (id: string) => {
+            const res = await fetch(`${API_URL}/schedule/durations/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete duration');
+        }
+    },
+
+    // Vacations
+    vacations: {
+        getAll: async () => {
+            const res = await fetch(`${API_URL}/vacations`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        create: async (data: any) => {
+            const res = await fetch(`${API_URL}/vacations`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create vacation');
+            return res.json();
+        },
+        update: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/vacations/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update vacation');
+            return res.json();
+        },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/vacations/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete vacation');
+        }
+    },
+
+    // Users
+    users: {
+        getAll: async () => {
+            const res = await fetch(`${API_URL}/users`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        create: async (data: any) => {
+            const res = await fetch(`${API_URL}/users`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to create user');
+            }
+            return res.json();
+        },
+        update: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/users/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to update user');
+            }
+            return res.json();
+        },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/users/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete user');
+        }
     }
 };
 
