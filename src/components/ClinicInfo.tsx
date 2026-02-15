@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, MapPin, Phone, Mail, Clock, Save, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
+import { isSupabaseConfigured_ } from '../services/supabase';
 
 interface ClinicData {
   id?: string;
@@ -27,8 +28,14 @@ const ClinicInfo: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isSupabaseConfigured_) {
+      setError('❌ Supabase no está configurado. Ver .env.example para instrucciones.');
+      setIsLoading(false);
+      return;
+    }
     loadClinicInfo();
   }, []);
 
@@ -48,14 +55,20 @@ const ClinicInfo: React.FC = () => {
           closing_time: data.closing_time ? data.closing_time.substring(0, 5) : '20:00'
         });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error loading clinic info:', e);
+      setError(`Error loading data: ${e.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSave = async () => {
+    if (!isSupabaseConfigured_) {
+      alert('❌ Supabase no está configurado');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const timeData = {
@@ -75,9 +88,9 @@ const ClinicInfo: React.FC = () => {
       }
       setSuccessMessage('✓ Información de clínica actualizada');
       setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving clinic info:', error);
-      alert('Error al guardar la información de la clínica');
+      setError(`Error: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -90,6 +103,24 @@ const ClinicInfo: React.FC = () => {
       [name]: value
     }));
   };
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-8 max-w-md text-center">
+          <AlertCircle className="text-red-600 mx-auto mb-4" size={48} />
+          <h3 className="text-red-900 font-bold text-lg mb-2">Error de Configuración</h3>
+          <p className="text-red-700 text-sm mb-4">{error}</p>
+          <div className="bg-red-100 rounded-lg p-4 text-left text-xs font-mono text-red-900">
+            <p className="font-bold mb-2">📋 Para configurar:</p>
+            <p>1. Copia .env.example a .env.local</p>
+            <p>2. Añade tus credenciales de Supabase</p>
+            <p>3. Reinicia: npm run dev</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

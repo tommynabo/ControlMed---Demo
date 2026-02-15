@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users as UsersIcon, Plus, X, Trash2, Save, AlertCircle, Edit3, Shield, Eye, EyeOff } from 'lucide-react';
 import { api } from '../services/api';
+import { isSupabaseConfigured_ } from '../services/supabase';
 
 interface User {
   id?: string;
