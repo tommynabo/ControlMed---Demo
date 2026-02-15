@@ -1,0 +1,19 @@
+ESTADO;USUARIO;NOMBRE;ROL;CLÍNICA;SERIE FACTURACIÓN;NIF;Nº CUENTA BANCARIA;Nº SEGURIDAD SOCIAL;GRUPO COTIZACIÓN;CATEGORÍA PROFESIONAL;NOMBRE FISCAL
+Alta;kevinchrabieh@gmail.com;Dr. Chrabieh;Administrador;CHC Clinica Dental;;;;;;;Kevin
+Alta;admin@chcclinicadental.com;CHC Clinica Dental;Usuario;CHC Clinica Dental;;;;;;;CHC Clinica Dental
+Baja;kevinchrabieh@uic.es;Prueba medico;Usuario;CHC Clinica Dental;;;;;;;prueba
+Alta;pablorooblanco@gmail.com;Dr. ROO;Usuario;CHC Clinica Dental;;;;;;;Pablo
+Alta;almudena.deana.81@gmail.com;Almudena;Administrador;CHC Clinica Dental;;53418392H;;;;;Almudena
+Alta;blati98172023@hotmail.com;Dra. Concejero;Usuario;CHC Clinica Dental;;;;;;;Dra. Abigail Concejero
+Baja;verarfrancisca@gmail.com;Francisca;Usuario;CHC Clinica Dental;;;;;;;Francisca
+Alta;castaycaroline@gmail.com;Dra. Castay;Usuario;CHC Clinica Dental;;;;;;;Dra. Castay
+Baja;vasilikiblathra@uic.es;Dra. Blathra;Usuario;CHC Clinica Dental;;;;;;;Dra. Blathra
+Baja;molinaramoslaura@gmail.com;Laura;Usuario;CHC Clinica Dental;;;;;;;Laura
+Alta;alvarobabianon@uic.es;Alvaro Babiano;Usuario;CHC Clinica Dental;;;;;;;Alvaro Babiano
+Alta;elissaeid@uic.es;Elissa;Usuario;CHC Clinica Dental;;;;;;;Elissa
+Alta;letmanmon@gmail.com;Leticia Rodriguez Silvera;Usuario;CHC Clinica Dental;;;;;;;Leticia Rodriguez Silvera
+Alta;alisonGUADAMUDALAY@hotmail.com;Alison Betsy;Usuario;CHC Clinica Dental;;;;;;;Alison Betsy
+Alta;CLAUDIAVALENTINA30@GMAIL.COM;CLAUDIA;Usuario;CHC Clinica Dental;;;;;;;CLAUDIA
+Alta;tomasnivraone@gmail.com;Tomas;Administrador;CHC Clinica Dental;;;;;;;Tomas
+Alta;info@echalemarketing.es;Alejandro;Usuario;CHC Clinica Dental;;;;;;;Alejandro
+Alta;Velasconerea98@gmail.com;Nerea;Usuario;CHC Clinica Dental;;;;;;;Nerea
