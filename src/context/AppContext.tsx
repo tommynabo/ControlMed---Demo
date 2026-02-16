@@ -24,6 +24,8 @@ interface AppContextProps {
     setClinicalRecords: React.Dispatch<React.SetStateAction<ClinicalRecord[]>>;
     expenses: Expense[];
     setExpenses: React.Dispatch<React.SetStateAction<Expense[]>>;
+    doctors: Doctor[];
+    setDoctors: React.Dispatch<React.SetStateAction<Doctor[]>>;
 
     // Actions
     refreshPatients: () => Promise<void>;
@@ -61,6 +63,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [stock, setStock] = useState<InventoryItem[]>(INITIAL_STOCK);
     const [clinicalRecords, setClinicalRecords] = useState<ClinicalRecord[]>([]);
     const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [doctors, setDoctors] = useState<Doctor[]>([]);
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -70,12 +73,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (isAuthenticated) {
             const fetchData = async () => {
                 try {
-                    const [pts, appts] = await Promise.all([
+                    const [pts, appts, docs] = await Promise.all([
                         api.getPatients().catch(err => { console.error("Failed to fetch patients", err); return []; }),
-                        api.appointments.getAll().catch(err => { console.error("Failed to fetch appointments", err); return []; })
+                        api.appointments.getAll().catch(err => { console.error("Failed to fetch appointments", err); return []; }),
+                        api.getDoctors().catch(err => { console.error("Failed to fetch doctors", err); return []; })
                     ]);
                     setPatients(pts);
                     setAppointments(appts);
+                    setDoctors(docs);
                     // Stock and others can be added here
                 } catch (e) {
                     console.error("Error loading initial data", e);
@@ -123,6 +128,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             currentUser, currentUserRole: role, isAuthenticated, login, logout,
             patients, setPatients, appointments, setAppointments, invoices, setInvoices,
             stock, setStock, clinicalRecords, setClinicalRecords, expenses, setExpenses,
+            doctors, setDoctors,
             refreshPatients, refreshAppointments, addPatient, addAppointment, addInvoice, api,
             searchQuery, setSearchQuery, selectedPatient, setSelectedPatient
         }}>

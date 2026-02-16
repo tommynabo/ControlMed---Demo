@@ -4,12 +4,12 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { DENTAL_SERVICES, DOCTORS, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
+import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
 import { Appointment, Doctor } from '../../types';
 
 const Agenda: React.FC = () => {
     const {
-        appointments, addAppointment, patients, currentUser, currentUserRole, api, setSelectedPatient
+        appointments, addAppointment, patients, currentUser, currentUserRole, api, setSelectedPatient, doctors
     } = useAppContext();
     const navigate = useNavigate();
 
@@ -230,9 +230,9 @@ const Agenda: React.FC = () => {
                                 className="bg-transparent text-xs font-bold uppercase text-slate-600 outline-none px-2 py-2 cursor-pointer"
                             >
                                 <option value="all">Vista General (Todos)</option>
-                                <option value="dr-1">Dr. Martin (General)</option>
-                                <option value="dr-2">Dra. Garcia (Orto)</option>
-                                <option value="dr-3">Dr. Fernandez (Implantes)</option>
+                                {doctors.map(doc => (
+                                    <option key={doc.id} value={doc.id}>{doc.name} ({doc.specialization})</option>
+                                ))}
                             </select>
                         </div>
                     )}
@@ -261,14 +261,14 @@ const Agenda: React.FC = () => {
                         <div className="flex ml-14 mb-4">
                             {viewMode === 'daily' ? (
                                 selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
-                                    DOCTORS.map(doc => (
+                                    doctors.map(doc => (
                                         <div key={doc.id} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-900 uppercase tracking-wide">
                                             {doc.name}
                                         </div>
                                     ))
                                 ) : (
                                     <div className="flex-1 text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase">
-                                        Hoy
+                                        {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
                                     </div>
                                 )
                             ) : (
@@ -285,20 +285,19 @@ const Agenda: React.FC = () => {
 
                             {/* 1. Background Grid (Lines & Times) */}
                             {TIME_SLOTS.map((time, idx) => {
+                                const hour = time.split(':')[0];
                                 const isHourStart = time.endsWith(':00');
                                 return (
                                 <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
-                                    {/* Time Label - only show on hour marks */}
-                                    {isHourStart && (
+                                    {/* Time Label - show hour for every slot (8, 9, 10, etc.) */}
                                     <div className="absolute -left-14 -top-3 w-10 text-right text-xs font-bold text-slate-400 group-hover:text-blue-500 transition-colors">
-                                        {time}
+                                        {hour}
                                     </div>
-                                    )}
 
                                     {/* Clickable Slots for New Appt (Invisible overlay) */}
                                     {viewMode === 'daily' ? (
                                         selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
-                                            DOCTORS.map(doc => (
+                                            doctors.map(doc => (
                                                 <div
                                                     key={`${doc.id}-${time}`}
                                                     className="flex-1 h-full border-r border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
@@ -351,7 +350,7 @@ const Agenda: React.FC = () => {
 
                                     if (viewMode === 'daily') {
                                         if (selectedDoctorId === 'all') {
-                                            DOCTORS.forEach(doc => {
+                                            doctors.forEach(doc => {
                                                 const docAppts = appointments.filter(a =>
                                                     (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) &&
                                                     a.doctorId === doc.id
@@ -595,9 +594,9 @@ const Agenda: React.FC = () => {
                                     <option value="">-- Sin vincular --</option>
                                     {patientBudgets.map(b => (
                                         <option key={b.id} value={b.id}>
-                                            {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString()}
+                                            #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString()}
                                         </option>
-                                    ))}
+                                    ))}}
                                 </select>
                             </div>
                         )}

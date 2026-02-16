@@ -174,6 +174,18 @@ export const api = {
         if (!res.ok) throw new Error('Failed to fetch patients');
         return res.json();
     },
+
+    // Doctors
+    getDoctors: async (): Promise<Doctor[]> => {
+        try {
+            const res = await fetch(`${API_URL}/doctors`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch doctors');
+            return res.json();
+        } catch (error) {
+            console.error('Error fetching doctors:', error);
+            return [];
+        }
+    },
     createPatient: async (patient: Partial<Patient>): Promise<Patient> => {
         // Client-side ID generation fallback (Robust)
         if (!patient.id) {
