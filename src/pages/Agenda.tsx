@@ -596,7 +596,7 @@ const Agenda: React.FC = () => {
                                         <option key={b.id} value={b.id}>
                                             #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString()}
                                         </option>
-                                    ))}}
+                                    ))}
                                 </select>
                             </div>
                         )}
