@@ -150,10 +150,10 @@ const Agenda: React.FC = () => {
             return;
         }
 
-        if (!activeSlot || !apptSearch) return;
+        if (!activeSlot || !bookingPatientId) return;
 
-        // Find Patient
-        const patient = patients.find(p => p.name.toLowerCase() === apptSearch.toLowerCase());
+        // Find Patient using stored bookingPatientId for reliability
+        const patient = patients.find(p => p.id === bookingPatientId);
         if (!patient) {
             alert("Paciente no encontrado. Cree la ficha primero.");
             return;
@@ -552,8 +552,8 @@ const Agenda: React.FC = () => {
                                 }}
                                 disabled={!!selectedAppt} // Readonly if viewing
                             />
-                            {/* Suggestions - Solo mostrar si NO hay coincidencia exacta y NO estamos en modo ver */}
-                            {!selectedAppt && apptSearch.length > 0 && !patients.find(p => p.name === apptSearch) && (
+                            {/* Suggestions - Solo mostrar si NO hay paciente seleccionado */}
+                            {!selectedAppt && apptSearch.length > 0 && !bookingPatientId && (
                                 <div className="mt-2 bg-white border border-slate-100 rounded-xl shadow-lg max-h-40 overflow-y-auto">
                                     {patients
                                         .filter(p => (p.name?.toLowerCase() || '').includes(apptSearch.toLowerCase()) || (p.dni || '').includes(apptSearch))
@@ -662,32 +662,32 @@ const Agenda: React.FC = () => {
                             </select>
                         </div>
 
-                        {/* Treatment Selection */}
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
-                            <select
-                                className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                value={bookingTreatment}
-                                onChange={(e) => {
-                                    const tId = e.target.value;
-                                    setBookingTreatment(tId);
-                                    if (tId) {
-                                        const t = DENTAL_SERVICES.find(s => s.id === tId);
-                                        if (t) setBookingPrice(t.price);
-                                        // Optional: Clear budget if we want strict OR logic
-                                        // setBookingBudgetId(''); 
+                        {/* Treatment Selection - Only show if NO budget is selected */}
+                        {!bookingBudgetId && (
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
+                                <select
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                    value={bookingTreatment}
+                                    onChange={(e) => {
+                                        const tId = e.target.value;
+                                        setBookingTreatment(tId);
+                                        if (tId) {
+                                            const t = DENTAL_SERVICES.find(s => s.id === tId);
+                                            if (t) setBookingPrice(t.price);
+                                        }
+                                    }}
+                                    disabled={!!selectedAppt}
+                                >
+                                    <option value="">Seleccionar Tratamiento...</option>
+                                    {DENTAL_SERVICES
+                                        .map(t => (
+                                            <option key={t.id} value={t.id}>{t.name} ({t.price}€)</option>
+                                        ))
                                     }
-                                }}
-                                disabled={!!selectedAppt}
-                            >
-                                <option value="">Seleccionar Tratamiento...</option>
-                                {DENTAL_SERVICES
-                                    .map(t => (
-                                        <option key={t.id} value={t.id}>{t.name} ({t.price}€)</option>
-                                    ))
-                                }
-                            </select>
-                        </div>
+                                </select>
+                            </div>
+                        )}
 
                         {/* Additional Details: Price, Duration, Observation */}
                         <div className="grid grid-cols-2 gap-4">

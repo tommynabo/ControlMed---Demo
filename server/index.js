@@ -478,23 +478,34 @@ app.post('/api/appointments', async (req, res) => {
         const safeBudgetId = (budgetId && budgetId !== 'undefined' && budgetId.trim().length > 0) ? budgetId : null;
         const safeBudgetItemId = (budgetItemId && budgetItemId !== 'undefined' && budgetItemId.trim().length > 0) ? budgetItemId : null;
 
-        // VALIDATION: Specialization Check (REMOVED per user request to allow flexibility)
-        /*
-        if (safeTreatmentId && safeDoctorId) {
+// VALIDATION: Doctor Account Status Check (NEW: Ensure doctor has active user account)
+        if (safeDoctorId) {
             try {
-                const { data: treatment } = await supabase.from('Treatment').select('specialtyId').eq('id', safeTreatmentId).maybeSingle();
-                const { data: doctor } = await supabase.from('Doctor').select('specialtyId, name').eq('id', safeDoctorId).maybeSingle();
+                const { data: doctor, error: doctorErr } = await supabase
+                    .from('Doctor')
+                    .select('name, user_id, is_active')
+                    .eq('id', safeDoctorId)
+                    .maybeSingle();
 
-                if (treatment && doctor) {
-                    if (treatment.specialtyId && doctor.specialtyId && treatment.specialtyId !== doctor.specialtyId) {
-                        return res.status(400).json({ error: `El Dr. ${doctor.name} no es especialista en el tratamiento seleccionado.` });
-                    }
+                if (doctorErr || !doctor) {
+                    return res.status(400).json({ error: 'Doctor no encontrado' });
                 }
+
+                if (!doctor.is_active) {
+                    return res.status(400).json({ error: `El Dr. ${doctor.name} está inactivo. No se pueden crear citas con este doctor.` });
+                }
+
+                // Optional: Validate that doctor has a system user account
+                // if (!doctor.user_id) {
+                //     return res.status(400).json({ error: `El Dr. ${doctor.name} no tiene cuenta de sistema. Cree una cuenta en Configuración > Usuarios.` });
+                // }
+
+                console.log(`✓ Doctor validation passed: ${doctor.name}`);
             } catch (validationErr) {
-                console.warn('⚠️ Specialization validation skipped:', validationErr.message);
+                console.warn('⚠️ Doctor validation error:', validationErr.message);
+                // Don't block appointment if validation service fails, but log it
             }
         }
-        */
 
         const appointmentId = crypto.randomUUID();
         const { data, error } = await supabase

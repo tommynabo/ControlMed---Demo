@@ -93,7 +93,7 @@ async function importUsers() {
           
           // Obtener el usuario existente para su ID
           const { data: existingUser } = await supabase.auth.admin.listUsers();
-          const user = existingUser?.users?.find((u: any) => u.email === usuario.email);
+          const user = existingUser?.users?.find(u => u.email === usuario.email);
           
           if (user) {
             await createSystemUserIfNotExists(user.id, usuario);
@@ -109,12 +109,12 @@ async function importUsers() {
         console.log(`   ✅ Usuario creado: ${data.user?.id}`);
         
         // Crear entrada en system_users
-        await createSystemUserIfNotExists(data.user!.id, usuario);
+        await createSystemUserIfNotExists(data.user.id, usuario);
         
         created++;
         results.push({ ...usuario, status: 'created', id: data.user?.id });
       }
-    } catch (err: any) {
+    } catch (err) {
       console.log(`   ❌ Error inesperado: ${err.message}`);
       failed++;
       results.push({ ...usuario, status: 'exception', message: err.message });
@@ -141,7 +141,7 @@ async function importUsers() {
   console.log('4. Verificar que aparezcan en Settings → Usuarios');
 }
 
-async function createSystemUserIfNotExists(userId: string, usuario: any) {
+async function createSystemUserIfNotExists(userId, usuario) {
   const { data: existing } = await supabase
     .from('system_users')
     .select('*')

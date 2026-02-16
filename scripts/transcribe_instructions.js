@@ -11,11 +11,11 @@ const openai = new OpenAI({
 async function transcribeFolder(folderPath) {
     try {
         const files = fs.readdirSync(folderPath);
-        const mp3Files = files.filter(file => file.endsWith('.mp3'));
+        const audioVideoFiles = files.filter(file => file.endsWith('.mp3') || file.endsWith('.mp4'));
 
-        console.log(`Found ${mp3Files.length} mp3 files in ${folderPath}`);
+        console.log(`Found ${audioVideoFiles.length} audio/video files in ${folderPath}`);
 
-        for (const file of mp3Files) {
+        for (const file of audioVideoFiles) {
             console.log(`Transcribing ${file}...`);
             const filePath = path.join(folderPath, file);
 
@@ -28,7 +28,7 @@ async function transcribeFolder(folderPath) {
             console.log(transcription.text);
             console.log('-----------------------------------\n');
 
-            const textFilePath = filePath.replace('.mp3', '.txt');
+            const textFilePath = filePath.replace(path.extname(file), '.txt');
             fs.writeFileSync(textFilePath, transcription.text, 'utf8');
             console.log(`Saved transcription to ${textFilePath}`);
         }

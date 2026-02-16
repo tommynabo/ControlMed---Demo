@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, User, CreditCard, FileText } from 'lucide-react';
+import { ArrowLeft, Calendar, User, CreditCard } from 'lucide-react';
 import { Appointment, Patient, Budget, Payment } from '../../types';
-import { Odontogram } from '../components/Odontogram';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAppContext } from '../context/AppContext';
 
@@ -15,7 +14,6 @@ export const AppointmentDetails: React.FC = () => {
     const [appointment, setAppointment] = useState<Appointment | null>(null);
     const [patient, setPatient] = useState<Patient | null>(null);
     const [budgets, setBudgets] = useState<Budget[]>([]);
-    const [activeTab, setActiveTab] = useState('odontogram');
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
     // Cargar datos desde location.state o API
@@ -340,59 +338,58 @@ export const AppointmentDetails: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Tabs */}
+                {/* Tabs - HIDDEN: Today's appointment only shows execution info, not odontogram */}
                 <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="flex border-b border-slate-200 p-2 bg-slate-50">
-                        {['odontogram', 'treatments', 'documents'].map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${activeTab === tab
-                                    ? 'bg-slate-900 text-white shadow-lg'
-                                    : 'text-slate-400 hover:bg-white hover:text-slate-900'
-                                    }`}
-                            >
-                                {tab === 'odontogram' ? '🦷 Odontograma' :
-                                    tab === 'treatments' ? '📋 Tratamientos' :
-                                        '📄 Documentos'}
-                            </button>
-                        ))}
-                    </div>
+                    {/* Tab Content - Simplified: Only show what's needed for today's appointment execution */}
+                    <div className="p-8 min-h-[400px]">
+                        <div className="animate-in fade-in slide-in-from-bottom-4">
+                            <h3 className="text-2xl font-black text-slate-900 mb-6">Resumen de la Cita de Hoy</h3>
+                            
+                            {/* Quick Reference Card */}
+                            <div className="grid grid-cols-2 gap-6 mb-6">
+                                <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+                                    <p className="text-xs font-black uppercase text-blue-600 mb-2">QUÉ SE ESTÁ HACIENDO</p>
+                                    <p className="text-lg font-black text-slate-900 break-words">
+                                        {typeof appointment.treatment === 'object' && appointment.treatment !== null
+                                            ? (appointment.treatment as any).name || 'Consulta'
+                                            : appointment.treatment || 'Consulta / Tratamiento'}
+                                    </p>
+                                </div>
+                                
+                                <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100">
+                                    <p className="text-xs font-black uppercase text-amber-600 mb-2">DURACIÓN</p>
+                                    <p className="text-lg font-black text-slate-900">
+                                        {appointment.duration ? `${appointment.duration} minutos` : '60 minutos'}
+                                    </p>
+                                </div>
 
-                    {/* Tab Content */}
-                    <div className="p-8 min-h-[600px]">
-                        {activeTab === 'odontogram' && (
-                            <div className="animate-in fade-in slide-in-from-bottom-4">
-                                <Odontogram
-                                    patientId={patient.id}
-                                    isEditable={true}
-                                    onTreatmentsChange={(treatments) => {
-                                        console.log('Treatments updated:', treatments);
-                                    }}
-                                />
-                            </div>
-                        )}
+                                {appointment.budgetId && (
+                                    <div className="bg-green-50 rounded-2xl p-6 border border-green-100">
+                                        <p className="text-xs font-black uppercase text-green-600 mb-2">VINCULADO A PRESUPUESTO</p>
+                                        <p className="text-sm font-black text-slate-900">✓ Presupuesto Asociado</p>
+                                    </div>
+                                )}
 
-                        {activeTab === 'treatments' && (
-                            <div className="animate-in fade-in slide-in-from-bottom-4">
-                                <h3 className="text-2xl font-black text-slate-900 mb-6">Plan de Tratamiento</h3>
-                                <div className="bg-slate-50 rounded-2xl p-6 text-center text-slate-400">
-                                    <FileText size={48} className="mx-auto mb-4 opacity-50" />
-                                    <p className="font-bold">Los tratamientos se gestionan desde el Odontograma</p>
-                                    <p className="text-sm mt-2">Ve a la pestaña de Odontograma para añadir tratamientos</p>
+                                <div className="bg-purple-50 rounded-2xl p-6 border border-purple-100">
+                                    <p className="text-xs font-black uppercase text-purple-600 mb-2">A COBRAR HOY</p>
+                                    <p className="text-lg font-black text-slate-900">
+                                        {appointment.amount ? `${appointment.amount}€` : 'Por confirmar'}
+                                    </p>
                                 </div>
                             </div>
-                        )}
 
-                        {activeTab === 'documents' && (
-                            <div className="animate-in fade-in slide-in-from-bottom-4">
-                                <h3 className="text-2xl font-black text-slate-900 mb-6">Documentos</h3>
-                                <div className="bg-slate-50 rounded-2xl p-6 text-center text-slate-400">
-                                    <FileText size={48} className="mx-auto mb-4 opacity-50" />
-                                    <p className="font-bold">Próximamente: Consentimientos, recetas, etc.</p>
+                            {/* Notes Section - Visible for reference */}
+                            {appointment.observations && (
+                                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 mb-6">
+                                    <p className="text-xs font-black uppercase text-slate-600 mb-2">NOTAS / OBSERVACIONES</p>
+                                    <p className="text-slate-900 font-medium">{appointment.observations}</p>
                                 </div>
-                            </div>
-                        )}
+                            )}
+
+                            <p className="text-sm text-slate-500 mt-4">
+                                ℹ️ Para ver el historial completo y odontograma del paciente, accede a su ficha desde la agenda.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
