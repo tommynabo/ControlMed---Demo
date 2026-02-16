@@ -499,7 +499,6 @@ const Agenda: React.FC = () => {
 
                         </div>
                     </div>
-                            </div>
                         </div>
                     </div>
                 </div>
