@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, User, CreditCard } from 'lucide-react';
+import { ArrowLeft, Calendar, User, CreditCard, FileText, Teeth } from 'lucide-react';
 import { Appointment, Patient, Budget, Payment } from '../../types';
 import { PaymentModal } from '../components/PaymentModal';
+import { Odontogram } from '../../components/Odontogram';
 import { useAppContext } from '../context/AppContext';
 
 export const AppointmentDetails: React.FC = () => {
@@ -15,12 +16,15 @@ export const AppointmentDetails: React.FC = () => {
     const [patient, setPatient] = useState<Patient | null>(null);
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState<'summary' | 'odontogram' | 'treatments' | 'documents'>('summary');
+    const [toothStates, setToothStates] = useState<Record<string, string>>({});
 
     // Cargar datos desde location.state o API
     useEffect(() => {
         if (location.state?.appointment && location.state?.patient) {
             setAppointment(location.state.appointment);
             setPatient(location.state.patient);
+            loadToothStates(location.state.patient.id);
         } else if (appointmentId) {
             // Cargar desde API
             loadAppointmentData(appointmentId);
@@ -38,12 +42,15 @@ export const AppointmentDetails: React.FC = () => {
 
     const loadAppointmentData = async (id: string) => {
         try {
-            // TODO: Implementar API para cargar cita por ID
             const appointmentData = await api.appointments.getById(id);
             setAppointment(appointmentData);
 
             const patientData = patients.find(p => p.id === appointmentData.patientId);
             setPatient(patientData || null);
+            
+            if (patientData) {
+                loadToothStates(patientData.id);
+            }
         } catch (error) {
             console.error('Error loading appointment:', error);
             alert('Error al cargar la cita');
@@ -51,11 +58,19 @@ export const AppointmentDetails: React.FC = () => {
         }
     };
 
+    const loadToothStates = async (patientId: string) => {
+        try {
+            const states = await api.getPatientToothStates(patientId);
+            setToothStates(states || {});
+        } catch (error) {
+            console.warn('Could not load tooth states:', error);
+        }
+    };
+
     const handlePaymentComplete = (payment: Payment, invoice: any) => {
         console.log('Payment completed:', payment);
         console.log('Invoice generated:', invoice);
 
-        // Actualizar monedero del paciente si es pago a cuenta
         if (payment.type === 'ADVANCE_PAYMENT' && patient) {
             const updatedPatient = {
                 ...patient,
@@ -64,13 +79,11 @@ export const AppointmentDetails: React.FC = () => {
             setPatient(updatedPatient);
         }
 
-        // Recargar presupuestos si es necesario
         if (patient) {
             api.budget.getByPatient(patient.id).then(setBudgets);
         }
     };
 
-    // Helper to get status styles
     const getStatusStyle = (status: string) => {
         switch (status?.toLowerCase()) {
             case 'completed':
@@ -88,7 +101,6 @@ export const AppointmentDetails: React.FC = () => {
         }
     };
 
-    // Handle status update
     const updateAppointmentStatus = async (newStatus: string) => {
         if (!appointment) return;
         try {
@@ -183,7 +195,6 @@ export const AppointmentDetails: React.FC = () => {
                             })()}
                         </div>
 
-                        {/* Action buttons - only show if not already completed/cancelled */}
                         {!['completed', 'realizada', 'canceled', 'cancelled', 'anulada', 'noshow', 'no vino'].includes(appointment.status?.toLowerCase() || '') && (
                             <div className="flex gap-3">
                                 <button
@@ -207,7 +218,6 @@ export const AppointmentDetails: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Show reset button if appointment was already marked */}
                         {['completed', 'realizada', 'canceled', 'cancelled', 'anulada', 'noshow', 'no vino'].includes(appointment.status?.toLowerCase() || '') && (
                             <button
                                 onClick={() => updateAppointmentStatus('Scheduled')}
@@ -338,59 +348,137 @@ export const AppointmentDetails: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Tabs - HIDDEN: Today's appointment only shows execution info, not odontogram */}
+                {/* Tabs Navigation */}
+                <div className="flex gap-2 bg-white rounded-[2.5rem] p-2 border border-slate-200 shadow-sm">
+                    <button
+                        onClick={() => setActiveTab('summary')}
+                        className={`flex-1 py-3 px-4 rounded-2xl font-black text-sm uppercase transition-all flex items-center justify-center gap-2 ${
+                            activeTab === 'summary'
+                                ? 'bg-slate-900 text-white shadow-lg'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <Calendar size={16} /> Resumen
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('odontogram')}
+                        className={`flex-1 py-3 px-4 rounded-2xl font-black text-sm uppercase transition-all flex items-center justify-center gap-2 ${
+                            activeTab === 'odontogram'
+                                ? 'bg-slate-900 text-white shadow-lg'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <Teeth size={16} /> Odontograma
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('treatments')}
+                        className={`flex-1 py-3 px-4 rounded-2xl font-black text-sm uppercase transition-all flex items-center justify-center gap-2 ${
+                            activeTab === 'treatments'
+                                ? 'bg-slate-900 text-white shadow-lg'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <User size={16} /> Tratamientos
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('documents')}
+                        className={`flex-1 py-3 px-4 rounded-2xl font-black text-sm uppercase transition-all flex items-center justify-center gap-2 ${
+                            activeTab === 'documents'
+                                ? 'bg-slate-900 text-white shadow-lg'
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <FileText size={16} /> Documentos
+                    </button>
+                </div>
+
+                {/* Tab Content */}
                 <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                    {/* Tab Content - Simplified: Only show what's needed for today's appointment execution */}
-                    <div className="p-8 min-h-[400px]">
-                        <div className="animate-in fade-in slide-in-from-bottom-4">
-                            <h3 className="text-2xl font-black text-slate-900 mb-6">Resumen de la Cita de Hoy</h3>
-                            
-                            {/* Quick Reference Card */}
-                            <div className="grid grid-cols-2 gap-6 mb-6">
-                                <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
-                                    <p className="text-xs font-black uppercase text-blue-600 mb-2">QUÉ SE ESTÁ HACIENDO</p>
-                                    <p className="text-lg font-black text-slate-900 break-words">
-                                        {typeof appointment.treatment === 'object' && appointment.treatment !== null
-                                            ? (appointment.treatment as any).name || 'Consulta'
-                                            : appointment.treatment || 'Consulta / Tratamiento'}
-                                    </p>
-                                </div>
+                    {activeTab === 'summary' && (
+                        <div className="p-8 min-h-[400px]">
+                            <div className="animate-in fade-in slide-in-from-bottom-4">
+                                <h3 className="text-2xl font-black text-slate-900 mb-6">Resumen de la Cita</h3>
                                 
-                                <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100">
-                                    <p className="text-xs font-black uppercase text-amber-600 mb-2">DURACIÓN</p>
-                                    <p className="text-lg font-black text-slate-900">
-                                        {appointment.duration ? `${appointment.duration} minutos` : '60 minutos'}
-                                    </p>
+                                <div className="grid grid-cols-2 gap-6 mb-6">
+                                    <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
+                                        <p className="text-xs font-black uppercase text-blue-600 mb-2">QUÉ SE ESTÁ HACIENDO</p>
+                                        <p className="text-lg font-black text-slate-900 break-words">
+                                            {typeof appointment.treatment === 'object' && appointment.treatment !== null
+                                                ? (appointment.treatment as any).name || 'Consulta'
+                                                : appointment.treatment || 'Consulta / Tratamiento'}
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100">
+                                        <p className="text-xs font-black uppercase text-amber-600 mb-2">DURACIÓN</p>
+                                        <p className="text-lg font-black text-slate-900">
+                                            {appointment.duration ? `${appointment.duration} minutos` : '60 minutos'}
+                                        </p>
+                                    </div>
+
+                                    {appointment.budgetId && (
+                                        <div className="bg-green-50 rounded-2xl p-6 border border-green-100">
+                                            <p className="text-xs font-black uppercase text-green-600 mb-2">VINCULADO A PRESUPUESTO</p>
+                                            <p className="text-sm font-black text-slate-900">✓ Presupuesto Asociado</p>
+                                        </div>
+                                    )}
+
+                                    <div className="bg-purple-50 rounded-2xl p-6 border border-purple-100">
+                                        <p className="text-xs font-black uppercase text-purple-600 mb-2">A COBRAR HOY</p>
+                                        <p className="text-lg font-black text-slate-900">
+                                            {appointment.amount ? `${appointment.amount}€` : 'Por confirmar'}
+                                        </p>
+                                    </div>
                                 </div>
 
-                                {appointment.budgetId && (
-                                    <div className="bg-green-50 rounded-2xl p-6 border border-green-100">
-                                        <p className="text-xs font-black uppercase text-green-600 mb-2">VINCULADO A PRESUPUESTO</p>
-                                        <p className="text-sm font-black text-slate-900">✓ Presupuesto Asociado</p>
+                                {appointment.observations && (
+                                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200">
+                                        <p className="text-xs font-black uppercase text-slate-600 mb-2">NOTAS / OBSERVACIONES</p>
+                                        <p className="text-slate-900 font-medium">{appointment.observations}</p>
                                     </div>
                                 )}
-
-                                <div className="bg-purple-50 rounded-2xl p-6 border border-purple-100">
-                                    <p className="text-xs font-black uppercase text-purple-600 mb-2">A COBRAR HOY</p>
-                                    <p className="text-lg font-black text-slate-900">
-                                        {appointment.amount ? `${appointment.amount}€` : 'Por confirmar'}
-                                    </p>
-                                </div>
                             </div>
-
-                            {/* Notes Section - Visible for reference */}
-                            {appointment.observations && (
-                                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 mb-6">
-                                    <p className="text-xs font-black uppercase text-slate-600 mb-2">NOTAS / OBSERVACIONES</p>
-                                    <p className="text-slate-900 font-medium">{appointment.observations}</p>
-                                </div>
-                            )}
-
-                            <p className="text-sm text-slate-500 mt-4">
-                                ℹ️ Para ver el historial completo y odontograma del paciente, accede a su ficha desde la agenda.
-                            </p>
                         </div>
-                    </div>
+                    )}
+
+                    {activeTab === 'odontogram' && (
+                        <div className="p-8 min-h-[500px] flex items-center justify-center">
+                            <div className="w-full">
+                                <h3 className="text-2xl font-black text-slate-900 mb-6">Odontograma del Paciente</h3>
+                                <Odontogram patientId={patient.id} readOnly={false} />
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'treatments' && (
+                        <div className="p-8 min-h-[400px]">
+                            <h3 className="text-2xl font-black text-slate-900 mb-6">Tratamientos del Paciente</h3>
+                            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 text-center text-slate-600 font-medium">
+                                <p>Los tratamientos se muestran en la ficha del paciente.</p>
+                                <button
+                                    onClick={() => navigate(`/patients/${patient.id}`)}
+                                    className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold text-sm uppercase"
+                                >
+                                    Ver Ficha Completa
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'documents' && (
+                        <div className="p-8 min-h-[400px]">
+                            <h3 className="text-2xl font-black text-slate-900 mb-6">Documentos del Paciente</h3>
+                            <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200 text-center text-slate-600 font-medium">
+                                <p>Los documentos se muestran en la ficha del paciente.</p>
+                                <button
+                                    onClick={() => navigate(`/patients/${patient.id}`)}
+                                    className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold text-sm uppercase"
+                                >
+                                    Ver Ficha Completa
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

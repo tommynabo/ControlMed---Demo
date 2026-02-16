@@ -137,6 +137,25 @@ const Agenda: React.FC = () => {
         setBookingDoctorId(appt.doctorId);
         setBookingTreatment(typeof appt.treatment === 'string' ? appt.treatment : (appt.treatment as any)?.id || '');
         setBookingBudgetId((appt as any).budgetId || ''); // Set Budget ID
+        setBookingPrice((appt as any).amount || 0);
+        setBookingDuration(appt.duration || 30);
+        setBookingObservation(appt.observations || '');
+
+        // Load budget items if a budget is linked
+        if ((appt as any).budgetId) {
+            const budget = patientBudgets.find(b => b.id === (appt as any).budgetId);
+            if (budget && budget.items) {
+                // If budgetItemId is set, select those items
+                if ((appt as any).budgetItemId) {
+                    const selectedItems = budget.items.filter((item: any) => item.id === (appt as any).budgetItemId);
+                    setSelectedBudgetItems(selectedItems);
+                } else {
+                    setSelectedBudgetItems([]);
+                }
+            }
+        } else {
+            setSelectedBudgetItems([]);
+        }
 
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
@@ -179,9 +198,9 @@ const Agenda: React.FC = () => {
             time: activeSlot.time,
             patientId: patient.id,
             doctorId: bookingDoctorId,
-            treatmentId: null, // Don't send fake srv-X IDs - backend validates UUID
+            treatmentId: null,
             budgetId: bookingBudgetId || null,
-            budgetItemId: bookingBudgetItemId || null,
+            budgetItemIds: selectedBudgetItems.length > 0 ? selectedBudgetItems.map(item => item.id || item._idx) : null,
             amount: bookingPrice || null,
             observations: bookingObservation || null,
             status: 'Scheduled',

@@ -275,41 +275,25 @@ app.get('/api/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
         
-        // Attempt to fetch from system users with DOCTOR role
-        // Using both possible table names since schema may vary
-        let users = [];
+        // Fetch doctors from Doctor table (primary source of truth)
+        const { data: doctors, error } = await supabase
+            .from('Doctor')
+            .select('id, name, specialization')
+            .eq('is_active', true)
+            .order('name', { ascending: true });
         
-        // Try system_users table first (if it exists)
-        const { data: systemUsers, error: err1 } = await supabase
-            .from('system_users')
-            .select('id, email, full_name, role')
-            .eq('role', 'DOCTOR');
-        
-        if (!err1 && systemUsers && systemUsers.length > 0) {
-            // Transform system_users to match doctor structure
-            users = systemUsers.map(u => ({
-                id: u.id,
-                name: u.full_name || u.email.split('@')[0],
-                specialization: 'Odontólogo',
-                email: u.email
-            }));
-        } else {
-            // Fallback: try User table
-            const { data: userTable, error: err2 } = await supabase
-                .from('User')
-                .select('id, name, specialization, role')
-                .eq('role', 'DOCTOR');
-            
-            if (!err2 && userTable && userTable.length > 0) {
-                users = userTable.map(u => ({
-                    id: u.id,
-                    name: u.name,
-                    specialization: u.specialization || 'Odontólogo'
-                }));
-            }
+        if (error) {
+            console.error('Error fetching doctors from Doctor table:', error.message);
+            return res.status(500).json({ error: error.message });
         }
         
-        res.json(users);
+        if (!doctors || doctors.length === 0) {
+            console.warn('⚠️ No active doctors found in Doctor table');
+            return res.json([]);
+        }
+        
+        console.log(`✅ Loaded ${doctors.length} active doctors`);
+        res.json(doctors);
     } catch (e) {
         console.error('Error fetching doctors:', e.message);
         res.status(500).json({ error: e.message });
@@ -496,48 +480,50 @@ app.put('/api/patients/:id', async (req, res) => {
 // --- APPOINTMENTS ---
 app.post('/api/appointments', async (req, res) => {
     try {
-        const { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, amount } = req.body;
+        const { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, budgetItemIds, amount } = req.body;
 
-        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, amount });
+        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, budgetItemIds, amount });
 
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         // Sanitization: Ensure empty strings become null for UUID fields to prevent invalid input syntax
-        // DB expects UUID or NULL. Empty string "" is not a valid UUID.
-        // Also handle "undefined" string literal just in case
         const isValidUUID = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
         const safeTreatmentId = (treatmentId && isValidUUID(treatmentId)) ? treatmentId : null;
         const safeDoctorId = (doctorId && doctorId !== 'undefined' && doctorId.trim().length > 0) ? doctorId : null;
         const safeBudgetId = (budgetId && budgetId !== 'undefined' && budgetId.trim().length > 0) ? budgetId : null;
         const safeBudgetItemId = (budgetItemId && budgetItemId !== 'undefined' && budgetItemId.trim().length > 0) ? budgetItemId : null;
+        const safeBudgetItemIds = Array.isArray(budgetItemIds) && budgetItemIds.length > 0 ? budgetItemIds.filter(id => id && id !== 'undefined') : null;
 
-// VALIDATION: Doctor Account Status Check (NEW: Ensure doctor has active user account)
+        // VALIDATION: Doctor Account Status Check (Ensure doctor exists)
         if (safeDoctorId) {
             try {
+                // Query all columns from Doctor table
                 const { data: doctor, error: doctorErr } = await supabase
                     .from('Doctor')
-                    .select('name, user_id, is_active')
+                    .select()
                     .eq('id', safeDoctorId)
                     .maybeSingle();
 
-                if (doctorErr || !doctor) {
-                    return res.status(400).json({ error: 'Doctor no encontrado' });
+                if (doctorErr) {
+                    console.error('❌ Doctor lookup error:', doctorErr.message);
+                    return res.status(400).json({ error: 'Error al validar doctor: ' + doctorErr.message });
                 }
 
-                if (!doctor.is_active) {
+                if (!doctor) {
+                    console.error('❌ Doctor not found with ID:', safeDoctorId);
+                    return res.status(400).json({ error: `Doctor no encontrado (ID: ${safeDoctorId}). Asegúrate de que el doctor existe en la tabla Doctor.` });
+                }
+
+                // Check if doctor is active (if is_active column exists)
+                if (doctor.is_active === false) {
                     return res.status(400).json({ error: `El Dr. ${doctor.name} está inactivo. No se pueden crear citas con este doctor.` });
                 }
 
-                // Optional: Validate that doctor has a system user account
-                // if (!doctor.user_id) {
-                //     return res.status(400).json({ error: `El Dr. ${doctor.name} no tiene cuenta de sistema. Cree una cuenta en Configuración > Usuarios.` });
-                // }
-
-                console.log(`✓ Doctor validation passed: ${doctor.name}`);
+                console.log(`✓ Doctor validation passed: Dr. ${doctor.name} (${doctor.specialization})`);
             } catch (validationErr) {
-                console.warn('⚠️ Doctor validation error:', validationErr.message);
-                // Don't block appointment if validation service fails, but log it
+                console.error('❌ Doctor validation error:', validationErr.message);
+                return res.status(500).json({ error: 'Error al validar doctor: ' + validationErr.message });
             }
         }
 
@@ -545,16 +531,17 @@ app.post('/api/appointments', async (req, res) => {
         const { data, error } = await supabase
             .from('Appointment')
             .insert([{
-                id: appointmentId, // Explicitly generate ID
+                id: appointmentId,
                 date: new Date(date).toISOString(),
                 time,
-                duration: duration || 60, // Default 60 minutos
+                duration: duration || 60,
                 observations: observations || null,
                 patientId,
                 doctorId: safeDoctorId,
                 treatmentId: safeTreatmentId,
                 budgetId: safeBudgetId,
-                budgetItemId: safeBudgetItemId,
+                budget_item_id: safeBudgetItemId || null,
+                budget_item_ids: safeBudgetItemIds ? JSON.stringify(safeBudgetItemIds) : null,
                 amount: amount || null,
                 status: 'Scheduled',
                 paid: false
