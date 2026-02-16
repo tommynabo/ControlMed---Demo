@@ -261,7 +261,7 @@ const Agenda: React.FC = () => {
                         <div className="w-14 flex-shrink-0 pr-4">
                             <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
                             {TIME_SLOTS.map((time, idx) => {
-                                const hour = time.split(':')[0];
+                                const hour = parseInt(time.split(':')[0], 10);
                                 // Only render on the start of each hour (every 4 slots)
                                 if (idx % 4 === 0) {
                                     return (
@@ -278,22 +278,22 @@ const Agenda: React.FC = () => {
                         <div className="flex-1 min-w-[600px] relative">
                             <div className="min-w-[1000px] relative">
                         {/* HEADERS */}
-                        <div className="flex mb-4">
+                        <div className="flex h-12 mb-4">
                             {viewMode === 'daily' ? (
                                 selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
                                     doctors.map(doc => (
-                                        <div key={doc.id} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-900 uppercase tracking-wide">
+                                        <div key={doc.id} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-900 uppercase tracking-wide flex items-center justify-center">
                                             {doc.name}
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="flex-1 text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase">
+                                    <div className="flex-1 text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase flex items-center justify-center">
                                         {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
                                     </div>
                                 )
                             ) : (
                                 Array.from({ length: 7 }).map((_, i) => (
-                                    <div key={i} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs">
+                                    <div key={i} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
                                         {getDayName(currentDate, i)}
                                     </div>
                                 ))
