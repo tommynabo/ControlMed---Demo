@@ -274,10 +274,44 @@ app.get('/api/patients/:patientId/clinical-records', async (req, res) => {
 app.get('/api/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
-        const { data, error } = await supabase.from('Doctor').select('*');
-        if (error) throw error;
-        res.json(data);
+        
+        // Attempt to fetch from system users with DOCTOR role
+        // Using both possible table names since schema may vary
+        let users = [];
+        
+        // Try system_users table first (if it exists)
+        const { data: systemUsers, error: err1 } = await supabase
+            .from('system_users')
+            .select('id, email, full_name, role')
+            .eq('role', 'DOCTOR');
+        
+        if (!err1 && systemUsers && systemUsers.length > 0) {
+            // Transform system_users to match doctor structure
+            users = systemUsers.map(u => ({
+                id: u.id,
+                name: u.full_name || u.email.split('@')[0],
+                specialization: 'Odontólogo',
+                email: u.email
+            }));
+        } else {
+            // Fallback: try User table
+            const { data: userTable, error: err2 } = await supabase
+                .from('User')
+                .select('id, name, specialization, role')
+                .eq('role', 'DOCTOR');
+            
+            if (!err2 && userTable && userTable.length > 0) {
+                users = userTable.map(u => ({
+                    id: u.id,
+                    name: u.name,
+                    specialization: u.specialization || 'Odontólogo'
+                }));
+            }
+        }
+        
+        res.json(users);
     } catch (e) {
+        console.error('Error fetching doctors:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

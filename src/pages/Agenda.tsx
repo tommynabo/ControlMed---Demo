@@ -256,9 +256,26 @@ const Agenda: React.FC = () => {
             {/* CALENDAR GRID (COLUMN BASED) */}
             <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden relative">
                 <div className="overflow-x-auto pb-4">
-                    <div className="min-w-[1000px] relative">
+                    <div className="flex">
+                        {/* TIME COLUMN - Always visible */}
+                        <div className="w-14 flex-shrink-0 pr-4">
+                            <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
+                            {TIME_SLOTS.map((time) => {
+                                const hour = time.split(':')[0];
+                                const isHourStart = time.endsWith(':00');
+                                return (
+                                    <div key={`time-label-${time}`} className={`h-12 flex items-center text-right pr-2 text-xs font-bold text-slate-400 ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                        {hour}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        
+                        {/* SCHEDULER GRID */}
+                        <div className="flex-1 min-w-[600px] relative">
+                            <div className="min-w-[1000px] relative">
                         {/* HEADERS */}
-                        <div className="flex ml-14 mb-4">
+                        <div className="flex mb-4">
                             {viewMode === 'daily' ? (
                                 selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
                                     doctors.map(doc => (
@@ -285,14 +302,9 @@ const Agenda: React.FC = () => {
 
                             {/* 1. Background Grid (Lines & Times) */}
                             {TIME_SLOTS.map((time, idx) => {
-                                const hour = time.split(':')[0];
                                 const isHourStart = time.endsWith(':00');
                                 return (
                                 <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
-                                    {/* Time Label - show hour for every slot (8, 9, 10, etc.) */}
-                                    <div className="absolute -left-14 -top-3 w-10 text-right text-xs font-bold text-slate-400 group-hover:text-blue-500 transition-colors">
-                                        {hour}
-                                    </div>
 
                                     {/* Clickable Slots for New Appt (Invisible overlay) */}
                                     {viewMode === 'daily' ? (
@@ -487,6 +499,9 @@ const Agenda: React.FC = () => {
 
                         </div>
                     </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -655,8 +670,8 @@ const Agenda: React.FC = () => {
                                 disabled={!!selectedAppt}
                             >
                                 <option value="">Seleccionar Doctor...</option>
-                                {DOCTORS.map(d => (
-                                    <option key={d.id} value={d.id}>{d.name} ({d.specialization})</option>
+                                {doctors.map(d => (
+                                    <option key={d.id} value={d.id}>{d.name || d.full_name} ({d.specialization || 'Odontólogo'})</option>
                                 ))}
                             </select>
                         </div>
