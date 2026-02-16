@@ -260,14 +260,17 @@ const Agenda: React.FC = () => {
                         {/* TIME COLUMN - Always visible */}
                         <div className="w-14 flex-shrink-0 pr-4">
                             <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
-                            {TIME_SLOTS.map((time) => {
+                            {TIME_SLOTS.map((time, idx) => {
                                 const hour = time.split(':')[0];
-                                const isHourStart = time.endsWith(':00');
-                                return (
-                                    <div key={`time-label-${time}`} className={`h-12 flex items-center text-right pr-2 text-xs font-bold text-slate-400 ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
-                                        {hour}
-                                    </div>
-                                );
+                                // Only render on the start of each hour (every 4 slots)
+                                if (idx % 4 === 0) {
+                                    return (
+                                        <div key={`time-label-${time}`} className="h-48 flex items-center justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300">
+                                            {hour}am
+                                        </div>
+                                    );
+                                }
+                                return null;
                             })}
                         </div>
                         
