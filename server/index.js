@@ -275,11 +275,10 @@ app.get('/api/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
         
-        // Fetch doctors from Doctor table (primary source of truth)
+        // Fetch ALL doctors from Doctor table (no is_active filter for now)
         const { data: doctors, error } = await supabase
             .from('Doctor')
             .select('id, name, specialization')
-            .eq('is_active', true)
             .order('name', { ascending: true });
         
         if (error) {
@@ -288,15 +287,106 @@ app.get('/api/doctors', async (req, res) => {
         }
         
         if (!doctors || doctors.length === 0) {
-            console.warn('⚠️ No active doctors found in Doctor table');
+            console.warn('⚠️ No doctors found in Doctor table. Have you run the sync?');
             return res.json([]);
         }
         
-        console.log(`✅ Loaded ${doctors.length} active doctors`);
+        console.log(`✅ Loaded ${doctors.length} doctors`);
         res.json(doctors);
     } catch (e) {
         console.error('Error fetching doctors:', e.message);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// DEBUG: Check doctors sync status
+app.get('/api/debug/doctors', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        
+        // Check Doctor table
+        const { data: doctors, error: doctorError } = await supabase
+            .from('Doctor')
+            .select('*');
+        
+        // Check User table for DOCTOR role
+        const { data: doctorUsers, error: userError } = await supabase
+            .from('User')
+            .select('id, name, role')
+            .eq('role', 'DOCTOR');
+        
+        res.json({
+            status: 'debug',
+            doctor_table: {
+                count: doctors?.length || 0,
+                error: doctorError?.message,
+                doctors: doctors || []
+            },
+            user_table_doctors: {
+                count: doctorUsers?.length || 0,
+                error: userError?.message,
+                users: doctorUsers || []
+            },
+            sync_status: {
+                doctors_synced: doctors?.length || 0,
+                users_with_doctor_role: doctorUsers?.length || 0,
+                needs_sync: (doctorUsers?.length || 0) > (doctors?.length || 0)
+            }
+        });
+    } catch (e) {
+        console.error('Error in debug endpoint:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// AUTO-SYNC: Sincronizar doctores desde User a Doctor
+app.post('/api/sync/doctors', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        
+        // Get all users with DOCTOR role
+        const { data: doctorUsers, error: userError } = await supabase
+            .from('User')
+            .select('id, name')
+            .eq('role', 'DOCTOR');
+        
+        if (userError) {
+            return res.status(500).json({ error: 'Error fetching doctor users: ' + userError.message });
+        }
+        
+        if (!doctorUsers || doctorUsers.length === 0) {
+            return res.json({ 
+                success: true,
+                message: 'No doctor users to sync',
+                synced: 0 
+            });
+        }
+        
+        // Insert/update each doctor in Doctor table
+        const syncPromises = doctorUsers.map(user => 
+            supabase
+                .from('Doctor')
+                .upsert({
+                    id: user.id,
+                    name: user.name,
+                    specialization: 'Odontólogo'
+                })
+                .select()
+        );
+        
+        const results = await Promise.all(syncPromises);
+        const synced = results.filter(r => !r.error).length;
+        
+        console.log(`✅ Synchronized ${synced} doctors from User table`);
+        
+        res.json({
+            success: true,
+            message: `Synchronized ${synced} doctors from User table`,
+            synced: synced
+        });
+    } catch (e) {
+        console.error('Error syncing doctors:', e.message);
+        res.status(500).json({ error: 'Sync failed: ' + e.message });
     }
 });
 
