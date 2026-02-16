@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, User, CreditCard, FileText, Teeth } from 'lucide-react';
+import { ArrowLeft, Calendar, User, CreditCard, FileText, Smile } from 'lucide-react';
 import { Appointment, Patient, Budget, Payment } from '../../types';
 import { PaymentModal } from '../components/PaymentModal';
 import { Odontogram } from '../../components/Odontogram';
@@ -368,7 +368,7 @@ export const AppointmentDetails: React.FC = () => {
                                 : 'text-slate-600 hover:text-slate-900'
                         }`}
                     >
-                        <Teeth size={16} /> Odontograma
+                        <Smile size={16} /> Odontograma
                     </button>
                     <button
                         onClick={() => setActiveTab('treatments')}
