@@ -266,7 +266,7 @@ const Agenda: React.FC = () => {
                                 if (idx % 4 === 0) {
                                     return (
                                         <div key={`time-label-${time}`} className="h-48 flex items-center justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300">
-                                            {hour}am
+                                            {hour}
                                         </div>
                                     );
                                 }
