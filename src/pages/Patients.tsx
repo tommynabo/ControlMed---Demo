@@ -17,6 +17,20 @@ import { BudgetModal } from '../components/BudgetModal';
 import { PrescriptionModal } from '../components/PrescriptionModal';
 import { DOCTORS, DENTAL_SERVICES } from '../constants';
 
+// Helper function to normalize patient data, ensuring prescriptions is always an array
+const normalizePrescriptions = (prescriptions: any): string[] => {
+    if (Array.isArray(prescriptions)) return prescriptions;
+    if (typeof prescriptions === 'string') {
+        try {
+            const parsed = JSON.parse(prescriptions);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+    return [];
+};
+
 const Patients: React.FC = () => {
     const {
         patients, setPatients, searchQuery, setSearchQuery,
@@ -308,7 +322,7 @@ const Patients: React.FC = () => {
         if (!prescriptionText || !selectedPatient) return;
 
         try {
-            const currentRecetas = [...(selectedPatient.prescriptions || [])];
+            const currentRecetas = [...normalizePrescriptions(selectedPatient.prescriptions)];
 
             if (editingPrescriptionIndex !== null) {
                 currentRecetas[editingPrescriptionIndex] = prescriptionText;
@@ -343,7 +357,7 @@ const Patients: React.FC = () => {
         if (!selectedPatient) return;
 
         try {
-            const currentRecetas = [...(selectedPatient.prescriptions || [])];
+            const currentRecetas = [...normalizePrescriptions(selectedPatient.prescriptions)];
             currentRecetas.splice(idx, 1);
 
             const updated = await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
@@ -1054,10 +1068,10 @@ const Patients: React.FC = () => {
 
 
                                 <div className="space-y-4">
-                                    {(selectedPatient.prescriptions || []).length === 0 ? (
+                                    {normalizePrescriptions(selectedPatient.prescriptions).length === 0 ? (
                                         <div className="text-center p-10 opacity-50 font-bold uppercase text-xs">No hay recetas guardadas</div>
                                     ) : (
-                                        (selectedPatient.prescriptions || []).map((receta, idx) => (
+                                        normalizePrescriptions(selectedPatient.prescriptions).map((receta, idx) => (
                                             <div key={idx} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group">
                                                 <div className="flex justify-between items-start gap-4">
                                                     <div className="flex items-start gap-4 flex-1">
@@ -1841,7 +1855,7 @@ const Patients: React.FC = () => {
                             });
 
                             // Legacy: also update patient prescriptions array
-                            const currentRecetas = [...(selectedPatient.prescriptions || [])];
+                            const currentRecetas = [...normalizePrescriptions(selectedPatient.prescriptions)];
                             currentRecetas.push(text);
                             await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
 

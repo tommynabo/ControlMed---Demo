@@ -391,6 +391,48 @@ app.post('/api/sync/doctors', async (req, res) => {
 });
 
 // --- PATIENT MANAGEMENT ---
+// Normalize patient data - parse JSON fields
+const normalizePatient = (patient) => {
+    if (!patient) return patient;
+    
+    return {
+        ...patient,
+        prescriptions: Array.isArray(patient.prescriptions) 
+            ? patient.prescriptions 
+            : (typeof patient.prescriptions === 'string' 
+                ? (() => {
+                    try {
+                        return JSON.parse(patient.prescriptions);
+                    } catch {
+                        return [];
+                    }
+                })()
+                : []),
+        medicalHistory: Array.isArray(patient.medicalHistory)
+            ? patient.medicalHistory
+            : (typeof patient.medicalHistory === 'string'
+                ? (() => {
+                    try {
+                        return JSON.parse(patient.medicalHistory);
+                    } catch {
+                        return [];
+                    }
+                })()
+                : []),
+        criticalAlerts: Array.isArray(patient.criticalAlerts)
+            ? patient.criticalAlerts
+            : (typeof patient.criticalAlerts === 'string'
+                ? (() => {
+                    try {
+                        return JSON.parse(patient.criticalAlerts);
+                    } catch {
+                        return [];
+                    }
+                })()
+                : [])
+    };
+};
+
 app.get('/api/patients', async (req, res) => {
     try {
         console.log("GET /api/patients - Fetching all patients...");
@@ -413,7 +455,9 @@ app.get('/api/patients', async (req, res) => {
         }
 
         console.log(`✅ Loaded ${data.length} patients.`);
-        res.json(data);
+        // Normalize all patients to ensure JSON fields are parsed
+        const normalizedData = data.map(normalizePatient);
+        res.json(normalizedData);
     } catch (e) {
         console.error("Error Fetching Patients:", e);
         res.status(500).json({ error: e.message });
@@ -489,7 +533,8 @@ app.post('/api/patients', async (req, res) => {
         }
 
         console.log("✅ Patient created:", created.id);
-        res.json(created);
+        // Normalize the returned patient
+        res.json(normalizePatient(created));
     } catch (e) {
         console.error("Error creating patient:", e);
         res.status(500).json({ error: e.message });
@@ -560,7 +605,8 @@ app.put('/api/patients/:id', async (req, res) => {
         }
 
         console.log("✅ Patient updated:", data.id);
-        res.json(data);
+        // Normalize the returned patient
+        res.json(normalizePatient(data));
     } catch (e) {
         console.error("Error updating patient:", e);
         res.status(500).json({ error: e.message });
