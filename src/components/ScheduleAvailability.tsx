@@ -79,8 +79,8 @@ const ScheduleAvailability: React.FC = () => {
   const loadScheduleData = async () => {
     setIsLoadingDoctors(true);
     try {
-      // Load system doctors (with DOCTOR role)
-      const systemUsersData = await api.systemUsers.getAll();
+      // Load system doctors (with DOCTOR role) - Include inactive for search
+      const systemUsersData = await api.systemUsers.getAllIncludeInactive();
       const doctorUsers = systemUsersData.filter((u: SystemUser) => u.role === 'DOCTOR');
       setSystemDoctors(doctorUsers);
 
