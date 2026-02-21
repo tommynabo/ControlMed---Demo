@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     ChevronLeft, ChevronRight, Search, Plus, Calendar, User, Clock, CheckCircle2, ExternalLink
 } from 'lucide-react';
@@ -6,6 +6,23 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
 import { Appointment, Doctor } from '../../types';
+
+interface DoctorSchedule {
+  id?: string;
+  doctor_id: string;
+  doctor_name: string;
+  monday: boolean;
+  tuesday: boolean;
+  wednesday: boolean;
+  thursday: boolean;
+  friday: boolean;
+  saturday: boolean;
+  sunday: boolean;
+  morning_start: string;
+  morning_end: string;
+  afternoon_start: string;
+  afternoon_end: string;
+}
 
 const Agenda: React.FC = () => {
     const {
@@ -16,6 +33,7 @@ const Agenda: React.FC = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('daily');
     const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
+    const [doctorSchedules, setDoctorSchedules] = useState<DoctorSchedule[]>([]);
 
     const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
     const [activeSlot, setActiveSlot] = useState<{ time: string, dayIdx: number } | null>(null);
@@ -36,6 +54,27 @@ const Agenda: React.FC = () => {
     const [bookingBudgetId, setBookingBudgetId] = useState<string>('');
     const [bookingBudgetItemId, setBookingBudgetItemId] = useState<string>('');
     const [selectedBudgetItems, setSelectedBudgetItems] = useState<any[]>([]);
+
+    // Load Doctor Schedules from Supabase
+    useEffect(() => {
+        const loadSchedules = async () => {
+            try {
+                const schedules = await api.doctorSchedules.getAll();
+                // Transform time format: "HH:MM:SS" -> "HH:MM"
+                const transformed = (schedules || []).map((s: any) => ({
+                    ...s,
+                    morning_start: s.morning_start?.slice(0, 5) || '09:00',
+                    morning_end: s.morning_end?.slice(0, 5) || '13:00',
+                    afternoon_start: s.afternoon_start?.slice(0, 5) || '16:00',
+                    afternoon_end: s.afternoon_end?.slice(0, 5) || '20:00'
+                }));
+                setDoctorSchedules(transformed);
+            } catch (err) {
+                console.error('Error loading doctor schedules:', err);
+            }
+        };
+        loadSchedules();
+    }, []);
 
     // Fetch Budgets
     React.useEffect(() => {
@@ -79,6 +118,48 @@ const Agenda: React.FC = () => {
         if (viewMode === 'daily') newDate.setDate(newDate.getDate() + 1);
         else newDate.setDate(newDate.getDate() + 7);
         setCurrentDate(newDate);
+    };
+
+    // Get available time slots based on doctor's schedule
+    const getAvailableTimeSlots = (date: Date, doctorId?: string): string[] => {
+        if (!doctorId || doctorId === 'all') return TIME_SLOTS;
+
+        const schedule = doctorSchedules.find(s => s.doctor_id === doctorId);
+        if (!schedule) return TIME_SLOTS; // If no schedule found, show all slots
+
+        // Get day of week (0 = Sunday, 1 = Monday, etc.)
+        const dayOfWeek = date.getDay();
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayName = dayNames[dayOfWeek] as keyof DoctorSchedule;
+
+        // Check if doctor works this day
+        if (!schedule[dayName]) return [];
+
+        // Get morning and afternoon times
+        const morningStart = schedule.morning_start;
+        const morningEnd = schedule.morning_end;
+        const afternoonStart = schedule.afternoon_start;
+        const afternoonEnd = schedule.afternoon_end;
+
+        // Filter TIME_SLOTS that fall within available hours
+        return TIME_SLOTS.filter(slot => {
+            const [slotH, slotM] = slot.split(':').map(Number);
+            const [mornStart, _] = morningStart.split(':').map(Number);
+            const [mornEnd, __] = morningEnd.split(':').map(Number);
+            const [aftStart, ___] = afternoonStart.split(':').map(Number);
+            const [aftEnd, ____] = afternoonEnd.split(':').map(Number);
+
+            const slotTime = slotH + slotM / 60;
+            const morningStartTime = mornStart + _ / 60;
+            const morningEndTime = mornEnd + __ / 60;
+            const afternoonStartTime = aftStart + ___ / 60;
+            const afternoonEndTime = aftEnd + ____ / 60;
+
+            return (
+                (slotTime >= morningStartTime && slotTime < morningEndTime) ||
+                (slotTime >= afternoonStartTime && slotTime < afternoonEndTime)
+            );
+        });
     };
 
     const filteredAppointments = useMemo(() => {
@@ -279,7 +360,9 @@ const Agenda: React.FC = () => {
                         {/* TIME COLUMN - Always visible */}
                         <div className="w-14 flex-shrink-0 pr-4">
                             <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
-                            {TIME_SLOTS.map((time, idx) => {
+                            {(viewMode === 'daily' && selectedDoctorId !== 'all' 
+                                ? getAvailableTimeSlots(currentDate, selectedDoctorId) 
+                                : TIME_SLOTS).map((time, idx) => {
                                 const hour = parseInt(time.split(':')[0], 10);
                                 // Only render on the start of each hour (every 4 slots)
                                 if (idx % 4 === 0) {
@@ -323,7 +406,9 @@ const Agenda: React.FC = () => {
                         <div className="relative">
 
                             {/* 1. Background Grid (Lines & Times) */}
-                            {TIME_SLOTS.map((time, idx) => {
+                            {(viewMode === 'daily' && selectedDoctorId !== 'all' 
+                                ? getAvailableTimeSlots(currentDate, selectedDoctorId) 
+                                : TIME_SLOTS).map((time, idx) => {
                                 const isHourStart = time.endsWith(':00');
                                 return (
                                 <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>

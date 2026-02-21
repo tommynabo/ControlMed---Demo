@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, Plus, X, Trash2, Save, AlertCircle, Edit3 } from 'lucide-react';
+import { Calendar, Clock, Plus, X, Trash2, Save, AlertCircle, Edit3, Search } from 'lucide-react';
 import { api } from '../services/api';
+
+interface SystemUser {
+  id: string;
+  email: string;
+  full_name: string;
+  role: string;
+}
 
 interface DoctorSchedule {
   id?: string;
@@ -17,6 +24,8 @@ interface DoctorSchedule {
   morning_end: string;
   afternoon_start: string;
   afternoon_end: string;
+  notes?: string;
+  is_active?: boolean;
 }
 
 interface ServiceDuration {
@@ -26,6 +35,7 @@ interface ServiceDuration {
 }
 
 const ScheduleAvailability: React.FC = () => {
+  const [systemDoctors, setSystemDoctors] = useState<SystemUser[]>([]);
   const [doctors, setDoctors] = useState<DoctorSchedule[]>([]);
   const [serviceDurations, setServiceDurations] = useState<ServiceDuration[]>([]);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
@@ -36,6 +46,9 @@ const ScheduleAvailability: React.FC = () => {
   // Modal states
   const [showDoctorModal, setShowDoctorModal] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<DoctorSchedule | null>(null);
+  const [doctorSearchInput, setDoctorSearchInput] = useState('');
+  const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
+  
   const [doctorForm, setDoctorForm] = useState<DoctorSchedule>({
     doctor_id: '',
     doctor_name: '',
@@ -66,9 +79,27 @@ const ScheduleAvailability: React.FC = () => {
   const loadScheduleData = async () => {
     setIsLoadingDoctors(true);
     try {
+      // Load system doctors (with DOCTOR role)
+      const systemUsersData = await api.systemUsers.getAll();
+      const doctorUsers = systemUsersData.filter((u: SystemUser) => u.role === 'DOCTOR');
+      setSystemDoctors(doctorUsers);
+
+      // Load configured doctor schedules
       const doctorsData = await api.doctorSchedules.getAll();
+      
+      // Transform time format: "HH:MM:SS" -> "HH:MM"
+      const transformedDoctors = (doctorsData || []).map((doc: any) => ({
+        ...doc,
+        morning_start: doc.morning_start?.slice(0, 5) || '09:00',
+        morning_end: doc.morning_end?.slice(0, 5) || '13:00',
+        afternoon_start: doc.afternoon_start?.slice(0, 5) || '16:00',
+        afternoon_end: doc.afternoon_end?.slice(0, 5) || '20:00'
+      }));
+      
+      setDoctors(transformedDoctors);
+
+      // Load service durations
       const durationsData = await api.schedule.getServiceDurations();
-      setDoctors(doctorsData || []);
       setServiceDurations(durationsData || []);
     } catch (e) {
       console.error('Error loading schedule data:', e);
@@ -77,7 +108,53 @@ const ScheduleAvailability: React.FC = () => {
     }
   };
 
+  // Filter doctors based on search input
+  const filteredDoctors = systemDoctors.filter(doc =>
+    doc.full_name.toLowerCase().includes(doctorSearchInput.toLowerCase()) ||
+    doc.email.toLowerCase().includes(doctorSearchInput.toLowerCase())
+  );
+
+  const handleSelectDoctor = (doctor: SystemUser) => {
+    // Check if this doctor already has a schedule
+    const existingSchedule = doctors.find(d => d.doctor_id === doctor.id);
+    
+    if (existingSchedule) {
+      setEditingDoctor(existingSchedule);
+      // Make sure times are in HH:MM format
+      setDoctorForm({
+        ...existingSchedule,
+        morning_start: existingSchedule.morning_start?.slice(0, 5) || '09:00',
+        morning_end: existingSchedule.morning_end?.slice(0, 5) || '13:00',
+        afternoon_start: existingSchedule.afternoon_start?.slice(0, 5) || '16:00',
+        afternoon_end: existingSchedule.afternoon_end?.slice(0, 5) || '20:00'
+      });
+    } else {
+      setEditingDoctor(null);
+      setDoctorForm({
+        doctor_id: doctor.id,
+        doctor_name: doctor.full_name,
+        monday: true,
+        tuesday: true,
+        wednesday: true,
+        thursday: true,
+        friday: true,
+        saturday: false,
+        sunday: false,
+        morning_start: '09:00',
+        morning_end: '13:00',
+        afternoon_start: '16:00',
+        afternoon_end: '20:00',
+        is_active: true
+      });
+    }
+    
+    setDoctorSearchInput('');
+    setShowDoctorDropdown(false);
+    setShowDoctorModal(true);
+  };
+
   const handleResetDoctorForm = () => {
+    setDoctorSearchInput('');
     setDoctorForm({
       doctor_id: '',
       doctor_name: '',
@@ -91,14 +168,15 @@ const ScheduleAvailability: React.FC = () => {
       morning_start: '09:00',
       morning_end: '13:00',
       afternoon_start: '16:00',
-      afternoon_end: '20:00'
+      afternoon_end: '20:00',
+      is_active: true
     });
     setEditingDoctor(null);
   };
 
   const handleAddDoctor = () => {
     handleResetDoctorForm();
-    setShowDoctorModal(true);
+    setShowDoctorDropdown(true);
   };
 
   const handleEditDoctor = (doctor: DoctorSchedule) => {
@@ -108,6 +186,11 @@ const ScheduleAvailability: React.FC = () => {
   };
 
   const handleSaveDoctor = async () => {
+    if (!doctorForm.doctor_id) {
+      alert('Por favor selecciona un doctor');
+      return;
+    }
+
     if (!doctorForm.doctor_name) {
       alert('El nombre del doctor es obligatorio');
       return;
@@ -115,14 +198,33 @@ const ScheduleAvailability: React.FC = () => {
 
     setIsSaving(true);
     try {
+      const scheduleData = {
+        doctor_id: doctorForm.doctor_id,
+        doctor_name: doctorForm.doctor_name,
+        monday: doctorForm.monday,
+        tuesday: doctorForm.tuesday,
+        wednesday: doctorForm.wednesday,
+        thursday: doctorForm.thursday,
+        friday: doctorForm.friday,
+        saturday: doctorForm.saturday,
+        sunday: doctorForm.sunday,
+        morning_start: doctorForm.morning_start + ':00',
+        morning_end: doctorForm.morning_end + ':00',
+        afternoon_start: doctorForm.afternoon_start + ':00',
+        afternoon_end: doctorForm.afternoon_end + ':00',
+        is_active: true
+      };
+
       if (editingDoctor?.id) {
-        await api.schedule.updateDoctor(editingDoctor.id, doctorForm);
+        await api.doctorSchedules.update(editingDoctor.id, scheduleData);
       } else {
-        await api.schedule.createDoctor(doctorForm);
+        await api.doctorSchedules.create(scheduleData);
       }
+      
       setShowDoctorModal(false);
+      setShowDoctorDropdown(false);
       loadScheduleData();
-      setSuccessMessage('Horario guardado correctamente');
+      setSuccessMessage('Horario guardado correctamente ✓');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       console.error('Error saving doctor schedule:', error);
@@ -137,7 +239,8 @@ const ScheduleAvailability: React.FC = () => {
     if (!confirm(`¿Eliminar horario de ${name}?`)) return;
 
     try {
-      await api.schedule.deleteDoctor(id);
+      // Soft delete by marking as inactive in Supabase
+      await api.doctorSchedules.update(id, { is_active: false });
       loadScheduleData();
       setSuccessMessage('Horario eliminado');
       setTimeout(() => setSuccessMessage(''), 3000);
@@ -270,6 +373,48 @@ const ScheduleAvailability: React.FC = () => {
             </button>
           </div>
 
+          {/* Doctor Search (Show when adding new) */}
+          {showDoctorDropdown && !editingDoctor && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6 relative z-50">
+              <label className="text-xs font-black uppercase text-slate-400 mb-3 block">Selecciona un Doctor</label>
+              <div className="relative">
+                <div className="relative">
+                  <Search className="absolute left-4 top-3 text-slate-400" size={18} />
+                  <input
+                    type="text"
+                    value={doctorSearchInput}
+                    onChange={(e) => setDoctorSearchInput(e.target.value)}
+                    onFocus={() => setShowDoctorDropdown(true)}
+                    placeholder="Escribe el nombre o email del doctor..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-12 pr-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
+                  />
+                </div>
+
+                {/* Dropdown list */}
+                {showDoctorDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg max-h-64 overflow-y-auto z-50">
+                    {filteredDoctors.length > 0 ? (
+                      filteredDoctors.map(doctor => (
+                        <button
+                          key={doctor.id}
+                          onClick={() => handleSelectDoctor(doctor)}
+                          className="w-full px-4 py-3 text-left hover:bg-purple-50 border-b border-slate-100 last:border-0 transition-colors"
+                        >
+                          <p className="text-sm font-bold text-slate-900">{doctor.full_name}</p>
+                          <p className="text-xs text-slate-500">{doctor.email}</p>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-center text-xs text-slate-500">
+                        No se encontraron doctores
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {doctors.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
               <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
@@ -384,7 +529,10 @@ const ScheduleAvailability: React.FC = () => {
                 {editingDoctor ? '✏️ Editar Horario' : '➕ Nuevo Horario'}
               </h3>
               <button
-                onClick={() => setShowDoctorModal(false)}
+                onClick={() => {
+                  setShowDoctorModal(false);
+                  setShowDoctorDropdown(false);
+                }}
                 className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-xl transition-colors"
               >
                 <X size={20} />
@@ -392,15 +540,9 @@ const ScheduleAvailability: React.FC = () => {
             </div>
 
             <div className="space-y-6">
-              <div>
-                <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Nombre del Doctor</label>
-                <input
-                  type="text"
-                  value={doctorForm.doctor_name}
-                  onChange={(e) => setDoctorForm({ ...doctorForm, doctor_name: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
-                  placeholder="Ej: Dr. Juan Pérez"
-                />
+              <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
+                <p className="text-xs font-black uppercase text-purple-700 mb-1">Doctor</p>
+                <p className="text-sm font-bold text-slate-900">{doctorForm.doctor_name}</p>
               </div>
 
               <div>
@@ -484,7 +626,10 @@ const ScheduleAvailability: React.FC = () => {
 
             <div className="flex gap-4 mt-8">
               <button
-                onClick={() => setShowDoctorModal(false)}
+                onClick={() => {
+                  setShowDoctorModal(false);
+                  setShowDoctorDropdown(false);
+                }}
                 className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors"
               >
                 Cancelar
