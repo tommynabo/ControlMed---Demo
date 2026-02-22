@@ -420,269 +420,242 @@ const Agenda: React.FC = () => {
                                 {/* TIME GRID BACKGROUND & EVENTS LAYER */}
                                 <div className="relative">
 
-                                    {/* Helper: Get slots to render based on doctor availability */}
+                                    {/* ═══════ GRID RENDERING ═══════ */}
                                     {(() => {
-                                        let slotsToRender: Array<string | { type: 'HOUR_BLOCK'; hours: number }> = TIME_SLOTS;
-                                        
-                                        // In daily view with specific doctor, check for hourly blocks
-                                        if (viewMode === 'daily' && selectedDoctorId !== 'all' && selectedDoctorId !== '') {
+                                        const SLOT_H = 48; // h-12 = 48px
+
+                                        // ── CASE A: Daily + specific doctor → merged blocks ──
+                                        if (viewMode === 'daily' && selectedDoctorId && selectedDoctorId !== 'all') {
                                             const availableSlots = getAvailableTimeSlots(currentDate, selectedDoctorId);
-                                            const renderedRanges: Array<string | { type: 'HOUR_BLOCK'; hours: number }> = [];
-                                            
-                                            let blockedHours = 0;
-                                            let currentHour = -1;
-                                            let hasSlotInHour = false;
-                                            
-                                            TIME_SLOTS.forEach((slot, idx) => {
-                                                const [h] = slot.split(':').map(Number);
-                                                
-                                                if (h !== currentHour) {
-                                                    // New hour starting
-                                                    if (currentHour !== -1 && !hasSlotInHour) {
-                                                        // Previous hour was completely blocked
-                                                        blockedHours++;
-                                                    } else if (currentHour !== -1 && blockedHours > 0) {
-                                                        // Previous hour had slots, but before it had blocked hours
-                                                        renderedRanges.push({ type: 'HOUR_BLOCK', hours: blockedHours });
-                                                        blockedHours = 0;
-                                                    }
-                                                    currentHour = h;
-                                                    hasSlotInHour = false;
-                                                }
-                                                
-                                                if (availableSlots.includes(slot)) {
-                                                    hasSlotInHour = true;
-                                                    renderedRanges.push(slot);
-                                                }
-                                            });
-                                            
-                                            // Handle last hour
-                                            if (!hasSlotInHour && currentHour !== -1) {
-                                                blockedHours++;
-                                            }
-                                            if (blockedHours > 0) {
-                                                renderedRanges.push({ type: 'HOUR_BLOCK', hours: blockedHours });
-                                            }
-                                            
-                                            slotsToRender = renderedRanges;
-                                        }
-                                        
-                                        return slotsToRender.map((item, idx) => {
-                                            // Check if this is an hour block placeholder
-                                            if (typeof item === 'object' && item.type === 'HOUR_BLOCK') {
-                                                const blockHeight = item.hours * 48; // 48px per hour
+
+                                            // If entire day is off
+                                            if (availableSlots.length === 0) {
                                                 return (
-                                                    <div key={`block-${idx}`} className="flex relative group" style={{ height: `${blockHeight}px` }}>
+                                                    <div style={{ height: `${TIME_SLOTS.length * SLOT_H}px` }}
+                                                         className="flex items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                                        <div className="text-center">
+                                                            <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                                                            <p className="text-sm font-bold text-slate-400">Día libre</p>
+                                                            <p className="text-xs text-slate-300 mt-1">Este doctor no trabaja hoy</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            // Build render plan: merge consecutive blocked slots
+                                            type PlanItem = { kind: 'block'; count: number } | { kind: 'slot'; time: string };
+                                            const plan: PlanItem[] = [];
+                                            let blockCount = 0;
+
+                                            for (const slot of TIME_SLOTS) {
+                                                if (availableSlots.includes(slot)) {
+                                                    if (blockCount > 0) {
+                                                        plan.push({ kind: 'block', count: blockCount });
+                                                        blockCount = 0;
+                                                    }
+                                                    plan.push({ kind: 'slot', time: slot });
+                                                } else {
+                                                    blockCount++;
+                                                }
+                                            }
+                                            if (blockCount > 0) plan.push({ kind: 'block', count: blockCount });
+
+                                            return plan.map((item, idx) => {
+                                                if (item.kind === 'block') {
+                                                    return (
+                                                        <div key={`blk-${idx}`}
+                                                             style={{ height: `${item.count * SLOT_H}px` }}
+                                                             className="flex relative border-t border-slate-100">
+                                                            <div className="flex-1 bg-slate-50/80 flex items-center justify-center">
+                                                                <span className="text-xs text-slate-300 font-bold uppercase tracking-widest select-none">
+                                                                    Sin consulta
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                const t = item.time;
+                                                const hourStart = t.endsWith(':00');
+                                                return (
+                                                    <div key={t} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
                                                         <div
-                                                            className="flex-1 bg-white/80 cursor-not-allowed border-t-2 border-slate-300"
-                                                            style={{
-                                                                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
+                                                            className="flex-1 h-full hover:bg-purple-50/30 cursor-pointer transition-colors z-0"
+                                                            onClick={() => {
+                                                                setActiveSlot({ time: t, dayIdx: 0 });
+                                                                setBookingDoctorId(selectedDoctorId);
+                                                                setSelectedAppt(null);
+                                                                setIsAppointmentModalOpen(true);
                                                             }}
                                                         />
                                                     </div>
                                                 );
-                                            }
-                                            
-                                            const time = item as string;
-                                            const isHourStart = time.endsWith(':00');
-                                            return (
-                                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                            });
+                                        }
 
-                                                        {/* Clickable Slots for New Appt (Invisible overlay) */}
-                                                        {viewMode === 'daily' ? (
-                                                            selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
-                                                                doctors.map(doc => {
-                                                                    const isAvailable = getAvailableTimeSlots(currentDate, doc.id).includes(time);
-                                                                    return (
-                                                                        <div
-                                                                            key={`${doc.id}-${time}`}
-                                                                            className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
-                                                                            style={!isAvailable ? {
-                                                                                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
-                                                                            } : {}}
-                                                                            onClick={() => {
-                                                                                if (!isAvailable) return;
-                                                                                setActiveSlot({ time, dayIdx: 0 });
-                                                                                setSelectedDoctorId(doc.id);
-                                                                                setBookingDoctorId(doc.id);
-                                                                                setSelectedAppt(null);
-                                                                                setIsAppointmentModalOpen(true);
-                                                                            }}
-                                                                        />
-                                                                    );
-                                                                })
-                                                            ) : (
-                                                                (() => {
-                                                                    const isAvailable = selectedDoctorId === 'all' 
-                                                                        ? true 
-                                                                        : getAvailableTimeSlots(currentDate, selectedDoctorId).includes(time);
-                                                                    return (
-                                                                        <div
-                                                                            className={`flex-1 h-full transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
-                                                                            style={!isAvailable ? {
-                                                                                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
-                                                                            } : {}}
-                                                                            onClick={() => {
-                                                                                if (!isAvailable) return;
-                                                                                setActiveSlot({ time, dayIdx: 0 });
-                                                                                setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
-                                                                                setSelectedAppt(null);
-                                                                                setIsAppointmentModalOpen(true);
-                                                                            }}
-                                                                        />
-                                                                    );
-                                                                })()
-                                                            )
-                                                        ) : (
-                                                            Array.from({ length: 7 }).map((_, dayIdx) => {
-                                                                const d = new Date(currentDate);
-                                                                const day = d.getDay();
-                                                                const diff = d.getDate() - day + (day === 0 ? -6 : 1) + dayIdx;
-                                                                d.setDate(diff);
-                                                                const isAvailable = selectedDoctorId !== 'all' ? getAvailableTimeSlots(d, selectedDoctorId).includes(time) : true;
-
-                                                                return (
-                                                                    <div
-                                                                        key={`day-${dayIdx}-${time}`}
-                                                                        className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
-                                                                        style={!isAvailable ? {
-                                                                            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
-                                                                        } : {}}
-                                                                        onClick={() => {
-                                                                            if (!isAvailable) return;
-                                                                            setActiveSlot({ time, dayIdx });
-                                                                            setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
-                                                                            setSelectedAppt(null);
-                                                                            setIsAppointmentModalOpen(true);
-                                                                        }}
-                                                                    />
-                                                                );
-                                                            })
-                                                        )}
+                                        // ── CASE B: Daily + all doctors (admin multi-column) ──
+                                        if (viewMode === 'daily' && selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION')) {
+                                            return TIME_SLOTS.map(time => {
+                                                const hourStart = time.endsWith(':00');
+                                                return (
+                                                    <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                                        {doctors.map(doc => {
+                                                            const ok = getAvailableTimeSlots(currentDate, doc.id).includes(time);
+                                                            return (
+                                                                <div key={`${doc.id}-${time}`}
+                                                                     className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                     onClick={() => {
+                                                                         if (!ok) return;
+                                                                         setActiveSlot({ time, dayIdx: 0 });
+                                                                         setSelectedDoctorId(doc.id);
+                                                                         setBookingDoctorId(doc.id);
+                                                                         setSelectedAppt(null);
+                                                                         setIsAppointmentModalOpen(true);
+                                                                     }}
+                                                                />
+                                                            );
+                                                        })}
                                                     </div>
                                                 );
+                                            });
+                                        }
+
+                                        // ── CASE C: Daily + single column (no specific doctor / non-admin) ──
+                                        if (viewMode === 'daily') {
+                                            return TIME_SLOTS.map(time => {
+                                                const hourStart = time.endsWith(':00');
+                                                return (
+                                                    <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                                        <div className="flex-1 h-full hover:bg-slate-50/50 cursor-pointer transition-colors z-0"
+                                                             onClick={() => {
+                                                                 setActiveSlot({ time, dayIdx: 0 });
+                                                                 setBookingDoctorId('');
+                                                                 setSelectedAppt(null);
+                                                                 setIsAppointmentModalOpen(true);
+                                                             }}
+                                                        />
+                                                    </div>
+                                                );
+                                            });
+                                        }
+
+                                        // ── CASE D: Weekly view ──
+                                        return TIME_SLOTS.map(time => {
+                                            const hourStart = time.endsWith(':00');
+                                            return (
+                                                <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                                    {Array.from({ length: 7 }).map((_, dayIdx) => {
+                                                        const d = new Date(currentDate);
+                                                        const dow = d.getDay();
+                                                        const diff = d.getDate() - dow + (dow === 0 ? -6 : 1) + dayIdx;
+                                                        d.setDate(diff);
+                                                        const ok = selectedDoctorId !== 'all'
+                                                            ? getAvailableTimeSlots(d, selectedDoctorId).includes(time)
+                                                            : true;
+                                                        return (
+                                                            <div key={`w-${dayIdx}-${time}`}
+                                                                 className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                 onClick={() => {
+                                                                     if (!ok) return;
+                                                                     setActiveSlot({ time, dayIdx });
+                                                                     setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
+                                                                     setSelectedAppt(null);
+                                                                     setIsAppointmentModalOpen(true);
+                                                                 }}
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
                                         });
                                     })()}
 
-                                    {/* 2. Appointments Overlay */}
+                                    {/* ═══════ APPOINTMENTS OVERLAY ═══════ */}
                                     <div className="absolute inset-0 z-10 pointer-events-none flex ml-0">
                                         {(() => {
-                                            // Each TIME_SLOT = 15 min, rendered as h-12 (3rem = 48px)
-                                            const PIXELS_PER_MINUTE = 48 / 15; // 48px per 15-min slot = 3.2 px/min
+                                            const SLOT_H = 48;
+                                            const PX_PER_MIN = SLOT_H / 15; // 3.2
 
-                                            // Build columns for overlay positioning
-                                            const columns = [];
+                                            // Convert time → pixel top using slot index (handles the 13:45→16:00 gap correctly)
+                                            const timeToTop = (t: string): number => {
+                                                const idx = TIME_SLOTS.indexOf(t);
+                                                if (idx >= 0) return idx * SLOT_H;
+                                                // Interpolate if time is between slots
+                                                const [h, m] = t.split(':').map(Number);
+                                                const mins = h * 60 + m;
+                                                for (let i = 0; i < TIME_SLOTS.length - 1; i++) {
+                                                    const [sh, sm] = TIME_SLOTS[i].split(':').map(Number);
+                                                    const [nh, nm] = TIME_SLOTS[i + 1].split(':').map(Number);
+                                                    if (mins >= sh * 60 + sm && mins < nh * 60 + nm) {
+                                                        return (i + (mins - (sh * 60 + sm)) / 15) * SLOT_H;
+                                                    }
+                                                }
+                                                return (TIME_SLOTS.length - 1) * SLOT_H;
+                                            };
+
+                                            // Build columns
+                                            const columns: Appointment[][] = [];
 
                                             if (viewMode === 'daily') {
+                                                const dateStr = currentDate.toISOString().split('T')[0];
                                                 if (selectedDoctorId === 'all') {
                                                     doctors.forEach(doc => {
-                                                        const docAppts = appointments.filter(a =>
-                                                            (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) &&
-                                                            a.doctorId === doc.id
-                                                        );
-                                                        columns.push(docAppts);
+                                                        columns.push(appointments.filter(a =>
+                                                            (a.date === dateStr || a.date.startsWith(dateStr)) && a.doctorId === doc.id
+                                                        ));
                                                     });
                                                 } else {
-                                                    const docAppts = appointments.filter(a =>
-                                                        (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) &&
+                                                    columns.push(appointments.filter(a =>
+                                                        (a.date === dateStr || a.date.startsWith(dateStr)) &&
                                                         (a.doctorId === selectedDoctorId || selectedDoctorId === 'all')
-                                                    );
-                                                    columns.push(docAppts);
+                                                    ));
                                                 }
                                             } else {
-                                                // Weekly
                                                 for (let i = 0; i < 7; i++) {
                                                     const d = new Date(currentDate);
-                                                    const day = d.getDay();
-                                                    const diff = d.getDate() - day + (day === 0 ? -6 : 1) + i;
+                                                    const dow = d.getDay();
+                                                    const diff = d.getDate() - dow + (dow === 0 ? -6 : 1) + i;
                                                     d.setDate(diff);
-                                                    const dateStr = d.toISOString().split('T')[0];
-
-                                                    const dayAppts = appointments.filter(a =>
-                                                        (a.date === dateStr || a.date.startsWith(dateStr)) &&
+                                                    const ds = d.toISOString().split('T')[0];
+                                                    columns.push(appointments.filter(a =>
+                                                        (a.date === ds || a.date.startsWith(ds)) &&
                                                         (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)
-                                                    );
-                                                    columns.push(dayAppts);
+                                                    ));
                                                 }
                                             }
 
                                             return columns.map((colAppts, colIdx) => {
-                                                // Layout Algorithm for Overlaps
-                                                // 1. Sort by time
                                                 const sorted = [...colAppts].sort((a, b) => a.time.localeCompare(b.time));
-
-                                                // 2. Simple overlap detection
-                                                // We will group intersecting events
-                                                // This is a simplified version. For robust full calendar, use a library or proper graph coloring.
-                                                // Here: simple horizontal stacking.
-
                                                 return (
                                                     <div key={colIdx} className="flex-1 relative h-full pointer-events-none border-r border-transparent">
                                                         {sorted.map(appt => {
-                                                            // Parse time
-                                                            const [h, m] = appt.time.split(':').map(Number);
-                                                            const startMinutes = h * 60 + m;
+                                                            const top = timeToTop(appt.time);
+                                                            const height = (appt.duration || 30) * PX_PER_MIN;
 
-                                                            // Start of day (using first slot)
-                                                            const [startH, startM] = TIME_SLOTS[0].split(':').map(Number);
-                                                            const dayStartMinutes = startH * 60 + startM;
+                                                            const [ah, am] = appt.time.split(':').map(Number);
+                                                            const startMin = ah * 60 + am;
 
-                                                            const offsetMinutes = startMinutes - dayStartMinutes;
-                                                            const top = offsetMinutes * PIXELS_PER_MINUTE; // 96px per 60min
-                                                            const height = (appt.duration || 30) * PIXELS_PER_MINUTE;
-
-                                                            // Determine width/left based on simplistic overlap
-                                                            // Check if it overlaps with ANY previous in this column that hasn't ended
-                                                            // Just simple strict offset for now if overlap
-
-                                                            // Actually, let's just render them full width but semi-transparent if simplified,
-                                                            // or use z-index.
-                                                            // User asked for "side-by-side".
-
-                                                            // Quick Overlap Check
-                                                            const overlapping = sorted.filter(a => {
-                                                                if (a.id === appt.id) return false;
-                                                                const [ah, am] = a.time.split(':').map(Number);
-                                                                const aStart = ah * 60 + am;
-                                                                const aEnd = aStart + (a.duration || 30);
-                                                                const myEnd = startMinutes + (appt.duration || 30);
-                                                                return (startMinutes < aEnd && myEnd > aStart);
+                                                            const overlapping = sorted.filter(o => {
+                                                                if (o.id === appt.id) return false;
+                                                                const [oh, om] = o.time.split(':').map(Number);
+                                                                const oStart = oh * 60 + om;
+                                                                const oEnd = oStart + (o.duration || 30);
+                                                                const myEnd = startMin + (appt.duration || 30);
+                                                                return startMin < oEnd && myEnd > oStart;
                                                             });
 
-                                                            let width = '100%';
-                                                            let left = '0%';
-
+                                                            let width = '100%', left = '0%';
                                                             if (overlapping.length > 0) {
-                                                                // Simple logic: if I overlap, I take half width.
-                                                                // If I am later than the one I overlap with, I go right.
-                                                                const olderSibling = overlapping.find(o => o.time < appt.time || (o.time === appt.time && o.id < appt.id));
-                                                                if (olderSibling) {
-                                                                    width = '50%';
-                                                                    left = '50%'; // Shift right
-                                                                } else {
-                                                                    width = overlapping.length > 0 ? '50%' : '100%';
-                                                                    left = '0%';
-                                                                }
+                                                                const older = overlapping.find(o => o.time < appt.time || (o.time === appt.time && o.id < appt.id));
+                                                                width = '50%';
+                                                                left = older ? '50%' : '0%';
                                                             }
 
                                                             return (
                                                                 <div
                                                                     key={appt.id}
-                                                                    onClick={(e) => {
-                                                                        // Allow clicking
-                                                                        handleAppointmentClick(e, appt);
-                                                                    }}
-                                                                    style={{
-                                                                        top: `${top}px`,
-                                                                        height: `${height}px`,
-                                                                        left,
-                                                                        width,
-                                                                        position: 'absolute'
-                                                                    }}
-                                                                    className={`
-                                                                p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-start
-                                                                ${getAppointmentColors(appt.status, appt.paid)}
-                                                            `}
+                                                                    onClick={(e) => handleAppointmentClick(e, appt)}
+                                                                    style={{ top: `${top}px`, height: `${height}px`, left, width, position: 'absolute' }}
+                                                                    className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-start ${getAppointmentColors(appt.status, appt.paid)}`}
                                                                 >
                                                                     <div className="flex justify-between items-start">
                                                                         <span className="truncate">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
@@ -695,7 +668,6 @@ const Agenda: React.FC = () => {
                                                                                 : appt.treatment || '-'}
                                                                         </span>
                                                                     )}
-                                                                    {/* Observations (if tall enough) */}
                                                                     {appt.duration && appt.duration >= 60 && (appt as any).observation && (
                                                                         <p className="text-[9px] opacity-60 mt-1 line-clamp-2 italic leading-tight">
                                                                             "{(appt as any).observation}"
