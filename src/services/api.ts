@@ -800,17 +800,13 @@ export const api = {
         }
     },
 
-    // Doctor Schedules (Supabase Direct)
+    // Doctor Schedules
     doctorSchedules: {
         getAll: async () => {
             try {
-                const { data, error } = await supabase
-                    .from('doctor_schedules')
-                    .select('*')
-                    .eq('is_active', true);
-
-                if (error) throw error;
-                return data || [];
+                const res = await fetch(`${API_URL}/doctor-schedules`, { headers });
+                if (!res.ok) throw new Error('Failed to fetch doctor schedules');
+                return await res.json();
             } catch (error) {
                 console.error('Error fetching doctor schedules:', error);
                 return [];
@@ -819,14 +815,9 @@ export const api = {
 
         getByDoctor: async (doctorId: string) => {
             try {
-                const { data, error } = await supabase
-                    .from('doctor_schedules')
-                    .select('*')
-                    .eq('doctor_id', doctorId)
-                    .single();
-
-                if (error && error.code !== 'PGRST116') throw error;
-                return data || null;
+                const res = await fetch(`${API_URL}/doctor-schedules/doctor/${doctorId}`, { headers });
+                if (!res.ok) throw new Error('Failed to fetch doctor schedule');
+                return await res.json();
             } catch (error) {
                 console.error('Error fetching doctor schedule:', error);
                 return null;
@@ -835,14 +826,13 @@ export const api = {
 
         create: async (scheduleData: any) => {
             try {
-                const { data, error } = await supabase
-                    .from('doctor_schedules')
-                    .insert([scheduleData])
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                return data;
+                const res = await fetch(`${API_URL}/doctor-schedules`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(scheduleData)
+                });
+                if (!res.ok) throw new Error('Failed to create doctor schedule');
+                return await res.json();
             } catch (error) {
                 console.error('Error creating doctor schedule:', error);
                 throw error;
@@ -851,15 +841,13 @@ export const api = {
 
         update: async (id: string, scheduleData: any) => {
             try {
-                const { data, error } = await supabase
-                    .from('doctor_schedules')
-                    .update(scheduleData)
-                    .eq('id', id)
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                return data;
+                const res = await fetch(`${API_URL}/doctor-schedules/${id}`, {
+                    method: 'PUT',
+                    headers,
+                    body: JSON.stringify(scheduleData)
+                });
+                if (!res.ok) throw new Error('Failed to update doctor schedule');
+                return await res.json();
             } catch (error) {
                 console.error('Error updating doctor schedule:', error);
                 throw error;

@@ -238,6 +238,69 @@ app.delete('/api/system-users/:id', async (req, res) => {
     }
 });
 
+// --- DOCTOR SCHEDULES API ---
+app.get('/api/doctor-schedules', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.from('doctor_schedules').select('*');
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        console.error('Error fetching doctor schedules:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/doctor-schedules/doctor/:doctorId', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.from('doctor_schedules').select('*').eq('doctor_id', req.params.doctorId).single();
+        if (error && error.code !== 'PGRST116') throw error;
+        res.json(data || null);
+    } catch (e) {
+        console.error('Error fetching doctor schedule:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/doctor-schedules', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.from('doctor_schedules').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (e) {
+        console.error('Error creating doctor schedule:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/doctor-schedules/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { data, error } = await supabase.from('doctor_schedules').update(req.body).eq('id', id).select().single();
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        console.error('Error updating doctor schedule:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/doctor-schedules/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { error } = await supabase.from('doctor_schedules').delete().eq('id', id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting doctor schedule:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/finance/financing', async (req, res) => {
     try {
         const result = await financeService.createFinancingPlan(prisma, req.body);
@@ -914,20 +977,13 @@ app.put('/api/appointments/:id', async (req, res) => {
 
 app.delete('/api/appointments/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { id } = req.params;
-
         console.log(`🗑️ Deleting Appointment ${id}`);
 
-        const { error } = await supabase
-            .from('Appointment')
-            .delete()
-            .eq('id', id);
-
-        if (error) {
-            console.error("❌ Error deleting appointment:", error);
-            return res.status(500).json({ error: error.message });
-        }
+        // Try deleting via Prisma
+        await prisma.appointment.delete({
+            where: { id: id }
+        });
 
         console.log("✅ Appointment Deleted:", id);
         res.json({ success: true });
