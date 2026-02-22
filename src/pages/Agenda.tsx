@@ -74,7 +74,11 @@ const Agenda: React.FC = () => {
             }
         };
         loadSchedules();
-    }, []);
+        
+        // Reload schedules every 5 seconds to catch changes from Settings
+        const interval = setInterval(loadSchedules, 5000);
+        return () => clearInterval(interval);
+    }, [api]);
 
     // Fetch Budgets
     React.useEffect(() => {
@@ -272,6 +276,21 @@ const Agenda: React.FC = () => {
             return;
         }
 
+        // Validate that the slot is available according to doctor's schedule
+        let dateToSave = currentDate;
+        if (viewMode === 'weekly') {
+            const currentDay = currentDate.getDay(); // 0-6
+            const diff = currentDate.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + activeSlot.dayIdx;
+            dateToSave = new Date(currentDate); // Copy
+            dateToSave.setDate(diff);
+        }
+
+        const availableSlots = getAvailableTimeSlots(dateToSave, bookingDoctorId);
+        if (!availableSlots.includes(activeSlot.time)) {
+            alert("❌ Este horario no está disponible para este doctor.\n\nVerifica la configuración de horarios en Configuración → Horarios Médicos.");
+            return;
+        }
+
         // Calculate Date
         let dateToSave = currentDate;
         if (viewMode === 'weekly') {
@@ -419,29 +438,47 @@ const Agenda: React.FC = () => {
                                                     {/* Clickable Slots for New Appt (Invisible overlay) */}
                                                     {viewMode === 'daily' ? (
                                                         selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
-                                                            doctors.map(doc => (
-                                                                <div
-                                                                    key={`${doc.id}-${time}`}
-                                                                    className="flex-1 h-full border-r border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
-                                                                    onClick={() => {
-                                                                        setActiveSlot({ time, dayIdx: 0 });
-                                                                        setSelectedDoctorId(doc.id);
-                                                                        setBookingDoctorId(doc.id);
-                                                                        setSelectedAppt(null);
-                                                                        setIsAppointmentModalOpen(true);
-                                                                    }}
-                                                                />
-                                                            ))
+                                                            doctors.map(doc => {
+                                                                const isAvailable = getAvailableTimeSlots(currentDate, doc.id).includes(time);
+                                                                return (
+                                                                    <div
+                                                                        key={`${doc.id}-${time}`}
+                                                                        className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
+                                                                        style={!isAvailable ? {
+                                                                            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
+                                                                        } : {}}
+                                                                        onClick={() => {
+                                                                            if (!isAvailable) return;
+                                                                            setActiveSlot({ time, dayIdx: 0 });
+                                                                            setSelectedDoctorId(doc.id);
+                                                                            setBookingDoctorId(doc.id);
+                                                                            setSelectedAppt(null);
+                                                                            setIsAppointmentModalOpen(true);
+                                                                        }}
+                                                                    />
+                                                                );
+                                                            })
                                                         ) : (
-                                                            <div
-                                                                className="flex-1 h-full hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
-                                                                onClick={() => {
-                                                                    setActiveSlot({ time, dayIdx: 0 });
-                                                                    setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
-                                                                    setSelectedAppt(null);
-                                                                    setIsAppointmentModalOpen(true);
-                                                                }}
-                                                            />
+                                                            (() => {
+                                                                const isAvailable = selectedDoctorId === 'all' 
+                                                                    ? true 
+                                                                    : getAvailableTimeSlots(currentDate, selectedDoctorId).includes(time);
+                                                                return (
+                                                                    <div
+                                                                        className={`flex-1 h-full transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
+                                                                        style={!isAvailable ? {
+                                                                            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
+                                                                        } : {}}
+                                                                        onClick={() => {
+                                                                            if (!isAvailable) return;
+                                                                            setActiveSlot({ time, dayIdx: 0 });
+                                                                            setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
+                                                                            setSelectedAppt(null);
+                                                                            setIsAppointmentModalOpen(true);
+                                                                        }}
+                                                                    />
+                                                                );
+                                                            })()
                                                         )
                                                     ) : (
                                                         Array.from({ length: 7 }).map((_, dayIdx) => {

@@ -214,7 +214,7 @@ const ScheduleAvailability: React.FC = () => {
     }
 
     if (!doctorForm.morning_active && !doctorForm.afternoon_active) {
-      alert('Debes habilitar al menos un turno (mañana o tarde) o marcarlo como inactivo totalmente.');
+      alert('⚠️ Debes habilitar al menos UN turno:\n• Turno Mañana\n• Turno Tarde\n\nO marca el doctor como inactivo.');
       return;
     }
 
