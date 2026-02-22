@@ -49,7 +49,7 @@ const ScheduleAvailability: React.FC = () => {
   const [doctorSearchInput, setDoctorSearchInput] = useState('');
   const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
 
-  const [doctorForm, setDoctorForm] = useState<DoctorSchedule>({
+  const [doctorForm, setDoctorForm] = useState<DoctorSchedule & { morning_active: boolean, afternoon_active: boolean }>({
     doctor_id: '',
     doctor_name: '',
     monday: true,
@@ -62,7 +62,9 @@ const ScheduleAvailability: React.FC = () => {
     morning_start: '09:00',
     morning_end: '13:00',
     afternoon_start: '16:00',
-    afternoon_end: '20:00'
+    afternoon_end: '20:00',
+    morning_active: true,
+    afternoon_active: true
   });
 
   const [showDurationModal, setShowDurationModal] = useState(false);
@@ -125,7 +127,10 @@ const ScheduleAvailability: React.FC = () => {
         morning_start: existingSchedule.morning_start?.slice(0, 5) || '09:00',
         morning_end: existingSchedule.morning_end?.slice(0, 5) || '13:00',
         afternoon_start: existingSchedule.afternoon_start?.slice(0, 5) || '16:00',
-        afternoon_end: existingSchedule.afternoon_end?.slice(0, 5) || '20:00'
+        afternoon_end: existingSchedule.afternoon_end?.slice(0, 5) || '20:00',
+        morning_active: !!(existingSchedule.morning_start && existingSchedule.morning_end),
+        afternoon_active: !!(existingSchedule.afternoon_start && existingSchedule.afternoon_end),
+        is_active: existingSchedule.is_active !== false
       });
     } else {
       setEditingDoctor(null);
@@ -143,6 +148,8 @@ const ScheduleAvailability: React.FC = () => {
         morning_end: '13:00',
         afternoon_start: '16:00',
         afternoon_end: '20:00',
+        morning_active: true,
+        afternoon_active: true,
         is_active: true
       });
     }
@@ -168,6 +175,8 @@ const ScheduleAvailability: React.FC = () => {
       morning_end: '13:00',
       afternoon_start: '16:00',
       afternoon_end: '20:00',
+      morning_active: true,
+      afternoon_active: true,
       is_active: true
     });
     setEditingDoctor(null);
@@ -180,7 +189,15 @@ const ScheduleAvailability: React.FC = () => {
 
   const handleEditDoctor = (doctor: DoctorSchedule) => {
     setEditingDoctor(doctor);
-    setDoctorForm(doctor);
+    setDoctorForm({
+      ...doctor,
+      morning_active: !!(doctor.morning_start && doctor.morning_end),
+      afternoon_active: !!(doctor.afternoon_start && doctor.afternoon_end),
+      morning_start: doctor.morning_start || '09:00',
+      morning_end: doctor.morning_end || '13:00',
+      afternoon_start: doctor.afternoon_start || '16:00',
+      afternoon_end: doctor.afternoon_end || '20:00',
+    });
     setShowDoctorModal(true);
   };
 
@@ -190,8 +207,8 @@ const ScheduleAvailability: React.FC = () => {
       return;
     }
 
-    if (!doctorForm.doctor_name) {
-      alert('El nombre del doctor es obligatorio');
+    if (!doctorForm.morning_active && !doctorForm.afternoon_active) {
+      alert('Debes habilitar al menos un turno (mañana o tarde) o marcarlo como inactivo totalmente.');
       return;
     }
 
@@ -207,10 +224,10 @@ const ScheduleAvailability: React.FC = () => {
         friday: doctorForm.friday,
         saturday: doctorForm.saturday,
         sunday: doctorForm.sunday,
-        morning_start: doctorForm.morning_start + ':00',
-        morning_end: doctorForm.morning_end + ':00',
-        afternoon_start: doctorForm.afternoon_start + ':00',
-        afternoon_end: doctorForm.afternoon_end + ':00',
+        morning_start: doctorForm.morning_active ? doctorForm.morning_start + ':00' : null,
+        morning_end: doctorForm.morning_active ? doctorForm.morning_end + ':00' : null,
+        afternoon_start: doctorForm.afternoon_active ? doctorForm.afternoon_start + ':00' : null,
+        afternoon_end: doctorForm.afternoon_active ? doctorForm.afternoon_end + ':00' : null,
         is_active: true
       };
 
@@ -418,43 +435,74 @@ const ScheduleAvailability: React.FC = () => {
               <p className="text-slate-500 font-bold">No hay horarios configurados</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {doctors.map(doctor => (
-                <div key={doctor.id} className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-md transition-shadow">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                      <h5 className="text-sm font-bold text-slate-900">{doctor.doctor_name}</h5>
-                      <p className="text-xs text-slate-400 mt-1">
-                        Turno mañana: {doctor.morning_start} - {doctor.morning_end} | Turno tarde: {doctor.afternoon_start} - {doctor.afternoon_end}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditDoctor(doctor)}
-                        className="p-2 hover:bg-purple-50 rounded-lg text-slate-400 hover:text-purple-600 transition-colors"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDoctor(doctor.id, doctor.doctor_name)}
-                        className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+            <div className="space-y-6">
+              {(Object.entries(
+                doctors.reduce((acc, doc) => {
+                  if (!acc[doc.doctor_name]) acc[doc.doctor_name] = [];
+                  acc[doc.doctor_name].push(doc);
+                  return acc;
+                }, {} as Record<string, DoctorSchedule[]>)
+              ) as [string, DoctorSchedule[]][]).map(([doctorName, schedules]) => (
+                <div key={doctorName} className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-md transition-shadow">
+                  <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+                    <h5 className="text-lg font-bold text-slate-900">{doctorName}</h5>
+                    <button
+                      onClick={() => {
+                        handleResetDoctorForm();
+                        setDoctorForm(prev => ({ ...prev, doctor_name: doctorName, doctor_id: schedules[0].doctor_id }));
+                        setShowDoctorModal(true);
+                      }}
+                      className="bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-lg text-xs font-bold uppercase gap-2 flex items-center transition-colors"
+                    >
+                      <Plus size={14} /> Añadir Fragmento
+                    </button>
                   </div>
 
-                  {/* Days Grid */}
-                  <div className="grid grid-cols-7 gap-2">
-                    {daysOfWeek.map(day => (
-                      <div
-                        key={day.key}
-                        className={`p-2 rounded-lg text-center text-xs font-bold uppercase cursor-default ${doctor[day.key as keyof DoctorSchedule]
-                          ? 'bg-purple-100 text-purple-700'
-                          : 'bg-slate-100 text-slate-400'
-                          }`}
-                      >
-                        {day.label[0]}
+                  <div className="space-y-4">
+                    {schedules.map((doctor, idx) => (
+                      <div key={doctor.id || idx} className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex-1">
+                            <h6 className="text-xs font-black uppercase text-slate-500 mb-1">Franja #{idx + 1}</h6>
+                            <p className="text-sm font-bold text-slate-700 flex flex-wrap gap-x-4 gap-y-1">
+                              {doctor.morning_start && doctor.morning_end ? (
+                                <span>Mañana: <span className="text-purple-600">{doctor.morning_start} - {doctor.morning_end}</span></span>
+                              ) : null}
+                              {doctor.afternoon_start && doctor.afternoon_end ? (
+                                <span>Tarde: <span className="text-purple-600">{doctor.afternoon_start} - {doctor.afternoon_end}</span></span>
+                              ) : null}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleEditDoctor(doctor)}
+                              className="p-2 bg-white border border-slate-200 hover:bg-purple-50 rounded-lg text-slate-400 hover:text-purple-600 transition-colors"
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDoctor(doctor.id, doctor.doctor_name)}
+                              className="p-2 bg-white border border-slate-200 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Days Grid */}
+                        <div className="grid grid-cols-7 gap-2">
+                          {daysOfWeek.map(day => (
+                            <div
+                              key={day.key}
+                              className={`py-1.5 rounded-md text-center text-[10px] font-black uppercase cursor-default ${doctor[day.key as keyof DoctorSchedule]
+                                ? 'bg-purple-200 text-purple-800'
+                                : 'bg-slate-200 text-slate-400 opacity-50'
+                                }`}
+                            >
+                              {day.label.slice(0, 3)}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>

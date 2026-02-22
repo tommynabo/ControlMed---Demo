@@ -254,11 +254,11 @@ app.get('/api/doctor-schedules', async (req, res) => {
 app.get('/api/doctor-schedules/doctor/:doctorId', async (req, res) => {
     try {
         const supabase = getSupabase();
-        const { data, error } = await supabase.from('doctor_schedules').select('*').eq('doctor_id', req.params.doctorId).single();
-        if (error && error.code !== 'PGRST116') throw error;
-        res.json(data || null);
+        const { data, error } = await supabase.from('doctor_schedules').select('*').eq('doctor_id', req.params.doctorId);
+        if (error) throw error;
+        res.json(data || []);
     } catch (e) {
-        console.error('Error fetching doctor schedule:', e);
+        console.error('Error fetching doctor schedules:', e);
         res.status(500).json({ error: e.message });
     }
 });

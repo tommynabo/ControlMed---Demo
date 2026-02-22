@@ -124,41 +124,46 @@ const Agenda: React.FC = () => {
     const getAvailableTimeSlots = (date: Date, doctorId?: string): string[] => {
         if (!doctorId || doctorId === 'all') return TIME_SLOTS;
 
-        const schedule = doctorSchedules.find(s => s.doctor_id === doctorId);
-        if (!schedule) return TIME_SLOTS; // If no schedule found, show all slots
+        // Get ALL schedules for this doctor
+        const schedules = doctorSchedules.filter(s => s.doctor_id === doctorId);
+        if (schedules.length === 0) return TIME_SLOTS; // If no schedule found, show all slots
 
         // Get day of week (0 = Sunday, 1 = Monday, etc.)
         const dayOfWeek = date.getDay();
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const dayName = dayNames[dayOfWeek] as keyof DoctorSchedule;
 
-        // Check if doctor works this day
-        if (!schedule[dayName]) return [];
+        // Filter schedules that apply to this specific day
+        const activeSchedulesForDay = schedules.filter(s => s[dayName]);
+        if (activeSchedulesForDay.length === 0) return []; // Completely blocked out day
 
-        // Get morning and afternoon times
-        const morningStart = schedule.morning_start;
-        const morningEnd = schedule.morning_end;
-        const afternoonStart = schedule.afternoon_start;
-        const afternoonEnd = schedule.afternoon_end;
-
-        // Filter TIME_SLOTS that fall within available hours
+        // Filter TIME_SLOTS that fall within available hours of ANY active schedule fragment
         return TIME_SLOTS.filter(slot => {
             const [slotH, slotM] = slot.split(':').map(Number);
-            const [mornStart, _] = morningStart.split(':').map(Number);
-            const [mornEnd, __] = morningEnd.split(':').map(Number);
-            const [aftStart, ___] = afternoonStart.split(':').map(Number);
-            const [aftEnd, ____] = afternoonEnd.split(':').map(Number);
-
             const slotTime = slotH + slotM / 60;
-            const morningStartTime = mornStart + _ / 60;
-            const morningEndTime = mornEnd + __ / 60;
-            const afternoonStartTime = aftStart + ___ / 60;
-            const afternoonEndTime = aftEnd + ____ / 60;
 
-            return (
-                (slotTime >= morningStartTime && slotTime < morningEndTime) ||
-                (slotTime >= afternoonStartTime && slotTime < afternoonEndTime)
-            );
+            return activeSchedulesForDay.some(schedule => {
+                let inMorning = false;
+                let inAfternoon = false;
+
+                if (schedule.morning_start && schedule.morning_end) {
+                    const [mStartHour, mStartMin] = schedule.morning_start.split(':').map(Number);
+                    const [mEndHour, mEndMin] = schedule.morning_end.split(':').map(Number);
+                    const morningStartTime = mStartHour + mStartMin / 60;
+                    const morningEndTime = mEndHour + mEndMin / 60;
+                    if (slotTime >= morningStartTime && slotTime < morningEndTime) inMorning = true;
+                }
+
+                if (schedule.afternoon_start && schedule.afternoon_end) {
+                    const [aStartHour, aStartMin] = schedule.afternoon_start.split(':').map(Number);
+                    const [aEndHour, aEndMin] = schedule.afternoon_end.split(':').map(Number);
+                    const afternoonStartTime = aStartHour + aStartMin / 60;
+                    const afternoonEndTime = aEndHour + aEndMin / 60;
+                    if (slotTime >= afternoonStartTime && slotTime < afternoonEndTime) inAfternoon = true;
+                }
+
+                return inMorning || inAfternoon;
+            });
         });
     };
 

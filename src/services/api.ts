@@ -813,14 +813,14 @@ export const api = {
             }
         },
 
-        getByDoctor: async (doctorId: string) => {
+        getByDoctor: async (doctorId: string): Promise<any[]> => {
             try {
                 const res = await fetch(`${API_URL}/doctor-schedules/doctor/${doctorId}`, { headers });
                 if (!res.ok) throw new Error('Failed to fetch doctor schedule');
-                return await res.json();
+                return await res.json(); // Returns array now
             } catch (error) {
                 console.error('Error fetching doctor schedule:', error);
-                return null;
+                return []; // Return an empty array on error
             }
         },
 
