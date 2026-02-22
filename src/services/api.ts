@@ -888,9 +888,7 @@ export const api = {
             try {
                 const { data, error } = await supabase
                     .from('system_users')
-                    .select('*')
-                    .order('role', { ascending: true })
-                    .order('full_name', { ascending: true });
+                    .select('*');
 
                 if (error) throw error;
                 return data || [];

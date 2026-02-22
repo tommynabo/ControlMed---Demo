@@ -109,6 +109,57 @@ app.get('/api/liquidations', async (req, res) => {
 // --- BUDGETS ---
 // --- BUDGETS (Moved to Module 8 below) ---
 
+// --- SCHEDULE DURATIONS (Missing API Endpoints) ---
+app.get('/api/schedule/durations', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.from('service_durations').select('*').order('specialty', { ascending: true });
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        console.error('Error fetching durations:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/schedule/durations', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.from('service_durations').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (e) {
+        console.error('Error creating duration:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/schedule/durations/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { data, error } = await supabase.from('service_durations').update(req.body).eq('id', id).select().single();
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        console.error('Error updating duration:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/schedule/durations/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { error } = await supabase.from('service_durations').delete().eq('id', id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting duration:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/finance/financing', async (req, res) => {
     try {
         const result = await financeService.createFinancingPlan(prisma, req.body);

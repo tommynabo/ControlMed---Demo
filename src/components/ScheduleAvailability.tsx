@@ -109,8 +109,8 @@ const ScheduleAvailability: React.FC = () => {
 
   // Filter doctors based on search input
   const filteredDoctors = systemDoctors.filter(doc =>
-    doc.full_name.toLowerCase().includes(doctorSearchInput.toLowerCase()) ||
-    doc.email.toLowerCase().includes(doctorSearchInput.toLowerCase())
+    (doc.full_name || '').toLowerCase().includes(doctorSearchInput.toLowerCase()) ||
+    (doc.email || '').toLowerCase().includes(doctorSearchInput.toLowerCase())
   );
 
   const handleSelectDoctor = (doctor: SystemUser) => {
@@ -450,8 +450,8 @@ const ScheduleAvailability: React.FC = () => {
                       <div
                         key={day.key}
                         className={`p-2 rounded-lg text-center text-xs font-bold uppercase cursor-default ${doctor[day.key as keyof DoctorSchedule]
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-slate-100 text-slate-400'
+                          ? 'bg-purple-100 text-purple-700'
+                          : 'bg-slate-100 text-slate-400'
                           }`}
                       >
                         {day.label[0]}
@@ -554,8 +554,8 @@ const ScheduleAvailability: React.FC = () => {
                         })
                       }
                       className={`p-3 rounded-lg text-xs font-bold uppercase transition-all ${doctorForm[day.key as keyof DoctorSchedule]
-                          ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
-                          : 'bg-slate-100 text-slate-400 border-2 border-slate-200'
+                        ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
+                        : 'bg-slate-100 text-slate-400 border-2 border-slate-200'
                         }`}
                     >
                       {day.label[0]}
