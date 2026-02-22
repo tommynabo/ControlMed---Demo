@@ -420,86 +420,149 @@ const Agenda: React.FC = () => {
                                 {/* TIME GRID BACKGROUND & EVENTS LAYER */}
                                 <div className="relative">
 
-                                    {/* 1. Background Grid (Lines & Times) */}
-                                    {TIME_SLOTS.map((time, idx) => {
-                                        const isHourStart = time.endsWith(':00');
-                                        return (
-                                            <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                    {/* Helper: Get slots to render based on doctor availability */}
+                                    {(() => {
+                                        let slotsToRender: Array<string | { type: 'HOUR_BLOCK'; hours: number }> = TIME_SLOTS;
+                                        
+                                        // In daily view with specific doctor, check for hourly blocks
+                                        if (viewMode === 'daily' && selectedDoctorId !== 'all' && selectedDoctorId !== '') {
+                                            const availableSlots = getAvailableTimeSlots(currentDate, selectedDoctorId);
+                                            const renderedRanges: Array<string | { type: 'HOUR_BLOCK'; hours: number }> = [];
+                                            
+                                            let blockedHours = 0;
+                                            let currentHour = -1;
+                                            let hasSlotInHour = false;
+                                            
+                                            TIME_SLOTS.forEach((slot, idx) => {
+                                                const [h] = slot.split(':').map(Number);
+                                                
+                                                if (h !== currentHour) {
+                                                    // New hour starting
+                                                    if (currentHour !== -1 && !hasSlotInHour) {
+                                                        // Previous hour was completely blocked
+                                                        blockedHours++;
+                                                    } else if (currentHour !== -1 && blockedHours > 0) {
+                                                        // Previous hour had slots, but before it had blocked hours
+                                                        renderedRanges.push({ type: 'HOUR_BLOCK', hours: blockedHours });
+                                                        blockedHours = 0;
+                                                    }
+                                                    currentHour = h;
+                                                    hasSlotInHour = false;
+                                                }
+                                                
+                                                if (availableSlots.includes(slot)) {
+                                                    hasSlotInHour = true;
+                                                    renderedRanges.push(slot);
+                                                }
+                                            });
+                                            
+                                            // Handle last hour
+                                            if (!hasSlotInHour && currentHour !== -1) {
+                                                blockedHours++;
+                                            }
+                                            if (blockedHours > 0) {
+                                                renderedRanges.push({ type: 'HOUR_BLOCK', hours: blockedHours });
+                                            }
+                                            
+                                            slotsToRender = renderedRanges;
+                                        }
+                                        
+                                        return slotsToRender.map((item, idx) => {
+                                            // Check if this is an hour block placeholder
+                                            if (typeof item === 'object' && item.type === 'HOUR_BLOCK') {
+                                                const blockHeight = item.hours * 48; // 48px per hour
+                                                return (
+                                                    <div key={`block-${idx}`} className="flex relative group" style={{ height: `${blockHeight}px` }}>
+                                                        <div
+                                                            className="flex-1 bg-white/80 cursor-not-allowed border-t-2 border-slate-300"
+                                                            style={{
+                                                                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+                                            
+                                            const time = item as string;
+                                            const isHourStart = time.endsWith(':00');
+                                            return (
+                                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
 
-                                                    {/* Clickable Slots for New Appt (Invisible overlay) */}
-                                                    {viewMode === 'daily' ? (
-                                                        selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
-                                                            doctors.map(doc => {
-                                                                const isAvailable = getAvailableTimeSlots(currentDate, doc.id).includes(time);
-                                                                return (
-                                                                    <div
-                                                                        key={`${doc.id}-${time}`}
-                                                                        className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
-                                                                        style={!isAvailable ? {
-                                                                            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
-                                                                        } : {}}
-                                                                        onClick={() => {
-                                                                            if (!isAvailable) return;
-                                                                            setActiveSlot({ time, dayIdx: 0 });
-                                                                            setSelectedDoctorId(doc.id);
-                                                                            setBookingDoctorId(doc.id);
-                                                                            setSelectedAppt(null);
-                                                                            setIsAppointmentModalOpen(true);
-                                                                        }}
-                                                                    />
-                                                                );
-                                                            })
+                                                        {/* Clickable Slots for New Appt (Invisible overlay) */}
+                                                        {viewMode === 'daily' ? (
+                                                            selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
+                                                                doctors.map(doc => {
+                                                                    const isAvailable = getAvailableTimeSlots(currentDate, doc.id).includes(time);
+                                                                    return (
+                                                                        <div
+                                                                            key={`${doc.id}-${time}`}
+                                                                            className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
+                                                                            style={!isAvailable ? {
+                                                                                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
+                                                                            } : {}}
+                                                                            onClick={() => {
+                                                                                if (!isAvailable) return;
+                                                                                setActiveSlot({ time, dayIdx: 0 });
+                                                                                setSelectedDoctorId(doc.id);
+                                                                                setBookingDoctorId(doc.id);
+                                                                                setSelectedAppt(null);
+                                                                                setIsAppointmentModalOpen(true);
+                                                                            }}
+                                                                        />
+                                                                    );
+                                                                })
+                                                            ) : (
+                                                                (() => {
+                                                                    const isAvailable = selectedDoctorId === 'all' 
+                                                                        ? true 
+                                                                        : getAvailableTimeSlots(currentDate, selectedDoctorId).includes(time);
+                                                                    return (
+                                                                        <div
+                                                                            className={`flex-1 h-full transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
+                                                                            style={!isAvailable ? {
+                                                                                backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
+                                                                            } : {}}
+                                                                            onClick={() => {
+                                                                                if (!isAvailable) return;
+                                                                                setActiveSlot({ time, dayIdx: 0 });
+                                                                                setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
+                                                                                setSelectedAppt(null);
+                                                                                setIsAppointmentModalOpen(true);
+                                                                            }}
+                                                                        />
+                                                                    );
+                                                                })()
+                                                            )
                                                         ) : (
-                                                            (() => {
-                                                                const isAvailable = selectedDoctorId === 'all' 
-                                                                    ? true 
-                                                                    : getAvailableTimeSlots(currentDate, selectedDoctorId).includes(time);
+                                                            Array.from({ length: 7 }).map((_, dayIdx) => {
+                                                                const d = new Date(currentDate);
+                                                                const day = d.getDay();
+                                                                const diff = d.getDate() - day + (day === 0 ? -6 : 1) + dayIdx;
+                                                                d.setDate(diff);
+                                                                const isAvailable = selectedDoctorId !== 'all' ? getAvailableTimeSlots(d, selectedDoctorId).includes(time) : true;
+
                                                                 return (
                                                                     <div
-                                                                        className={`flex-1 h-full transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
+                                                                        key={`day-${dayIdx}-${time}`}
+                                                                        className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
                                                                         style={!isAvailable ? {
                                                                             backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
                                                                         } : {}}
                                                                         onClick={() => {
                                                                             if (!isAvailable) return;
-                                                                            setActiveSlot({ time, dayIdx: 0 });
+                                                                            setActiveSlot({ time, dayIdx });
                                                                             setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
                                                                             setSelectedAppt(null);
                                                                             setIsAppointmentModalOpen(true);
                                                                         }}
                                                                     />
                                                                 );
-                                                            })()
-                                                        )
-                                                    ) : (
-                                                        Array.from({ length: 7 }).map((_, dayIdx) => {
-                                                            const d = new Date(currentDate);
-                                                            const day = d.getDay();
-                                                            const diff = d.getDate() - day + (day === 0 ? -6 : 1) + dayIdx;
-                                                            d.setDate(diff);
-                                                            const isAvailable = selectedDoctorId !== 'all' ? getAvailableTimeSlots(d, selectedDoctorId).includes(time) : true;
-
-                                                            return (
-                                                                <div
-                                                                    key={`day-${dayIdx}-${time}`}
-                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
-                                                                    style={!isAvailable ? {
-                                                                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
-                                                                    } : {}}
-                                                                    onClick={() => {
-                                                                        if (!isAvailable) return;
-                                                                        setActiveSlot({ time, dayIdx });
-                                                                        setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
-                                                                        setSelectedAppt(null);
-                                                                        setIsAppointmentModalOpen(true);
-                                                                    }}
-                                                                />
-                                                            );
-                                                        })
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
+                                                            })
+                                                        )}
+                                                    </div>
+                                                );
+                                        });
+                                    })()}
 
                                     {/* 2. Appointments Overlay */}
                                     <div className="absolute inset-0 z-10 pointer-events-none flex ml-0">
