@@ -211,6 +211,7 @@ export const AppointmentDetails: React.FC = () => {
                                 if (window.confirm('¿Estás seguro de que deseas eliminar esta cita permanentemente?')) {
                                     try {
                                         await api.appointments.delete(appointment.id);
+                                        await refreshAppointments();
                                         alert('✅ Cita eliminada correctamente');
                                         navigate('/agenda');
                                     } catch (error) {
