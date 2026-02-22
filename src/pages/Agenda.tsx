@@ -128,8 +128,15 @@ const Agenda: React.FC = () => {
     const getAvailableTimeSlots = (date: Date, doctorId?: string): string[] => {
         if (!doctorId || doctorId === 'all') return TIME_SLOTS;
 
-        // Get ALL schedules for this doctor
-        const schedules = doctorSchedules.filter(s => s.doctor_id === doctorId);
+        // IMPORTANT: Doctor.id (from Doctor table) ≠ doctor_schedules.doctor_id (from system_users table)
+        // We match by doctor NAME as the reliable bridge between both tables
+        const doctor = doctors.find(d => d.id === doctorId);
+        if (!doctor) return TIME_SLOTS;
+
+        const doctorNameNorm = doctor.name?.toLowerCase().trim();
+        const schedules = doctorSchedules.filter(s =>
+            s.doctor_name?.toLowerCase().trim() === doctorNameNorm
+        );
         if (schedules.length === 0) return TIME_SLOTS; // If no schedule found, show all slots
 
         // Get day of week (0 = Sunday, 1 = Monday, etc.)
