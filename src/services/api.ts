@@ -256,6 +256,16 @@ export const api = {
                 throw new Error(errData.error || 'Failed to update appointment');
             }
             return res.json();
+        },
+        delete: async (id: string): Promise<void> => {
+            const res = await fetch(`${API_URL}/appointments/${id}`, {
+                method: 'DELETE',
+                headers
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to delete appointment');
+            }
         }
     },
 
@@ -718,7 +728,7 @@ export const api = {
                     .from('clinic_info')
                     .select('*')
                     .single();
-                
+
                 if (error && error.code !== 'PGRST116') throw error;
                 return data || null;
             } catch (error) {
@@ -726,13 +736,13 @@ export const api = {
                 return null;
             }
         },
-        
+
         getAddresses: async () => {
             try {
                 const { data, error } = await supabase
                     .from('clinic_addresses')
                     .select('*');
-                
+
                 if (error) throw error;
                 return data || [];
             } catch (error) {
@@ -740,14 +750,14 @@ export const api = {
                 return [];
             }
         },
-        
+
         getBillingInfo: async () => {
             try {
                 const { data, error } = await supabase
                     .from('clinic_billing_info')
                     .select('*')
                     .single();
-                
+
                 if (error && error.code !== 'PGRST116') throw error;
                 return data || null;
             } catch (error) {
@@ -763,7 +773,7 @@ export const api = {
                     .insert([clinicData])
                     .select()
                     .single();
-                
+
                 if (error) throw error;
                 return data;
             } catch (error) {
@@ -780,7 +790,7 @@ export const api = {
                     .eq('id', id)
                     .select()
                     .single();
-                
+
                 if (error) throw error;
                 return data;
             } catch (error) {
@@ -798,7 +808,7 @@ export const api = {
                     .from('doctor_schedules')
                     .select('*')
                     .eq('is_active', true);
-                
+
                 if (error) throw error;
                 return data || [];
             } catch (error) {
@@ -814,7 +824,7 @@ export const api = {
                     .select('*')
                     .eq('doctor_id', doctorId)
                     .single();
-                
+
                 if (error && error.code !== 'PGRST116') throw error;
                 return data || null;
             } catch (error) {
@@ -830,7 +840,7 @@ export const api = {
                     .insert([scheduleData])
                     .select()
                     .single();
-                
+
                 if (error) throw error;
                 return data;
             } catch (error) {
@@ -847,7 +857,7 @@ export const api = {
                     .eq('id', id)
                     .select()
                     .single();
-                
+
                 if (error) throw error;
                 return data;
             } catch (error) {
@@ -865,7 +875,7 @@ export const api = {
                     .from('system_users')
                     .select('*')
                     .eq('is_active', true);
-                
+
                 if (error) throw error;
                 return data || [];
             } catch (error) {
@@ -881,7 +891,7 @@ export const api = {
                     .select('*')
                     .order('role', { ascending: true })
                     .order('full_name', { ascending: true });
-                
+
                 if (error) throw error;
                 return data || [];
             } catch (error) {
@@ -897,7 +907,7 @@ export const api = {
                     .select('*')
                     .eq('id', id)
                     .single();
-                
+
                 if (error && error.code !== 'PGRST116') throw error;
                 return data || null;
             } catch (error) {
@@ -913,7 +923,7 @@ export const api = {
                     .insert([userData])
                     .select()
                     .single();
-                
+
                 if (error) throw error;
                 return data;
             } catch (error) {
@@ -930,7 +940,7 @@ export const api = {
                     .eq('id', id)
                     .select()
                     .single();
-                
+
                 if (error) throw error;
                 return data;
             } catch (error) {
@@ -945,7 +955,7 @@ export const api = {
                     .from('system_users')
                     .delete()
                     .eq('id', id);
-                
+
                 if (error) throw error;
             } catch (error) {
                 console.error('Error deleting system user:', error);

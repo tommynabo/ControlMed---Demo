@@ -8,20 +8,20 @@ import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
 import { Appointment, Doctor } from '../../types';
 
 interface DoctorSchedule {
-  id?: string;
-  doctor_id: string;
-  doctor_name: string;
-  monday: boolean;
-  tuesday: boolean;
-  wednesday: boolean;
-  thursday: boolean;
-  friday: boolean;
-  saturday: boolean;
-  sunday: boolean;
-  morning_start: string;
-  morning_end: string;
-  afternoon_start: string;
-  afternoon_end: string;
+    id?: string;
+    doctor_id: string;
+    doctor_name: string;
+    monday: boolean;
+    tuesday: boolean;
+    wednesday: boolean;
+    thursday: boolean;
+    friday: boolean;
+    saturday: boolean;
+    sunday: boolean;
+    morning_start: string;
+    morning_end: string;
+    afternoon_start: string;
+    afternoon_end: string;
 }
 
 const Agenda: React.FC = () => {
@@ -197,9 +197,9 @@ const Agenda: React.FC = () => {
             return 'bg-red-100 text-red-700 border-red-200 line-through';
         }
 
-        // Amarillo: No vino
+        // Fucsia/Morado: No vino
         if (lower === 'noshow' || lower === 'no vino') {
-            return 'bg-amber-100 text-amber-700 border-amber-200';
+            return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
         }
 
         // ⚪ Blanco: Pendiente (Scheduled)
@@ -360,252 +360,261 @@ const Agenda: React.FC = () => {
                         {/* TIME COLUMN - Always visible */}
                         <div className="w-14 flex-shrink-0 pr-4">
                             <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
-                            {(viewMode === 'daily' && selectedDoctorId !== 'all' 
-                                ? getAvailableTimeSlots(currentDate, selectedDoctorId) 
+                            {(viewMode === 'daily' && selectedDoctorId !== 'all'
+                                ? getAvailableTimeSlots(currentDate, selectedDoctorId)
                                 : TIME_SLOTS).map((time, idx) => {
-                                const hour = parseInt(time.split(':')[0], 10);
-                                // Only render on the start of each hour (every 4 slots)
-                                if (idx % 4 === 0) {
-                                    return (
-                                        <div key={`time-label-${time}`} className="h-48 flex items-center justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300">
-                                            {hour}
-                                        </div>
-                                    );
-                                }
-                                return null;
-                            })}
+                                    const hour = parseInt(time.split(':')[0], 10);
+                                    // Only render on the start of each hour (every 4 slots)
+                                    if (idx % 4 === 0) {
+                                        return (
+                                            <div key={`time-label-${time}`} className="h-48 flex items-center justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300">
+                                                {hour}
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })}
                         </div>
-                        
+
                         {/* SCHEDULER GRID */}
                         <div className="flex-1 min-w-[600px] relative">
                             <div className="min-w-[1000px] relative">
-                        {/* HEADERS */}
-                        <div className="flex h-12 mb-4">
-                            {viewMode === 'daily' ? (
-                                selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
-                                    doctors.map(doc => (
-                                        <div key={doc.id} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-900 uppercase tracking-wide flex items-center justify-center">
-                                            {doc.name}
-                                        </div>
-                                    ))
-                                ) : (
-                                    <div className="flex-1 text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase flex items-center justify-center">
-                                        {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
-                                    </div>
-                                )
-                            ) : (
-                                Array.from({ length: 7 }).map((_, i) => (
-                                    <div key={i} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
-                                        {getDayName(currentDate, i)}
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        {/* TIME GRID BACKGROUND & EVENTS LAYER */}
-                        <div className="relative">
-
-                            {/* 1. Background Grid (Lines & Times) */}
-                            {(viewMode === 'daily' && selectedDoctorId !== 'all' 
-                                ? getAvailableTimeSlots(currentDate, selectedDoctorId) 
-                                : TIME_SLOTS).map((time, idx) => {
-                                const isHourStart = time.endsWith(':00');
-                                return (
-                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
-
-                                    {/* Clickable Slots for New Appt (Invisible overlay) */}
+                                {/* HEADERS */}
+                                <div className="flex h-12 mb-4">
                                     {viewMode === 'daily' ? (
                                         selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
                                             doctors.map(doc => (
-                                                <div
-                                                    key={`${doc.id}-${time}`}
-                                                    className="flex-1 h-full border-r border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
-                                                    onClick={() => {
-                                                        setActiveSlot({ time, dayIdx: 0 });
-                                                        setSelectedDoctorId(doc.id);
-                                                        setBookingDoctorId(doc.id);
-                                                        setSelectedAppt(null);
-                                                        setIsAppointmentModalOpen(true);
-                                                    }}
-                                                />
+                                                <div key={doc.id} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-900 uppercase tracking-wide flex items-center justify-center">
+                                                    {doc.name}
+                                                </div>
                                             ))
                                         ) : (
-                                            <div
-                                                className="flex-1 h-full hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
-                                                onClick={() => {
-                                                    setActiveSlot({ time, dayIdx: 0 });
-                                                    setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
-                                                    setSelectedAppt(null);
-                                                    setIsAppointmentModalOpen(true);
-                                                }}
-                                            />
+                                            <div className="flex-1 text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase flex items-center justify-center">
+                                                {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
+                                            </div>
                                         )
                                     ) : (
-                                        Array.from({ length: 7 }).map((_, dayIdx) => (
-                                            <div
-                                                key={`day-${dayIdx}-${time}`}
-                                                className="flex-1 h-full border-r border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
-                                                onClick={() => {
-                                                    setActiveSlot({ time, dayIdx });
-                                                    setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
-                                                    setSelectedAppt(null);
-                                                    setIsAppointmentModalOpen(true);
-                                                }}
-                                            />
+                                        Array.from({ length: 7 }).map((_, i) => (
+                                            <div key={i} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
+                                                {getDayName(currentDate, i)}
+                                            </div>
                                         ))
                                     )}
                                 </div>
-                                );
-                            })}
 
-                            {/* 2. Appointments Overlay */}
-                            <div className="absolute inset-0 z-10 pointer-events-none flex ml-0">
-                                {(() => {
-                                    // Each TIME_SLOT = 15 min, rendered as h-12 (3rem = 48px)
-                                    const PIXELS_PER_MINUTE = 48 / 15; // 48px per 15-min slot = 3.2 px/min
+                                {/* TIME GRID BACKGROUND & EVENTS LAYER */}
+                                <div className="relative">
 
-                                    // Build columns for overlay positioning
-                                    const columns = [];
+                                    {/* 1. Background Grid (Lines & Times) */}
+                                    {(viewMode === 'daily' && selectedDoctorId !== 'all'
+                                        ? getAvailableTimeSlots(currentDate, selectedDoctorId)
+                                        : TIME_SLOTS).map((time, idx) => {
+                                            const isHourStart = time.endsWith(':00');
+                                            return (
+                                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
 
-                                    if (viewMode === 'daily') {
-                                        if (selectedDoctorId === 'all') {
-                                            doctors.forEach(doc => {
-                                                const docAppts = appointments.filter(a =>
-                                                    (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) &&
-                                                    a.doctorId === doc.id
-                                                );
-                                                columns.push(docAppts);
-                                            });
-                                        } else {
-                                            const docAppts = appointments.filter(a =>
-                                                (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) &&
-                                                (a.doctorId === selectedDoctorId || selectedDoctorId === 'all')
+                                                    {/* Clickable Slots for New Appt (Invisible overlay) */}
+                                                    {viewMode === 'daily' ? (
+                                                        selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
+                                                            doctors.map(doc => (
+                                                                <div
+                                                                    key={`${doc.id}-${time}`}
+                                                                    className="flex-1 h-full border-r border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
+                                                                    onClick={() => {
+                                                                        setActiveSlot({ time, dayIdx: 0 });
+                                                                        setSelectedDoctorId(doc.id);
+                                                                        setBookingDoctorId(doc.id);
+                                                                        setSelectedAppt(null);
+                                                                        setIsAppointmentModalOpen(true);
+                                                                    }}
+                                                                />
+                                                            ))
+                                                        ) : (
+                                                            <div
+                                                                className="flex-1 h-full hover:bg-slate-50/50 transition-colors cursor-pointer z-0"
+                                                                onClick={() => {
+                                                                    setActiveSlot({ time, dayIdx: 0 });
+                                                                    setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
+                                                                    setSelectedAppt(null);
+                                                                    setIsAppointmentModalOpen(true);
+                                                                }}
+                                                            />
+                                                        )
+                                                    ) : (
+                                                        Array.from({ length: 7 }).map((_, dayIdx) => {
+                                                            const d = new Date(currentDate);
+                                                            const day = d.getDay();
+                                                            const diff = d.getDate() - day + (day === 0 ? -6 : 1) + dayIdx;
+                                                            d.setDate(diff);
+                                                            const isAvailable = selectedDoctorId !== 'all' ? getAvailableTimeSlots(d, selectedDoctorId).includes(time) : true;
+
+                                                            return (
+                                                                <div
+                                                                    key={`day-${dayIdx}-${time}`}
+                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/50 cursor-not-allowed'}`}
+                                                                    onClick={() => {
+                                                                        if (!isAvailable) return;
+                                                                        setActiveSlot({ time, dayIdx });
+                                                                        setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
+                                                                        setSelectedAppt(null);
+                                                                        setIsAppointmentModalOpen(true);
+                                                                    }}
+                                                                />
+                                                            );
+                                                        })
+                                                    )}
+                                                </div>
                                             );
-                                            columns.push(docAppts);
-                                        }
-                                    } else {
-                                        // Weekly
-                                        for (let i = 0; i < 7; i++) {
-                                            const d = new Date(currentDate);
-                                            const day = d.getDay();
-                                            const diff = d.getDate() - day + (day === 0 ? -6 : 1) + i;
-                                            d.setDate(diff);
-                                            const dateStr = d.toISOString().split('T')[0];
+                                        })}
 
-                                            const dayAppts = appointments.filter(a =>
-                                                (a.date === dateStr || a.date.startsWith(dateStr)) &&
-                                                (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)
-                                            );
-                                            columns.push(dayAppts);
-                                        }
-                                    }
+                                    {/* 2. Appointments Overlay */}
+                                    <div className="absolute inset-0 z-10 pointer-events-none flex ml-0">
+                                        {(() => {
+                                            // Each TIME_SLOT = 15 min, rendered as h-12 (3rem = 48px)
+                                            const PIXELS_PER_MINUTE = 48 / 15; // 48px per 15-min slot = 3.2 px/min
 
-                                    return columns.map((colAppts, colIdx) => {
-                                        // Layout Algorithm for Overlaps
-                                        // 1. Sort by time
-                                        const sorted = [...colAppts].sort((a, b) => a.time.localeCompare(b.time));
+                                            // Build columns for overlay positioning
+                                            const columns = [];
 
-                                        // 2. Simple overlap detection
-                                        // We will group intersecting events
-                                        // This is a simplified version. For robust full calendar, use a library or proper graph coloring.
-                                        // Here: simple horizontal stacking.
-
-                                        return (
-                                            <div key={colIdx} className="flex-1 relative h-full pointer-events-none border-r border-transparent">
-                                                {sorted.map(appt => {
-                                                    // Parse time
-                                                    const [h, m] = appt.time.split(':').map(Number);
-                                                    const startMinutes = h * 60 + m;
-
-                                                    // Start of day (using first slot)
-                                                    const [startH, startM] = TIME_SLOTS[0].split(':').map(Number);
-                                                    const dayStartMinutes = startH * 60 + startM;
-
-                                                    const offsetMinutes = startMinutes - dayStartMinutes;
-                                                    const top = offsetMinutes * PIXELS_PER_MINUTE; // 96px per 60min
-                                                    const height = (appt.duration || 30) * PIXELS_PER_MINUTE;
-
-                                                    // Determine width/left based on simplistic overlap
-                                                    // Check if it overlaps with ANY previous in this column that hasn't ended
-                                                    // Just simple strict offset for now if overlap
-
-                                                    // Actually, let's just render them full width but semi-transparent if simplified,
-                                                    // or use z-index.
-                                                    // User asked for "side-by-side".
-
-                                                    // Quick Overlap Check
-                                                    const overlapping = sorted.filter(a => {
-                                                        if (a.id === appt.id) return false;
-                                                        const [ah, am] = a.time.split(':').map(Number);
-                                                        const aStart = ah * 60 + am;
-                                                        const aEnd = aStart + (a.duration || 30);
-                                                        const myEnd = startMinutes + (appt.duration || 30);
-                                                        return (startMinutes < aEnd && myEnd > aStart);
+                                            if (viewMode === 'daily') {
+                                                if (selectedDoctorId === 'all') {
+                                                    doctors.forEach(doc => {
+                                                        const docAppts = appointments.filter(a =>
+                                                            (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) &&
+                                                            a.doctorId === doc.id
+                                                        );
+                                                        columns.push(docAppts);
                                                     });
+                                                } else {
+                                                    const docAppts = appointments.filter(a =>
+                                                        (a.date === currentDate.toISOString().split('T')[0] || a.date.startsWith(currentDate.toISOString().split('T')[0])) &&
+                                                        (a.doctorId === selectedDoctorId || selectedDoctorId === 'all')
+                                                    );
+                                                    columns.push(docAppts);
+                                                }
+                                            } else {
+                                                // Weekly
+                                                for (let i = 0; i < 7; i++) {
+                                                    const d = new Date(currentDate);
+                                                    const day = d.getDay();
+                                                    const diff = d.getDate() - day + (day === 0 ? -6 : 1) + i;
+                                                    d.setDate(diff);
+                                                    const dateStr = d.toISOString().split('T')[0];
 
-                                                    let width = '100%';
-                                                    let left = '0%';
+                                                    const dayAppts = appointments.filter(a =>
+                                                        (a.date === dateStr || a.date.startsWith(dateStr)) &&
+                                                        (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)
+                                                    );
+                                                    columns.push(dayAppts);
+                                                }
+                                            }
 
-                                                    if (overlapping.length > 0) {
-                                                        // Simple logic: if I overlap, I take half width.
-                                                        // If I am later than the one I overlap with, I go right.
-                                                        const olderSibling = overlapping.find(o => o.time < appt.time || (o.time === appt.time && o.id < appt.id));
-                                                        if (olderSibling) {
-                                                            width = '50%';
-                                                            left = '50%'; // Shift right
-                                                        } else {
-                                                            width = overlapping.length > 0 ? '50%' : '100%';
-                                                            left = '0%';
-                                                        }
-                                                    }
+                                            return columns.map((colAppts, colIdx) => {
+                                                // Layout Algorithm for Overlaps
+                                                // 1. Sort by time
+                                                const sorted = [...colAppts].sort((a, b) => a.time.localeCompare(b.time));
 
-                                                    return (
-                                                        <div
-                                                            key={appt.id}
-                                                            onClick={(e) => {
-                                                                // Allow clicking
-                                                                handleAppointmentClick(e, appt);
-                                                            }}
-                                                            style={{
-                                                                top: `${top}px`,
-                                                                height: `${height}px`,
-                                                                left,
-                                                                width,
-                                                                position: 'absolute'
-                                                            }}
-                                                            className={`
+                                                // 2. Simple overlap detection
+                                                // We will group intersecting events
+                                                // This is a simplified version. For robust full calendar, use a library or proper graph coloring.
+                                                // Here: simple horizontal stacking.
+
+                                                return (
+                                                    <div key={colIdx} className="flex-1 relative h-full pointer-events-none border-r border-transparent">
+                                                        {sorted.map(appt => {
+                                                            // Parse time
+                                                            const [h, m] = appt.time.split(':').map(Number);
+                                                            const startMinutes = h * 60 + m;
+
+                                                            // Start of day (using first slot)
+                                                            const [startH, startM] = TIME_SLOTS[0].split(':').map(Number);
+                                                            const dayStartMinutes = startH * 60 + startM;
+
+                                                            const offsetMinutes = startMinutes - dayStartMinutes;
+                                                            const top = offsetMinutes * PIXELS_PER_MINUTE; // 96px per 60min
+                                                            const height = (appt.duration || 30) * PIXELS_PER_MINUTE;
+
+                                                            // Determine width/left based on simplistic overlap
+                                                            // Check if it overlaps with ANY previous in this column that hasn't ended
+                                                            // Just simple strict offset for now if overlap
+
+                                                            // Actually, let's just render them full width but semi-transparent if simplified,
+                                                            // or use z-index.
+                                                            // User asked for "side-by-side".
+
+                                                            // Quick Overlap Check
+                                                            const overlapping = sorted.filter(a => {
+                                                                if (a.id === appt.id) return false;
+                                                                const [ah, am] = a.time.split(':').map(Number);
+                                                                const aStart = ah * 60 + am;
+                                                                const aEnd = aStart + (a.duration || 30);
+                                                                const myEnd = startMinutes + (appt.duration || 30);
+                                                                return (startMinutes < aEnd && myEnd > aStart);
+                                                            });
+
+                                                            let width = '100%';
+                                                            let left = '0%';
+
+                                                            if (overlapping.length > 0) {
+                                                                // Simple logic: if I overlap, I take half width.
+                                                                // If I am later than the one I overlap with, I go right.
+                                                                const olderSibling = overlapping.find(o => o.time < appt.time || (o.time === appt.time && o.id < appt.id));
+                                                                if (olderSibling) {
+                                                                    width = '50%';
+                                                                    left = '50%'; // Shift right
+                                                                } else {
+                                                                    width = overlapping.length > 0 ? '50%' : '100%';
+                                                                    left = '0%';
+                                                                }
+                                                            }
+
+                                                            return (
+                                                                <div
+                                                                    key={appt.id}
+                                                                    onClick={(e) => {
+                                                                        // Allow clicking
+                                                                        handleAppointmentClick(e, appt);
+                                                                    }}
+                                                                    style={{
+                                                                        top: `${top}px`,
+                                                                        height: `${height}px`,
+                                                                        left,
+                                                                        width,
+                                                                        position: 'absolute'
+                                                                    }}
+                                                                    className={`
                                                                 p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-start
                                                                 ${getAppointmentColors(appt.status, false)}
                                                             `}
-                                                        >
-                                                            <div className="flex justify-between items-start">
-                                                                <span className="truncate">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
-                                                                {appt.duration && appt.duration > 45 && <span className="text-[9px] opacity-70 ml-1">{appt.time}</span>}
-                                                            </div>
-                                                            {appt.duration && appt.duration >= 30 && (
-                                                                <span className="text-[10px] opacity-80 truncate mt-1">
-                                                                    {typeof appt.treatment === 'object' && appt.treatment !== null
-                                                                        ? (appt.treatment as any).name || 'Tratamiento'
-                                                                        : appt.treatment || '-'}
-                                                                </span>
-                                                            )}
-                                                            {/* Observations (if tall enough) */}
-                                                            {appt.duration && appt.duration >= 60 && (appt as any).observation && (
-                                                                <p className="text-[9px] opacity-60 mt-1 line-clamp-2 italic leading-tight">
-                                                                    "{(appt as any).observation}"
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        );
-                                    });
-                                })()}
-                            </div>
+                                                                >
+                                                                    <div className="flex justify-between items-start">
+                                                                        <span className="truncate">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
+                                                                        {appt.duration && appt.duration > 45 && <span className="text-[9px] opacity-70 ml-1">{appt.time}</span>}
+                                                                    </div>
+                                                                    {appt.duration && appt.duration >= 30 && (
+                                                                        <span className="text-[10px] opacity-80 truncate mt-1">
+                                                                            {typeof appt.treatment === 'object' && appt.treatment !== null
+                                                                                ? (appt.treatment as any).name || 'Tratamiento'
+                                                                                : appt.treatment || '-'}
+                                                                        </span>
+                                                                    )}
+                                                                    {/* Observations (if tall enough) */}
+                                                                    {appt.duration && appt.duration >= 60 && (appt as any).observation && (
+                                                                        <p className="text-[9px] opacity-60 mt-1 line-clamp-2 italic leading-tight">
+                                                                            "{(appt as any).observation}"
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                );
+                                            });
+                                        })()}
+                                    </div>
 
-                        </div>
-                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -615,243 +624,243 @@ const Agenda: React.FC = () => {
             {isAppointmentModalOpen && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in">
                     <div className="bg-white max-w-lg w-full rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh]">
-                      <div className="p-8 space-y-6 overflow-y-auto flex-1">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-2xl font-black text-slate-900">{selectedAppt ? 'Detalles Cita' : 'Nueva Cita'}</h3>
-                            {selectedAppt && (() => {
-                                const patient = patients.find(p => p.id === selectedAppt.patientId);
-                                return (
-                                    <div className="flex gap-2">
-                                        {/* IR A FICHA button */}
-                                        <button
-                                            onClick={() => {
-                                                setIsAppointmentModalOpen(false);
-                                                if (selectedAppt) {
-                                                    const patient = patients.find(p => p.id === selectedAppt.patientId);
-                                                    if (patient) setSelectedPatient(patient);
-                                                }
-                                                navigate(`/pacientes`);
-                                            }}
-                                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
-                                        >
-                                            <User size={16} />
-                                            <span>Ir a Ficha</span>
-                                        </button>
-                                        {/* VER CITA button */}
-                                        <button
-                                            onClick={() => navigate(`/appointment/${selectedAppt.id}`, {
-                                                state: { appointment: selectedAppt, patient }
-                                            })}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
-                                        >
-                                            <ExternalLink size={16} />
-                                            <span>Ver Cita</span>
-                                        </button>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-
-                        <p className="text-sm text-slate-500">
-                            {activeSlot?.time} - {viewMode === 'daily' ? currentDate.toLocaleDateString() : 'Día ' + activeSlot?.dayIdx}
-                        </p>
-
-                        {/* Patient Search in Modal */}
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-400">Paciente</label>
-                            <input
-                                className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold"
-                                placeholder="Buscar paciente (Nombre)"
-                                value={apptSearch}
-                                onChange={(e) => {
-                                    setApptSearch(e.target.value);
-                                    if (bookingPatientId) {
-                                        setBookingPatientId('');
-                                        setPatientBudgets([]);
-                                    }
-                                }}
-                                disabled={!!selectedAppt} // Readonly if viewing
-                            />
-                            {/* Suggestions - Solo mostrar si NO hay paciente seleccionado */}
-                            {!selectedAppt && apptSearch.length > 0 && !bookingPatientId && (
-                                <div className="mt-2 bg-white border border-slate-100 rounded-xl shadow-lg max-h-40 overflow-y-auto">
-                                    {patients
-                                        .filter(p => (p.name?.toLowerCase() || '').includes(apptSearch.toLowerCase()) || (p.dni || '').includes(apptSearch))
-                                        .slice(0, 5)
-                                        .map(p => (
-                                            <div
-                                                key={p.id}
+                        <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-2xl font-black text-slate-900">{selectedAppt ? 'Detalles Cita' : 'Nueva Cita'}</h3>
+                                {selectedAppt && (() => {
+                                    const patient = patients.find(p => p.id === selectedAppt.patientId);
+                                    return (
+                                        <div className="flex gap-2">
+                                            {/* IR A FICHA button */}
+                                            <button
                                                 onClick={() => {
-                                                    setApptSearch(p.name);
-                                                    setBookingPatientId(p.id);
+                                                    setIsAppointmentModalOpen(false);
+                                                    if (selectedAppt) {
+                                                        const patient = patients.find(p => p.id === selectedAppt.patientId);
+                                                        if (patient) setSelectedPatient(patient);
+                                                    }
+                                                    navigate(`/pacientes`);
                                                 }}
-                                                className="p-3 hover:bg-slate-50 cursor-pointer text-xs font-bold text-slate-600 border-b border-slate-50 last:border-0"
+                                                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
                                             >
-                                                {p.name}
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Budget Selection (Optional) */}
-                        {patientBudgets.length > 0 && (
-                            <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Vincular a Presupuesto (Opcional)</label>
-                                <select
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                    value={bookingBudgetId}
-                                    onChange={(e) => {
-                                        const bId = e.target.value;
-                                        setBookingBudgetId(bId);
-                                        setBookingTreatment('');
-                                        setSelectedBudgetItems([]);
-                                        setBookingBudgetItemId('');
-                                        setBookingPrice(0);
-                                    }}
-                                    disabled={!!selectedAppt}
-                                >
-                                    <option value="">-- Sin vincular --</option>
-                                    {patientBudgets.map(b => (
-                                        <option key={b.id} value={b.id}>
-                                            #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString()}
-                                        </option>
-                                    ))}
-                                </select>
+                                                <User size={16} />
+                                                <span>Ir a Ficha</span>
+                                            </button>
+                                            {/* VER CITA button */}
+                                            <button
+                                                onClick={() => navigate(`/appointment/${selectedAppt.id}`, {
+                                                    state: { appointment: selectedAppt, patient }
+                                                })}
+                                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
+                                            >
+                                                <ExternalLink size={16} />
+                                                <span>Ver Cita</span>
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                             </div>
-                        )}
 
-                        {/* Budget Item Selection (If Budget Selected) - Multi-select */}
-                        {bookingBudgetId && (
+                            <p className="text-sm text-slate-500">
+                                {activeSlot?.time} - {viewMode === 'daily' ? currentDate.toLocaleDateString() : 'Día ' + activeSlot?.dayIdx}
+                            </p>
+
+                            {/* Patient Search in Modal */}
                             <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Conceptos del Presupuesto</label>
-                                <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 max-h-40 overflow-y-auto">
-                                    {patientBudgets.find(b => b.id === bookingBudgetId)?.items.map((item: any, idx: number) => {
-                                        const isChecked = selectedBudgetItems.some((si: any) => (si.id || idx.toString()) === (item.id || idx.toString()));
-                                        return (
-                                            <label key={idx} className="flex items-center gap-2 cursor-pointer hover:bg-white rounded-lg p-1 transition-colors">
-                                                <input
-                                                    type="checkbox"
-                                                    className="w-4 h-4 rounded"
-                                                    checked={isChecked}
-                                                    disabled={!!selectedAppt}
-                                                    onChange={() => {
-                                                        let newSelected;
-                                                        if (isChecked) {
-                                                            newSelected = selectedBudgetItems.filter((si: any) => (si.id || '') !== (item.id || idx.toString()));
-                                                        } else {
-                                                            newSelected = [...selectedBudgetItems, { ...item, _idx: idx }];
-                                                        }
-                                                        setSelectedBudgetItems(newSelected);
-                                                        // Auto-fill treatment names and total price
-                                                        setBookingTreatment(newSelected.map((i: any) => i.name).join(', '));
-                                                        setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + (i.price || 0), 0));
-                                                        setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
+                                <label className="text-xs font-bold uppercase text-slate-400">Paciente</label>
+                                <input
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold"
+                                    placeholder="Buscar paciente (Nombre)"
+                                    value={apptSearch}
+                                    onChange={(e) => {
+                                        setApptSearch(e.target.value);
+                                        if (bookingPatientId) {
+                                            setBookingPatientId('');
+                                            setPatientBudgets([]);
+                                        }
+                                    }}
+                                    disabled={!!selectedAppt} // Readonly if viewing
+                                />
+                                {/* Suggestions - Solo mostrar si NO hay paciente seleccionado */}
+                                {!selectedAppt && apptSearch.length > 0 && !bookingPatientId && (
+                                    <div className="mt-2 bg-white border border-slate-100 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                                        {patients
+                                            .filter(p => (p.name?.toLowerCase() || '').includes(apptSearch.toLowerCase()) || (p.dni || '').includes(apptSearch))
+                                            .slice(0, 5)
+                                            .map(p => (
+                                                <div
+                                                    key={p.id}
+                                                    onClick={() => {
+                                                        setApptSearch(p.name);
+                                                        setBookingPatientId(p.id);
                                                     }}
-                                                />
-                                                <span className="text-xs font-bold text-slate-600 flex-1">{item.name}</span>
-                                                <span className="text-xs font-bold text-slate-400">{item.price}€</span>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                                {selectedBudgetItems.length > 0 && (
-                                    <div className="mt-2 text-right text-xs font-black text-blue-600">
-                                        Total: {selectedBudgetItems.reduce((sum: number, i: any) => sum + (i.price || 0), 0).toFixed(2)}€
+                                                    className="p-3 hover:bg-slate-50 cursor-pointer text-xs font-bold text-slate-600 border-b border-slate-50 last:border-0"
+                                                >
+                                                    {p.name}
+                                                </div>
+                                            ))
+                                        }
                                     </div>
                                 )}
                             </div>
-                        )}
 
-                        {/* Doctor Selection */}
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-400">Doctor</label>
-                            <select
-                                className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                value={bookingDoctorId}
-                                onChange={(e) => {
-                                    setBookingDoctorId(e.target.value);
-                                }}
-                                disabled={!!selectedAppt}
-                            >
-                                <option value="">Seleccionar Doctor...</option>
-                                {doctors.map(d => (
-                                    <option key={d.id} value={d.id}>{d.name || d.full_name} ({d.specialization || 'Odontólogo'})</option>
-                                ))}
-                            </select>
-                        </div>
+                            {/* Budget Selection (Optional) */}
+                            {patientBudgets.length > 0 && (
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-400">Vincular a Presupuesto (Opcional)</label>
+                                    <select
+                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                        value={bookingBudgetId}
+                                        onChange={(e) => {
+                                            const bId = e.target.value;
+                                            setBookingBudgetId(bId);
+                                            setBookingTreatment('');
+                                            setSelectedBudgetItems([]);
+                                            setBookingBudgetItemId('');
+                                            setBookingPrice(0);
+                                        }}
+                                        disabled={!!selectedAppt}
+                                    >
+                                        <option value="">-- Sin vincular --</option>
+                                        {patientBudgets.map(b => (
+                                            <option key={b.id} value={b.id}>
+                                                #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString()}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
-                        {/* Treatment Selection - Only show if NO budget is selected */}
-                        {!bookingBudgetId && (
+                            {/* Budget Item Selection (If Budget Selected) - Multi-select */}
+                            {bookingBudgetId && (
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-400">Conceptos del Presupuesto</label>
+                                    <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 max-h-40 overflow-y-auto">
+                                        {patientBudgets.find(b => b.id === bookingBudgetId)?.items.map((item: any, idx: number) => {
+                                            const isChecked = selectedBudgetItems.some((si: any) => (si.id || idx.toString()) === (item.id || idx.toString()));
+                                            return (
+                                                <label key={idx} className="flex items-center gap-2 cursor-pointer hover:bg-white rounded-lg p-1 transition-colors">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="w-4 h-4 rounded"
+                                                        checked={isChecked}
+                                                        disabled={!!selectedAppt}
+                                                        onChange={() => {
+                                                            let newSelected;
+                                                            if (isChecked) {
+                                                                newSelected = selectedBudgetItems.filter((si: any) => (si.id || '') !== (item.id || idx.toString()));
+                                                            } else {
+                                                                newSelected = [...selectedBudgetItems, { ...item, _idx: idx }];
+                                                            }
+                                                            setSelectedBudgetItems(newSelected);
+                                                            // Auto-fill treatment names and total price
+                                                            setBookingTreatment(newSelected.map((i: any) => i.name).join(', '));
+                                                            setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + (i.price || 0), 0));
+                                                            setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
+                                                        }}
+                                                    />
+                                                    <span className="text-xs font-bold text-slate-600 flex-1">{item.name}</span>
+                                                    <span className="text-xs font-bold text-slate-400">{item.price}€</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    {selectedBudgetItems.length > 0 && (
+                                        <div className="mt-2 text-right text-xs font-black text-blue-600">
+                                            Total: {selectedBudgetItems.reduce((sum: number, i: any) => sum + (i.price || 0), 0).toFixed(2)}€
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Doctor Selection */}
                             <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
+                                <label className="text-xs font-bold uppercase text-slate-400">Doctor</label>
                                 <select
                                     className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                    value={bookingTreatment}
+                                    value={bookingDoctorId}
                                     onChange={(e) => {
-                                        const tId = e.target.value;
-                                        setBookingTreatment(tId);
-                                        if (tId) {
-                                            const t = DENTAL_SERVICES.find(s => s.id === tId);
-                                            if (t) setBookingPrice(t.price);
-                                        }
+                                        setBookingDoctorId(e.target.value);
                                     }}
                                     disabled={!!selectedAppt}
                                 >
-                                    <option value="">Seleccionar Tratamiento...</option>
-                                    {DENTAL_SERVICES
-                                        .map(t => (
-                                            <option key={t.id} value={t.id}>{t.name} ({t.price}€)</option>
-                                        ))
-                                    }
+                                    <option value="">Seleccionar Doctor...</option>
+                                    {doctors.map(d => (
+                                        <option key={d.id} value={d.id}>{d.name || d.full_name} ({d.specialization || 'Odontólogo'})</option>
+                                    ))}
                                 </select>
                             </div>
-                        )}
 
-                        {/* Additional Details: Price, Duration, Observation */}
-                        <div className="grid grid-cols-2 gap-4">
+                            {/* Treatment Selection - Only show if NO budget is selected */}
+                            {!bookingBudgetId && (
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
+                                    <select
+                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                        value={bookingTreatment}
+                                        onChange={(e) => {
+                                            const tId = e.target.value;
+                                            setBookingTreatment(tId);
+                                            if (tId) {
+                                                const t = DENTAL_SERVICES.find(s => s.id === tId);
+                                                if (t) setBookingPrice(t.price);
+                                            }
+                                        }}
+                                        disabled={!!selectedAppt}
+                                    >
+                                        <option value="">Seleccionar Tratamiento...</option>
+                                        {DENTAL_SERVICES
+                                            .map(t => (
+                                                <option key={t.id} value={t.id}>{t.name} ({t.price}€)</option>
+                                            ))
+                                        }
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Additional Details: Price, Duration, Observation */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-400">Precio (€)</label>
+                                    <input
+                                        type="number"
+                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                        value={bookingPrice}
+                                        onChange={e => setBookingPrice(Number(e.target.value))}
+                                        disabled={!!selectedAppt}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-400">Duración</label>
+                                    <select
+                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                        value={bookingDuration}
+                                        onChange={e => setBookingDuration(Number(e.target.value))}
+                                        disabled={!!selectedAppt}
+                                    >
+                                        <option value={15}>15 Min</option>
+                                        <option value={30}>30 Min</option>
+                                        <option value={45}>45 Min</option>
+                                        <option value={60}>1 Hora</option>
+                                        <option value={90}>1.5 Horas</option>
+                                        <option value={120}>2 Horas</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Precio (€)</label>
-                                <input
-                                    type="number"
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                    value={bookingPrice}
-                                    onChange={e => setBookingPrice(Number(e.target.value))}
+                                <label className="text-xs font-bold uppercase text-slate-400">Observaciones</label>
+                                <textarea
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-24 resize-none"
+                                    placeholder="Notas adicionales..."
+                                    value={bookingObservation}
+                                    onChange={e => setBookingObservation(e.target.value)}
                                     disabled={!!selectedAppt}
                                 />
                             </div>
-                            <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Duración</label>
-                                <select
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                    value={bookingDuration}
-                                    onChange={e => setBookingDuration(Number(e.target.value))}
-                                    disabled={!!selectedAppt}
-                                >
-                                    <option value={15}>15 Min</option>
-                                    <option value={30}>30 Min</option>
-                                    <option value={45}>45 Min</option>
-                                    <option value={60}>1 Hora</option>
-                                    <option value={90}>1.5 Horas</option>
-                                    <option value={120}>2 Horas</option>
-                                </select>
-                            </div>
-                        </div>
 
-                        <div>
-                            <label className="text-xs font-bold uppercase text-slate-400">Observaciones</label>
-                            <textarea
-                                className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-24 resize-none"
-                                placeholder="Notas adicionales..."
-                                value={bookingObservation}
-                                onChange={e => setBookingObservation(e.target.value)}
-                                disabled={!!selectedAppt}
-                            />
-                        </div>
-
-                      </div>{/* end scrollable area */}
-                      <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
+                        </div>{/* end scrollable area */}
+                        <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                             <button onClick={() => setIsAppointmentModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">
                                 {selectedAppt ? 'Cerrar' : 'Cancelar'}
                             </button>
@@ -860,7 +869,7 @@ const Agenda: React.FC = () => {
                                     Confirmar
                                 </button>
                             )}
-                      </div>
+                        </div>
                     </div>
                 </div>
             )

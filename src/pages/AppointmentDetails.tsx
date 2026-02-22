@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Calendar } from 'lucide-react';
+import { ArrowLeft, CreditCard, Calendar, Trash2 } from 'lucide-react';
 import { Appointment, Patient, Budget, Payment } from '../../types';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAppContext } from '../context/AppContext';
@@ -74,7 +74,7 @@ export const AppointmentDetails: React.FC = () => {
                 return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', label: 'Anulada' };
             case 'noshow':
             case 'no vino':
-                return { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200', label: 'No Vino' };
+                return { bg: 'bg-fuchsia-100', text: 'text-fuchsia-700', border: 'border-fuchsia-200', label: 'No Vino' };
             default:
                 return { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', label: 'Pendiente' };
         }
@@ -205,6 +205,26 @@ export const AppointmentDetails: React.FC = () => {
                                 ↺ Restablecer Pendiente
                             </button>
                         )}
+
+                        <button
+                            onClick={async () => {
+                                if (window.confirm('¿Estás seguro de que deseas eliminar esta cita permanentemente?')) {
+                                    try {
+                                        await api.appointments.delete(appointment.id);
+                                        alert('✅ Cita eliminada correctamente');
+                                        navigate('/agenda');
+                                    } catch (error) {
+                                        console.error('Error al eliminar la cita:', error);
+                                        alert('Error al eliminar la cita');
+                                    }
+                                }
+                            }}
+                            className="bg-red-100 hover:bg-red-200 text-red-600 px-4 py-3 rounded-xl text-xs font-black uppercase shadow-sm transition-all flex items-center gap-2 ml-4"
+                            title="Eliminar Cita"
+                        >
+                            <Trash2 size={18} />
+                            Eliminar
+                        </button>
                     </div>
 
                     {/* Appointment Details */}
@@ -331,7 +351,7 @@ export const AppointmentDetails: React.FC = () => {
                 <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm">
                     <div className="animate-in fade-in slide-in-from-bottom-4">
                         <h3 className="text-2xl font-black text-slate-900 mb-6">Resumen de la Cita</h3>
-                        
+
                         <div className="grid grid-cols-2 gap-6 mb-6">
                             <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
                                 <p className="text-xs font-black uppercase text-blue-600 mb-2">QUÉ SE ESTÁ HACIENDO</p>
@@ -341,7 +361,7 @@ export const AppointmentDetails: React.FC = () => {
                                         : appointment.treatment || 'Consulta / Tratamiento'}
                                 </p>
                             </div>
-                            
+
                             <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100">
                                 <p className="text-xs font-black uppercase text-amber-600 mb-2">DURACIÓN</p>
                                 <p className="text-lg font-black text-slate-900">

@@ -274,23 +274,23 @@ app.get('/api/patients/:patientId/clinical-records', async (req, res) => {
 app.get('/api/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
-        
+
         // Fetch ALL doctors from Doctor table (no is_active filter for now)
         const { data: doctors, error } = await supabase
             .from('Doctor')
             .select('id, name, specialization')
             .order('name', { ascending: true });
-        
+
         if (error) {
             console.error('Error fetching doctors from Doctor table:', error.message);
             return res.status(500).json({ error: error.message });
         }
-        
+
         if (!doctors || doctors.length === 0) {
             console.warn('⚠️ No doctors found in Doctor table. Have you run the sync?');
             return res.json([]);
         }
-        
+
         console.log(`✅ Loaded ${doctors.length} doctors`);
         res.json(doctors);
     } catch (e) {
@@ -303,18 +303,18 @@ app.get('/api/doctors', async (req, res) => {
 app.get('/api/debug/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
-        
+
         // Check Doctor table
         const { data: doctors, error: doctorError } = await supabase
             .from('Doctor')
             .select('*');
-        
+
         // Check User table for DOCTOR role
         const { data: doctorUsers, error: userError } = await supabase
             .from('User')
             .select('id, name, role')
             .eq('role', 'DOCTOR');
-        
+
         res.json({
             status: 'debug',
             doctor_table: {
@@ -343,27 +343,27 @@ app.get('/api/debug/doctors', async (req, res) => {
 app.post('/api/sync/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
-        
+
         // Get all users with DOCTOR role
         const { data: doctorUsers, error: userError } = await supabase
             .from('User')
             .select('id, name')
             .eq('role', 'DOCTOR');
-        
+
         if (userError) {
             return res.status(500).json({ error: 'Error fetching doctor users: ' + userError.message });
         }
-        
+
         if (!doctorUsers || doctorUsers.length === 0) {
-            return res.json({ 
+            return res.json({
                 success: true,
                 message: 'No doctor users to sync',
-                synced: 0 
+                synced: 0
             });
         }
-        
+
         // Insert/update each doctor in Doctor table
-        const syncPromises = doctorUsers.map(user => 
+        const syncPromises = doctorUsers.map(user =>
             supabase
                 .from('Doctor')
                 .upsert({
@@ -373,12 +373,12 @@ app.post('/api/sync/doctors', async (req, res) => {
                 })
                 .select()
         );
-        
+
         const results = await Promise.all(syncPromises);
         const synced = results.filter(r => !r.error).length;
-        
+
         console.log(`✅ Synchronized ${synced} doctors from User table`);
-        
+
         res.json({
             success: true,
             message: `Synchronized ${synced} doctors from User table`,
@@ -394,12 +394,12 @@ app.post('/api/sync/doctors', async (req, res) => {
 // Normalize patient data - parse JSON fields
 const normalizePatient = (patient) => {
     if (!patient) return patient;
-    
+
     return {
         ...patient,
-        prescriptions: Array.isArray(patient.prescriptions) 
-            ? patient.prescriptions 
-            : (typeof patient.prescriptions === 'string' 
+        prescriptions: Array.isArray(patient.prescriptions)
+            ? patient.prescriptions
+            : (typeof patient.prescriptions === 'string'
                 ? (() => {
                     try {
                         return JSON.parse(patient.prescriptions);
@@ -786,6 +786,31 @@ app.put('/api/appointments/:id', async (req, res) => {
         res.json(data);
     } catch (e) {
         console.error("Error updating appointment:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/appointments/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+
+        console.log(`🗑️ Deleting Appointment ${id}`);
+
+        const { error } = await supabase
+            .from('Appointment')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error("❌ Error deleting appointment:", error);
+            return res.status(500).json({ error: error.message });
+        }
+
+        console.log("✅ Appointment Deleted:", id);
+        res.json({ success: true });
+    } catch (e) {
+        console.error("Error deleting appointment:", e);
         res.status(500).json({ error: e.message });
     }
 });

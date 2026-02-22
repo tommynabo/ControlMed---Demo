@@ -48,7 +48,7 @@ const ScheduleAvailability: React.FC = () => {
   const [editingDoctor, setEditingDoctor] = useState<DoctorSchedule | null>(null);
   const [doctorSearchInput, setDoctorSearchInput] = useState('');
   const [showDoctorDropdown, setShowDoctorDropdown] = useState(false);
-  
+
   const [doctorForm, setDoctorForm] = useState<DoctorSchedule>({
     doctor_id: '',
     doctor_name: '',
@@ -79,14 +79,13 @@ const ScheduleAvailability: React.FC = () => {
   const loadScheduleData = async () => {
     setIsLoadingDoctors(true);
     try {
-      // Load system doctors (with DOCTOR role) - Include inactive for search
+      // Load system users - Include inactive for search, allow assigning schedules to any role (Admins can be doctors too)
       const systemUsersData = await api.systemUsers.getAllIncludeInactive();
-      const doctorUsers = systemUsersData.filter((u: SystemUser) => u.role === 'DOCTOR');
-      setSystemDoctors(doctorUsers);
+      setSystemDoctors(systemUsersData);
 
       // Load configured doctor schedules
       const doctorsData = await api.doctorSchedules.getAll();
-      
+
       // Transform time format: "HH:MM:SS" -> "HH:MM"
       const transformedDoctors = (doctorsData || []).map((doc: any) => ({
         ...doc,
@@ -95,7 +94,7 @@ const ScheduleAvailability: React.FC = () => {
         afternoon_start: doc.afternoon_start?.slice(0, 5) || '16:00',
         afternoon_end: doc.afternoon_end?.slice(0, 5) || '20:00'
       }));
-      
+
       setDoctors(transformedDoctors);
 
       // Load service durations
@@ -117,7 +116,7 @@ const ScheduleAvailability: React.FC = () => {
   const handleSelectDoctor = (doctor: SystemUser) => {
     // Check if this doctor already has a schedule
     const existingSchedule = doctors.find(d => d.doctor_id === doctor.id);
-    
+
     if (existingSchedule) {
       setEditingDoctor(existingSchedule);
       // Make sure times are in HH:MM format
@@ -147,7 +146,7 @@ const ScheduleAvailability: React.FC = () => {
         is_active: true
       });
     }
-    
+
     setDoctorSearchInput('');
     setShowDoctorDropdown(false);
     setShowDoctorModal(true);
@@ -220,7 +219,7 @@ const ScheduleAvailability: React.FC = () => {
       } else {
         await api.doctorSchedules.create(scheduleData);
       }
-      
+
       setShowDoctorModal(false);
       setShowDoctorDropdown(false);
       loadScheduleData();
@@ -344,17 +343,15 @@ const ScheduleAvailability: React.FC = () => {
       <div className="flex gap-2 bg-white border border-slate-200 rounded-xl p-1 w-fit">
         <button
           onClick={() => setActiveTab('doctors')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all ${
-            activeTab === 'doctors' ? 'bg-slate-900 text-white' : 'text-slate-500'
-          }`}
+          className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all ${activeTab === 'doctors' ? 'bg-slate-900 text-white' : 'text-slate-500'
+            }`}
         >
           Horarios de Doctores
         </button>
         <button
           onClick={() => setActiveTab('durations')}
-          className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all ${
-            activeTab === 'durations' ? 'bg-slate-900 text-white' : 'text-slate-500'
-          }`}
+          className={`px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all ${activeTab === 'durations' ? 'bg-slate-900 text-white' : 'text-slate-500'
+            }`}
         >
           Duraciones Estándar
         </button>
@@ -452,11 +449,10 @@ const ScheduleAvailability: React.FC = () => {
                     {daysOfWeek.map(day => (
                       <div
                         key={day.key}
-                        className={`p-2 rounded-lg text-center text-xs font-bold uppercase cursor-default ${
-                          doctor[day.key as keyof DoctorSchedule]
+                        className={`p-2 rounded-lg text-center text-xs font-bold uppercase cursor-default ${doctor[day.key as keyof DoctorSchedule]
                             ? 'bg-purple-100 text-purple-700'
                             : 'bg-slate-100 text-slate-400'
-                        }`}
+                          }`}
                       >
                         {day.label[0]}
                       </div>
@@ -557,11 +553,10 @@ const ScheduleAvailability: React.FC = () => {
                           [day.key]: !doctorForm[day.key as keyof DoctorSchedule]
                         })
                       }
-                      className={`p-3 rounded-lg text-xs font-bold uppercase transition-all ${
-                        doctorForm[day.key as keyof DoctorSchedule]
+                      className={`p-3 rounded-lg text-xs font-bold uppercase transition-all ${doctorForm[day.key as keyof DoctorSchedule]
                           ? 'bg-purple-100 text-purple-700 border-2 border-purple-300'
                           : 'bg-slate-100 text-slate-400 border-2 border-slate-200'
-                      }`}
+                        }`}
                     >
                       {day.label[0]}
                     </button>
