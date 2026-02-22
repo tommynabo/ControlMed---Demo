@@ -291,15 +291,6 @@ const Agenda: React.FC = () => {
             return;
         }
 
-        // Calculate Date
-        let dateToSave = currentDate;
-        if (viewMode === 'weekly') {
-            const currentDay = currentDate.getDay(); // 0-6
-            const diff = currentDate.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + activeSlot.dayIdx;
-            dateToSave = new Date(currentDate); // Copy
-            dateToSave.setDate(diff);
-        }
-
         const newAppt: any = {
             date: dateToSave.toISOString().split('T')[0],
             time: activeSlot.time,
