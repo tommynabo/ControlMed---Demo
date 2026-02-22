@@ -18,10 +18,10 @@ interface DoctorSchedule {
     friday: boolean;
     saturday: boolean;
     sunday: boolean;
-    morning_start: string;
-    morning_end: string;
-    afternoon_start: string;
-    afternoon_end: string;
+    morning_start: string | null;
+    morning_end: string | null;
+    afternoon_start: string | null;
+    afternoon_end: string | null;
 }
 
 const Agenda: React.FC = () => {
@@ -60,7 +60,7 @@ const Agenda: React.FC = () => {
         const loadSchedules = async () => {
             try {
                 const schedules = await api.doctorSchedules.getAll();
-                // Transform time format: "HH:MM:SS" -> "HH:MM" (preserve nulls)
+                // Transform time format: "HH:MM:SS" -> "HH:MM" (preserve nulls for disabled shifts)
                 const transformed = (schedules || []).map((s: any) => ({
                     ...s,
                     morning_start: s.morning_start ? s.morning_start.slice(0, 5) : null,
@@ -146,9 +146,8 @@ const Agenda: React.FC = () => {
                 let inMorning = false;
                 let inAfternoon = false;
 
-                // Check morning slot (only if morning times are defined and not null)
-                if (schedule.morning_start && schedule.morning_start.trim() && 
-                    schedule.morning_end && schedule.morning_end.trim()) {
+                // Check morning slot (only if morning start and end times are NOT null)
+                if (schedule.morning_start !== null && schedule.morning_end !== null) {
                     const [mStartHour, mStartMin] = schedule.morning_start.split(':').map(Number);
                     const [mEndHour, mEndMin] = schedule.morning_end.split(':').map(Number);
                     const morningStartTime = mStartHour + mStartMin / 60;
@@ -156,9 +155,8 @@ const Agenda: React.FC = () => {
                     if (slotTime >= morningStartTime && slotTime < morningEndTime) inMorning = true;
                 }
 
-                // Check afternoon slot (only if afternoon times are defined and not null)
-                if (schedule.afternoon_start && schedule.afternoon_start.trim() && 
-                    schedule.afternoon_end && schedule.afternoon_end.trim()) {
+                // Check afternoon slot (only if afternoon start and end times are NOT null)
+                if (schedule.afternoon_start !== null && schedule.afternoon_end !== null) {
                     const [aStartHour, aStartMin] = schedule.afternoon_start.split(':').map(Number);
                     const [aEndHour, aEndMin] = schedule.afternoon_end.split(':').map(Number);
                     const afternoonStartTime = aStartHour + aStartMin / 60;

@@ -20,10 +20,10 @@ interface DoctorSchedule {
   friday: boolean;
   saturday: boolean;
   sunday: boolean;
-  morning_start: string;
-  morning_end: string;
-  afternoon_start: string;
-  afternoon_end: string;
+  morning_start: string | null;
+  morning_end: string | null;
+  afternoon_start: string | null;
+  afternoon_end: string | null;
   notes?: string;
   is_active?: boolean;
 }
@@ -88,7 +88,7 @@ const ScheduleAvailability: React.FC = () => {
       // Load configured doctor schedules
       const doctorsData = await api.doctorSchedules.getAll();
 
-      // Transform time format: "HH:MM:SS" -> "HH:MM" (preserve nulls)
+      // Transform time format: "HH:MM:SS" -> "HH:MM" (preserve nulls for disabled shifts)
       const transformedDoctors = (doctorsData || []).map((doc: any) => ({
         ...doc,
         morning_start: doc.morning_start ? doc.morning_start.slice(0, 5) : null,
@@ -127,10 +127,10 @@ const ScheduleAvailability: React.FC = () => {
       
       setDoctorForm({
         ...existingSchedule,
-        morning_start: existingSchedule.morning_start?.slice(0, 5) || '09:00',
-        morning_end: existingSchedule.morning_end?.slice(0, 5) || '13:00',
-        afternoon_start: existingSchedule.afternoon_start?.slice(0, 5) || '16:00',
-        afternoon_end: existingSchedule.afternoon_end?.slice(0, 5) || '20:00',
+        morning_start: hasMorning ? (existingSchedule.morning_start?.slice(0, 5) || '09:00') : '09:00',
+        morning_end: hasMorning ? (existingSchedule.morning_end?.slice(0, 5) || '13:00') : '13:00',
+        afternoon_start: hasAfternoon ? (existingSchedule.afternoon_start?.slice(0, 5) || '16:00') : '16:00',
+        afternoon_end: hasAfternoon ? (existingSchedule.afternoon_end?.slice(0, 5) || '20:00') : '20:00',
         morning_active: hasMorning,
         afternoon_active: hasAfternoon,
         is_active: existingSchedule.is_active !== false
@@ -199,10 +199,10 @@ const ScheduleAvailability: React.FC = () => {
       ...doctor,
       morning_active: hasMorning,
       afternoon_active: hasAfternoon,
-      morning_start: doctor.morning_start?.trim() || '09:00',
-      morning_end: doctor.morning_end?.trim() || '13:00',
-      afternoon_start: doctor.afternoon_start?.trim() || '16:00',
-      afternoon_end: doctor.afternoon_end?.trim() || '20:00',
+      morning_start: hasMorning ? (doctor.morning_start?.trim() || '09:00') : '09:00',
+      morning_end: hasMorning ? (doctor.morning_end?.trim() || '13:00') : '13:00',
+      afternoon_start: hasAfternoon ? (doctor.afternoon_start?.trim() || '16:00') : '16:00',
+      afternoon_end: hasAfternoon ? (doctor.afternoon_end?.trim() || '20:00') : '20:00',
     });
     setShowDoctorModal(true);
   };
