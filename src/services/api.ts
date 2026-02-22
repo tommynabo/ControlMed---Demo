@@ -867,17 +867,13 @@ export const api = {
         }
     },
 
-    // System Users (Supabase Direct)
+    // System Users
     systemUsers: {
         getAll: async () => {
             try {
-                const { data, error } = await supabase
-                    .from('system_users')
-                    .select('*')
-                    .eq('is_active', true);
-
-                if (error) throw error;
-                return data || [];
+                const res = await fetch(`${API_URL}/system-users`, { headers });
+                if (!res.ok) throw new Error('Failed to fetch users');
+                return await res.json();
             } catch (error) {
                 console.error('Error fetching system users:', error);
                 return [];
@@ -886,12 +882,9 @@ export const api = {
 
         getAllIncludeInactive: async () => {
             try {
-                const { data, error } = await supabase
-                    .from('system_users')
-                    .select('*');
-
-                if (error) throw error;
-                return data || [];
+                const res = await fetch(`${API_URL}/system-users/all`, { headers });
+                if (!res.ok) throw new Error('Failed to fetch all users');
+                return await res.json();
             } catch (error) {
                 console.error('Error fetching all system users:', error);
                 return [];
@@ -900,14 +893,9 @@ export const api = {
 
         getById: async (id: string) => {
             try {
-                const { data, error } = await supabase
-                    .from('system_users')
-                    .select('*')
-                    .eq('id', id)
-                    .single();
-
-                if (error && error.code !== 'PGRST116') throw error;
-                return data || null;
+                const res = await fetch(`${API_URL}/system-users/${id}`, { headers });
+                if (!res.ok) throw new Error('Failed to fetch user');
+                return await res.json();
             } catch (error) {
                 console.error('Error fetching system user:', error);
                 return null;
@@ -916,14 +904,13 @@ export const api = {
 
         create: async (userData: any) => {
             try {
-                const { data, error } = await supabase
-                    .from('system_users')
-                    .insert([userData])
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                return data;
+                const res = await fetch(`${API_URL}/system-users`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(userData)
+                });
+                if (!res.ok) throw new Error('Failed to create user');
+                return await res.json();
             } catch (error) {
                 console.error('Error creating system user:', error);
                 throw error;
@@ -932,15 +919,13 @@ export const api = {
 
         update: async (id: string, userData: any) => {
             try {
-                const { data, error } = await supabase
-                    .from('system_users')
-                    .update(userData)
-                    .eq('id', id)
-                    .select()
-                    .single();
-
-                if (error) throw error;
-                return data;
+                const res = await fetch(`${API_URL}/system-users/${id}`, {
+                    method: 'PUT',
+                    headers,
+                    body: JSON.stringify(userData)
+                });
+                if (!res.ok) throw new Error('Failed to update user');
+                return await res.json();
             } catch (error) {
                 console.error('Error updating system user:', error);
                 throw error;
@@ -949,12 +934,11 @@ export const api = {
 
         delete: async (id: string) => {
             try {
-                const { error } = await supabase
-                    .from('system_users')
-                    .delete()
-                    .eq('id', id);
-
-                if (error) throw error;
+                const res = await fetch(`${API_URL}/system-users/${id}`, {
+                    method: 'DELETE',
+                    headers
+                });
+                if (!res.ok) throw new Error('Failed to delete user');
             } catch (error) {
                 console.error('Error deleting system user:', error);
                 throw error;

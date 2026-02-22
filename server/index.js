@@ -159,6 +159,84 @@ app.delete('/api/schedule/durations/:id', async (req, res) => {
         res.status(500).json({ error: e.message });
     }
 });
+// --- SYSTEM USERS API ---
+// Using Supabase service role key to bypass RLS and avoid text=uuid casting issues on frontend
+app.get('/api/system-users', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        // Return active users
+        const { data, error } = await supabase.from('system_users').select('*').eq('is_active', true);
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        console.error('Error fetching active system users:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/system-users/all', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        // Return all users and sort them
+        const { data, error } = await supabase.from('system_users').select('*').order('role').order('full_name');
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        console.error('Error fetching all system users:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/system-users/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { data, error } = await supabase.from('system_users').select('*').eq('id', id).single();
+        if (error && error.code !== 'PGRST116') throw error;
+        res.json(data || null);
+    } catch (e) {
+        console.error('Error fetching system user:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/system-users', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase.from('system_users').insert([req.body]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (e) {
+        console.error('Error creating system user:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/system-users/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { data, error } = await supabase.from('system_users').update(req.body).eq('id', id).select().single();
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        console.error('Error updating system user:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/system-users/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { error } = await supabase.from('system_users').delete().eq('id', id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting system user:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 app.post('/api/finance/financing', async (req, res) => {
     try {
@@ -802,7 +880,6 @@ app.get('/api/appointments/:id', async (req, res) => {
 
 app.put('/api/appointments/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { id } = req.params;
         const updates = req.body;
 
@@ -814,27 +891,21 @@ app.put('/api/appointments/:id', async (req, res) => {
         if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
         if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
 
-        // Remove 'treatment' object if passed (Prisma/Frontend might send the relation object back)
+        // Remove relation objects from updates to avoid Prisma errors
         delete updates.treatment;
         delete updates.doctor;
         delete updates.patient;
         delete updates.budget;
         delete updates.liquidation;
+        delete updates.id;
 
-        const { data, error } = await supabase
-            .from('Appointment')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
+        const updatedAppointment = await prisma.appointment.update({
+            where: { id: id },
+            data: updates
+        });
 
-        if (error) {
-            console.error("❌ Error updating appointment:", error);
-            return res.status(500).json({ error: error.message });
-        }
-
-        console.log("✅ Appointment Updated:", data.id);
-        res.json(data);
+        console.log("✅ Appointment Updated:", updatedAppointment.id);
+        res.json(updatedAppointment);
     } catch (e) {
         console.error("Error updating appointment:", e);
         res.status(500).json({ error: e.message });

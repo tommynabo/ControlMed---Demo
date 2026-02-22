@@ -584,7 +584,7 @@ const Agenda: React.FC = () => {
                                                                     }}
                                                                     className={`
                                                                 p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-start
-                                                                ${getAppointmentColors(appt.status, false)}
+                                                                ${getAppointmentColors(appt.status, appt.paid)}
                                                             `}
                                                                 >
                                                                     <div className="flex justify-between items-start">
