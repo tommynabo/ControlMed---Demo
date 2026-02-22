@@ -60,13 +60,13 @@ const Agenda: React.FC = () => {
         const loadSchedules = async () => {
             try {
                 const schedules = await api.doctorSchedules.getAll();
-                // Transform time format: "HH:MM:SS" -> "HH:MM"
+                // Transform time format: "HH:MM:SS" -> "HH:MM" (preserve nulls)
                 const transformed = (schedules || []).map((s: any) => ({
                     ...s,
-                    morning_start: s.morning_start?.slice(0, 5) || '09:00',
-                    morning_end: s.morning_end?.slice(0, 5) || '13:00',
-                    afternoon_start: s.afternoon_start?.slice(0, 5) || '16:00',
-                    afternoon_end: s.afternoon_end?.slice(0, 5) || '20:00'
+                    morning_start: s.morning_start ? s.morning_start.slice(0, 5) : null,
+                    morning_end: s.morning_end ? s.morning_end.slice(0, 5) : null,
+                    afternoon_start: s.afternoon_start ? s.afternoon_start.slice(0, 5) : null,
+                    afternoon_end: s.afternoon_end ? s.afternoon_end.slice(0, 5) : null
                 }));
                 setDoctorSchedules(transformed);
             } catch (err) {
@@ -146,7 +146,9 @@ const Agenda: React.FC = () => {
                 let inMorning = false;
                 let inAfternoon = false;
 
-                if (schedule.morning_start && schedule.morning_end) {
+                // Check morning slot (only if morning times are defined and not null)
+                if (schedule.morning_start && schedule.morning_start.trim() && 
+                    schedule.morning_end && schedule.morning_end.trim()) {
                     const [mStartHour, mStartMin] = schedule.morning_start.split(':').map(Number);
                     const [mEndHour, mEndMin] = schedule.morning_end.split(':').map(Number);
                     const morningStartTime = mStartHour + mStartMin / 60;
@@ -154,7 +156,9 @@ const Agenda: React.FC = () => {
                     if (slotTime >= morningStartTime && slotTime < morningEndTime) inMorning = true;
                 }
 
-                if (schedule.afternoon_start && schedule.afternoon_end) {
+                // Check afternoon slot (only if afternoon times are defined and not null)
+                if (schedule.afternoon_start && schedule.afternoon_start.trim() && 
+                    schedule.afternoon_end && schedule.afternoon_end.trim()) {
                     const [aStartHour, aStartMin] = schedule.afternoon_start.split(':').map(Number);
                     const [aEndHour, aEndMin] = schedule.afternoon_end.split(':').map(Number);
                     const afternoonStartTime = aStartHour + aStartMin / 60;
@@ -365,9 +369,7 @@ const Agenda: React.FC = () => {
                         {/* TIME COLUMN - Always visible */}
                         <div className="w-14 flex-shrink-0 pr-4">
                             <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
-                            {(viewMode === 'daily' && selectedDoctorId !== 'all'
-                                ? getAvailableTimeSlots(currentDate, selectedDoctorId)
-                                : TIME_SLOTS).map((time, idx) => {
+                            {TIME_SLOTS.map((time, idx) => {
                                     const hour = parseInt(time.split(':')[0], 10);
                                     // Only render on the start of each hour (every 4 slots)
                                     if (idx % 4 === 0) {
@@ -411,12 +413,10 @@ const Agenda: React.FC = () => {
                                 <div className="relative">
 
                                     {/* 1. Background Grid (Lines & Times) */}
-                                    {(viewMode === 'daily' && selectedDoctorId !== 'all'
-                                        ? getAvailableTimeSlots(currentDate, selectedDoctorId)
-                                        : TIME_SLOTS).map((time, idx) => {
-                                            const isHourStart = time.endsWith(':00');
-                                            return (
-                                                <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                    {TIME_SLOTS.map((time, idx) => {
+                                        const isHourStart = time.endsWith(':00');
+                                        return (
+                                            <div key={time} className={`flex h-12 relative group ${isHourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
 
                                                     {/* Clickable Slots for New Appt (Invisible overlay) */}
                                                     {viewMode === 'daily' ? (
@@ -456,7 +456,10 @@ const Agenda: React.FC = () => {
                                                             return (
                                                                 <div
                                                                     key={`day-${dayIdx}-${time}`}
-                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/50 cursor-not-allowed'}`}
+                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${isAvailable ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-white/80 cursor-not-allowed'}`}
+                                                                    style={!isAvailable ? {
+                                                                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(148, 163, 184, 0.08) 3px, rgba(148, 163, 184, 0.08) 6px)'
+                                                                    } : {}}
                                                                     onClick={() => {
                                                                         if (!isAvailable) return;
                                                                         setActiveSlot({ time, dayIdx });

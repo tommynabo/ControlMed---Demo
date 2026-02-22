@@ -88,13 +88,13 @@ const ScheduleAvailability: React.FC = () => {
       // Load configured doctor schedules
       const doctorsData = await api.doctorSchedules.getAll();
 
-      // Transform time format: "HH:MM:SS" -> "HH:MM"
+      // Transform time format: "HH:MM:SS" -> "HH:MM" (preserve nulls)
       const transformedDoctors = (doctorsData || []).map((doc: any) => ({
         ...doc,
-        morning_start: doc.morning_start?.slice(0, 5) || '09:00',
-        morning_end: doc.morning_end?.slice(0, 5) || '13:00',
-        afternoon_start: doc.afternoon_start?.slice(0, 5) || '16:00',
-        afternoon_end: doc.afternoon_end?.slice(0, 5) || '20:00'
+        morning_start: doc.morning_start ? doc.morning_start.slice(0, 5) : null,
+        morning_end: doc.morning_end ? doc.morning_end.slice(0, 5) : null,
+        afternoon_start: doc.afternoon_start ? doc.afternoon_start.slice(0, 5) : null,
+        afternoon_end: doc.afternoon_end ? doc.afternoon_end.slice(0, 5) : null
       }));
 
       setDoctors(transformedDoctors);
@@ -122,14 +122,17 @@ const ScheduleAvailability: React.FC = () => {
     if (existingSchedule) {
       setEditingDoctor(existingSchedule);
       // Make sure times are in HH:MM format
+      const hasMorning = !!(existingSchedule.morning_start && existingSchedule.morning_start.trim());
+      const hasAfternoon = !!(existingSchedule.afternoon_start && existingSchedule.afternoon_start.trim());
+      
       setDoctorForm({
         ...existingSchedule,
         morning_start: existingSchedule.morning_start?.slice(0, 5) || '09:00',
         morning_end: existingSchedule.morning_end?.slice(0, 5) || '13:00',
         afternoon_start: existingSchedule.afternoon_start?.slice(0, 5) || '16:00',
         afternoon_end: existingSchedule.afternoon_end?.slice(0, 5) || '20:00',
-        morning_active: !!(existingSchedule.morning_start && existingSchedule.morning_end),
-        afternoon_active: !!(existingSchedule.afternoon_start && existingSchedule.afternoon_end),
+        morning_active: hasMorning,
+        afternoon_active: hasAfternoon,
         is_active: existingSchedule.is_active !== false
       });
     } else {
@@ -189,14 +192,17 @@ const ScheduleAvailability: React.FC = () => {
 
   const handleEditDoctor = (doctor: DoctorSchedule) => {
     setEditingDoctor(doctor);
+    const hasMorning = !!(doctor.morning_start && doctor.morning_start.trim());
+    const hasAfternoon = !!(doctor.afternoon_start && doctor.afternoon_start.trim());
+    
     setDoctorForm({
       ...doctor,
-      morning_active: !!(doctor.morning_start && doctor.morning_end),
-      afternoon_active: !!(doctor.afternoon_start && doctor.afternoon_end),
-      morning_start: doctor.morning_start || '09:00',
-      morning_end: doctor.morning_end || '13:00',
-      afternoon_start: doctor.afternoon_start || '16:00',
-      afternoon_end: doctor.afternoon_end || '20:00',
+      morning_active: hasMorning,
+      afternoon_active: hasAfternoon,
+      morning_start: doctor.morning_start?.trim() || '09:00',
+      morning_end: doctor.morning_end?.trim() || '13:00',
+      afternoon_start: doctor.afternoon_start?.trim() || '16:00',
+      afternoon_end: doctor.afternoon_end?.trim() || '20:00',
     });
     setShowDoctorModal(true);
   };
@@ -467,10 +473,17 @@ const ScheduleAvailability: React.FC = () => {
                             <p className="text-sm font-bold text-slate-700 flex flex-wrap gap-x-4 gap-y-1">
                               {doctor.morning_start && doctor.morning_end ? (
                                 <span>Mañana: <span className="text-purple-600">{doctor.morning_start} - {doctor.morning_end}</span></span>
+                              ) : doctor.morning_start || doctor.morning_end ? (
+                                <span className="text-slate-500 italic">Mañana: Incompleto</span>
                               ) : null}
                               {doctor.afternoon_start && doctor.afternoon_end ? (
-                                <span>Tarde: <span className="text-purple-600">{doctor.afternoon_start} - {doctor.afternoon_end}</span></span>
+                                <span>Tarde: <span className="text-orange-600">{doctor.afternoon_start} - {doctor.afternoon_end}</span></span>
+                              ) : doctor.afternoon_start || doctor.afternoon_end ? (
+                                <span className="text-slate-500 italic">Tarde: Incompleto</span>
                               ) : null}
+                              {!doctor.morning_start && !doctor.afternoon_start && (
+                                <span className="text-slate-400 italic">Sin horarios configurados</span>
+                              )}
                             </p>
                           </div>
                           <div className="flex gap-2">
@@ -613,57 +626,123 @@ const ScheduleAvailability: React.FC = () => {
               </div>
 
               <div className="border-t border-slate-200 pt-6">
-                <h5 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  <Clock size={16} className="text-purple-500" />
-                  Turno Mañana
-                </h5>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Inicio</label>
-                    <input
-                      type="time"
-                      value={doctorForm.morning_start}
-                      onChange={(e) => setDoctorForm({ ...doctorForm, morning_start: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Fin</label>
-                    <input
-                      type="time"
-                      value={doctorForm.morning_end}
-                      onChange={(e) => setDoctorForm({ ...doctorForm, morning_end: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
-                    />
-                  </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h5 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Clock size={16} className="text-purple-500" />
+                    Turno Mañana
+                  </h5>
+                  {doctorForm.morning_active && (
+                    <button
+                      onClick={() => setDoctorForm({
+                        ...doctorForm,
+                        morning_active: false,
+                        morning_start: '09:00',
+                        morning_end: '13:00'
+                      })}
+                      className="px-3 py-1 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg text-xs font-bold uppercase transition-colors"
+                    >
+                      ✕ Eliminar Mañana
+                    </button>
+                  )}
                 </div>
+
+                {doctorForm.morning_active ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Inicio</label>
+                      <input
+                        type="time"
+                        value={doctorForm.morning_start}
+                        onChange={(e) => setDoctorForm({ ...doctorForm, morning_start: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Fin</label>
+                      <input
+                        type="time"
+                        value={doctorForm.morning_end}
+                        onChange={(e) => setDoctorForm({ ...doctorForm, morning_end: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl text-center">
+                    <p className="text-sm text-slate-500">Sin horario por la mañana</p>
+                    <button
+                      onClick={() => setDoctorForm({
+                        ...doctorForm,
+                        morning_active: true,
+                        morning_start: '09:00',
+                        morning_end: '13:00'
+                      })}
+                      className="mt-2 px-3 py-1 bg-purple-100 text-purple-600 hover:bg-purple-200 rounded-lg text-xs font-bold uppercase transition-colors"
+                    >
+                      + Agregar Mañana
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
-                <h5 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
-                  <Clock size={16} className="text-orange-500" />
-                  Turno Tarde
-                </h5>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Inicio</label>
-                    <input
-                      type="time"
-                      value={doctorForm.afternoon_start}
-                      onChange={(e) => setDoctorForm({ ...doctorForm, afternoon_start: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Fin</label>
-                    <input
-                      type="time"
-                      value={doctorForm.afternoon_end}
-                      onChange={(e) => setDoctorForm({ ...doctorForm, afternoon_end: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
-                    />
-                  </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h5 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Clock size={16} className="text-orange-500" />
+                    Turno Tarde
+                  </h5>
+                  {doctorForm.afternoon_active && (
+                    <button
+                      onClick={() => setDoctorForm({
+                        ...doctorForm,
+                        afternoon_active: false,
+                        afternoon_start: '16:00',
+                        afternoon_end: '20:00'
+                      })}
+                      className="px-3 py-1 bg-red-100 text-red-600 hover:bg-red-200 rounded-lg text-xs font-bold uppercase transition-colors"
+                    >
+                      ✕ Eliminar Tarde
+                    </button>
+                  )}
                 </div>
+
+                {doctorForm.afternoon_active ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Inicio</label>
+                      <input
+                        type="time"
+                        value={doctorForm.afternoon_start}
+                        onChange={(e) => setDoctorForm({ ...doctorForm, afternoon_start: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Fin</label>
+                      <input
+                        type="time"
+                        value={doctorForm.afternoon_end}
+                        onChange={(e) => setDoctorForm({ ...doctorForm, afternoon_end: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-200"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl text-center">
+                    <p className="text-sm text-slate-500">Sin horario por la tarde</p>
+                    <button
+                      onClick={() => setDoctorForm({
+                        ...doctorForm,
+                        afternoon_active: true,
+                        afternoon_start: '16:00',
+                        afternoon_end: '20:00'
+                      })}
+                      className="mt-2 px-3 py-1 bg-orange-100 text-orange-600 hover:bg-orange-200 rounded-lg text-xs font-bold uppercase transition-colors"
+                    >
+                      + Agregar Tarde
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
