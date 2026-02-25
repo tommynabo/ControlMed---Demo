@@ -141,6 +141,7 @@ model Appointment {
   time         String
   duration     Int       @default(60)       // Duración en minutos (15, 30, 45, 60, 90, 120)
   observations String?                      // Notas/Observaciones de la cita
+  visitDetails String?                      // Detalles de la visita (visible en agenda)
   status       String    @default("Scheduled") // Scheduled, Canceled, Completed, NoShow
   paid         Boolean   @default(false)    // Para diferenciación de colores (verde=pagada, naranja=no pagada)
   patientId    String
@@ -185,17 +186,18 @@ model Liquidation {
 }
 
 model Payment {
-  id          String   @id @default(uuid())
-  patientId   String
-  patient     Patient  @relation(fields: [patientId], references: [id])
-  budgetId    String?  // Si es cobro de un presupuesto
-  amount      Float
-  method      String   // "cash", "card", "wallet", "transfer"
-  type        String   // "DIRECT_CHARGE" (cobro directo) o "ADVANCE_PAYMENT" (pago a cuenta)
-  createdAt   DateTime @default(now())
-  invoiceId   String?  @unique // Factura generada al cobrar
-  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
-  notes       String?  // Descripción del pago
+  id                String   @id @default(uuid())
+  patientId         String
+  patient           Patient  @relation(fields: [patientId], references: [id])
+  budgetId          String?  // Si es cobro de un presupuesto
+  amount            Float
+  method            String   // "cash", "card", "wallet", "transfer"
+  type              String   // "DIRECT_CHARGE" (cobro directo) o "ADVANCE_PAYMENT" (pago a cuenta)
+  paymentBreakdown  String?  // JSON: [{method, amount}] for combined payments
+  createdAt         DateTime @default(now())
+  invoiceId         String?  @unique // Factura generada al cobrar
+  invoice           Invoice? @relation(fields: [invoiceId], references: [id])
+  notes             String?  // Descripción del pago
   
   @@index([patientId])
 }
@@ -360,4 +362,48 @@ model WhatsAppLog {
   error     String?
   sentAt    DateTime            @default(now())
   scheduledFor DateTime?        // New: For scheduled messages
+}
+
+// --- CLINICAL TREATMENT PLANS ---
+model ClinicalTreatmentPlan {
+  id        String                   @id @default(uuid())
+  patientId String
+  name      String                   @default("Plan de Tratamiento")
+  status    String                   @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  notes     String?
+  steps     ClinicalTreatmentStep[]
+  createdAt DateTime                 @default(now())
+  updatedAt DateTime                 @updatedAt
+
+  @@map("clinical_treatment_plans")
+  @@index([patientId])
+}
+
+model ClinicalTreatmentStep {
+  id            String                @id @default(uuid())
+  planId        String
+  plan          ClinicalTreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  stepOrder     Int                   @default(0)
+  treatmentName String
+  toothId       Int?
+  status        String                @default("PENDIENTE") // PENDIENTE, EN_PROCESO, COMPLETADO
+  notes         String?
+  completedAt   DateTime?
+  createdAt     DateTime              @default(now())
+
+  @@map("clinical_treatment_steps")
+  @@index([planId])
+}
+
+// --- AGENDA CLOSURES ---
+model AgendaClosure {
+  id        String   @id @default(uuid())
+  date      DateTime @db.Date
+  doctorId  String?  // NULL = all doctors closed
+  reason    String?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@map("agenda_closures")
+  @@index([date])
 }

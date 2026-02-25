@@ -932,6 +932,75 @@ export const api = {
                 throw error;
             }
         }
+    },
+
+    // Clinical Treatment Plans (Feature 1)
+    clinicalPlans: {
+        getByPatient: async (patientId: string) => {
+            const res = await fetch(`${API_URL}/clinical-plans/${patientId}`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        create: async (data: { patientId: string; name?: string; notes?: string; steps?: any[] }) => {
+            const res = await fetch(`${API_URL}/clinical-plans`, {
+                method: 'POST', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create clinical plan');
+            return res.json();
+        },
+        update: async (id: string, data: { name?: string; status?: string; notes?: string }) => {
+            const res = await fetch(`${API_URL}/clinical-plans/${id}`, {
+                method: 'PUT', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update clinical plan');
+            return res.json();
+        },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/clinical-plans/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete clinical plan');
+        },
+        addStep: async (data: { planId: string; treatmentName: string; toothId?: number; notes?: string }) => {
+            const res = await fetch(`${API_URL}/clinical-plan-steps`, {
+                method: 'POST', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to add step');
+            return res.json();
+        },
+        updateStep: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/clinical-plan-steps/${id}`, {
+                method: 'PUT', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update step');
+            return res.json();
+        },
+        deleteStep: async (id: string) => {
+            const res = await fetch(`${API_URL}/clinical-plan-steps/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete step');
+        }
+    },
+
+    // Agenda Closures (Feature 4)
+    agendaClosures: {
+        getAll: async (date?: string) => {
+            const url = date ? `${API_URL}/agenda-closures?date=${date}` : `${API_URL}/agenda-closures`;
+            const res = await fetch(url, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        create: async (data: { date: string; doctorId?: string; reason?: string }) => {
+            const res = await fetch(`${API_URL}/agenda-closures`, {
+                method: 'POST', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to create closure');
+            }
+            return res.json();
+        },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/agenda-closures/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete closure');
+        }
     }
 };
 

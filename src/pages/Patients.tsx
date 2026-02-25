@@ -6,7 +6,7 @@ import {
     QrCode, Wallet, AlertTriangle, Printer
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment } from '../../types';
+import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
 import { Odontogram } from '../components/Odontogram';
 import { PaymentModal } from '../components/PaymentModal';
 import { TransferBalanceModal } from '../components/TransferBalanceModal';
@@ -16,6 +16,7 @@ import { FinanceModal } from '../../components/FinanceModal';
 import { BudgetModal } from '../components/BudgetModal';
 import { PrescriptionModal } from '../components/PrescriptionModal';
 import { DOCTORS, DENTAL_SERVICES } from '../constants';
+import { PlanTratamientoTab } from '../components/PlanTratamientoTab';
 
 // Helper function to normalize patient data, ensuring prescriptions is always an array
 const normalizePrescriptions = (prescriptions: any): string[] => {
@@ -765,7 +766,7 @@ const Patients: React.FC = () => {
                     {/* HEADER SIDEBAR (Mobile/Desktop split logic from App.tsx simplified here) */}
                     <div className="px-8 pt-8 pb-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-xl sticky top-0 z-10">
                         <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                            {['ficha', 'history', 'whatsapp', 'odontogram', 'treatments', 'prescriptions', 'billing', 'docs', 'budget'].map(tab => (
+                            {['ficha', 'history', 'plan', 'whatsapp', 'odontogram', 'treatments', 'prescriptions', 'billing', 'docs', 'budget'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setPatientTab(tab)}
@@ -776,7 +777,7 @@ const Patients: React.FC = () => {
                                         }
 `}
                                 >
-                                    {tab === 'history' ? 'Historial' : tab === 'treatments' ? 'Tratamientos' : tab === 'prescriptions' ? 'Recetas' : tab === 'billing' ? 'Pagos' : tab === 'docs' ? 'Docs' : tab === 'budget' ? 'Pptos' : tab}
+                                    {tab === 'history' ? 'Historial' : tab === 'plan' ? 'Plan Tto' : tab === 'treatments' ? 'Tratamientos' : tab === 'prescriptions' ? 'Recetas' : tab === 'billing' ? 'Pagos' : tab === 'docs' ? 'Docs' : tab === 'budget' ? 'Pptos' : tab}
                                 </button>
                             ))}
                         </div>
@@ -1449,6 +1450,15 @@ const Patients: React.FC = () => {
                                 </div>
                             )
                         }
+
+                        {/* PLAN DE TRATAMIENTO TAB (Feature 1) */}
+                        {patientTab === 'plan' && (
+                            <PlanTratamientoTab
+                                patient={selectedPatient}
+                                api={api}
+                            />
+                        )}
+
                         {/* WHATSAPP TAB */}
                         {patientTab === 'whatsapp' && (
                             <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
@@ -1524,139 +1534,139 @@ const Patients: React.FC = () => {
                 isNewPatientModalOpen && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
                         <div className="bg-white max-w-lg w-full rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh]">
-                          <div className="p-8 pb-0 overflow-y-auto flex-1">
-                            <h3 className="text-2xl font-black text-slate-900 mb-6">Nuevo Paciente</h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <div className="grid grid-cols-2 gap-4 mb-4">
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">Nombre</label>
-                                            <input
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                                placeholder="Ej. Juan"
-                                                value={newPatient.firstName}
-                                                onChange={e => setNewPatient({ ...newPatient, firstName: e.target.value })}
-                                            />
+                            <div className="p-8 pb-0 overflow-y-auto flex-1">
+                                <h3 className="text-2xl font-black text-slate-900 mb-6">Nuevo Paciente</h3>
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">Nombre</label>
+                                                <input
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                    placeholder="Ej. Juan"
+                                                    value={newPatient.firstName}
+                                                    onChange={e => setNewPatient({ ...newPatient, firstName: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">1er Apellido</label>
+                                                <input
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                    placeholder="Ej. Pérez"
+                                                    value={newPatient.lastName1}
+                                                    onChange={e => setNewPatient({ ...newPatient, lastName1: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">2do Apellido</label>
+                                                <input
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                    placeholder="Ej. García"
+                                                    value={newPatient.lastName2}
+                                                    onChange={e => setNewPatient({ ...newPatient, lastName2: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">Fecha Nacimiento</label>
+                                                <input
+                                                    type="date"
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                    value={newPatient.birthDate}
+                                                    onChange={e => setNewPatient({ ...newPatient, birthDate: e.target.value })}
+                                                />
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">1er Apellido</label>
-                                            <input
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                                placeholder="Ej. Pérez"
-                                                value={newPatient.lastName1}
-                                                onChange={e => setNewPatient({ ...newPatient, lastName1: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">2do Apellido</label>
-                                            <input
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                                placeholder="Ej. García"
-                                                value={newPatient.lastName2}
-                                                onChange={e => setNewPatient({ ...newPatient, lastName2: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">Fecha Nacimiento</label>
-                                            <input
-                                                type="date"
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                                value={newPatient.birthDate}
-                                                onChange={e => setNewPatient({ ...newPatient, birthDate: e.target.value })}
-                                            />
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <input type="checkbox" checked={newPatient.smoker} onChange={e => setNewPatient({ ...newPatient, smoker: e.target.checked })} className="w-5 h-5 rounded hover:cursor-pointer" />
+                                            <label className="text-xs font-bold uppercase text-slate-600">Es Fumador</label>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <input type="checkbox" checked={newPatient.smoker} onChange={e => setNewPatient({ ...newPatient, smoker: e.target.checked })} className="w-5 h-5 rounded hover:cursor-pointer" />
-                                        <label className="text-xs font-bold uppercase text-slate-600">Es Fumador</label>
-                                    </div>
-                                </div>
 
-                                {/* Medical History Section */}
-                                <div className="border-t border-slate-100 pt-4">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-3">Historial Medico</p>
-                                    <div className="space-y-3">
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">Alergias</label>
-                                            <input
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                                placeholder="Ej. Penicilina, Latex, Anestesia..."
-                                                value={newPatient.allergies}
-                                                onChange={e => setNewPatient({ ...newPatient, allergies: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">Enfermedades</label>
-                                            <input
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                                placeholder="Ej. Diabetes, Hipertension, Cardiopatia..."
-                                                value={newPatient.diseases}
-                                                onChange={e => setNewPatient({ ...newPatient, diseases: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">Medicacion Habitual</label>
-                                            <input
-                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                                placeholder="Ej. Sintrom, Metformina, Enalapril..."
-                                                value={newPatient.medications}
-                                                onChange={e => setNewPatient({ ...newPatient, medications: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase text-slate-400">Alertas Medicas Criticas</label>
-                                            <input
-                                                className="w-full bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm font-bold text-rose-700"
-                                                placeholder="Ej. Anticoagulante, Protesis valvular, Bisfosfanatos..."
-                                                value={newPatient.criticalAlerts}
-                                                onChange={e => setNewPatient({ ...newPatient, criticalAlerts: e.target.value })}
-                                            />
+                                    {/* Medical History Section */}
+                                    <div className="border-t border-slate-100 pt-4">
+                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-3">Historial Medico</p>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">Alergias</label>
+                                                <input
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                    placeholder="Ej. Penicilina, Latex, Anestesia..."
+                                                    value={newPatient.allergies}
+                                                    onChange={e => setNewPatient({ ...newPatient, allergies: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">Enfermedades</label>
+                                                <input
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                    placeholder="Ej. Diabetes, Hipertension, Cardiopatia..."
+                                                    value={newPatient.diseases}
+                                                    onChange={e => setNewPatient({ ...newPatient, diseases: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">Medicacion Habitual</label>
+                                                <input
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                                    placeholder="Ej. Sintrom, Metformina, Enalapril..."
+                                                    value={newPatient.medications}
+                                                    onChange={e => setNewPatient({ ...newPatient, medications: e.target.value })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400">Alertas Medicas Criticas</label>
+                                                <input
+                                                    className="w-full bg-rose-50 border border-rose-200 rounded-xl p-3 text-sm font-bold text-rose-700"
+                                                    placeholder="Ej. Anticoagulante, Protesis valvular, Bisfosfanatos..."
+                                                    value={newPatient.criticalAlerts}
+                                                    onChange={e => setNewPatient({ ...newPatient, criticalAlerts: e.target.value })}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400">DNI / NIE</label>
-                                    <input
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                        placeholder="12345678X"
-                                        value={newPatient.dni}
-                                        onChange={e => setNewPatient({ ...newPatient, dni: e.target.value })}
-                                    />
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">DNI / NIE</label>
+                                        <input
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            placeholder="12345678X"
+                                            value={newPatient.dni}
+                                            onChange={e => setNewPatient({ ...newPatient, dni: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Email</label>
+                                        <input
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            placeholder="juan@email.com"
+                                            value={newPatient.email}
+                                            onChange={e => setNewPatient({ ...newPatient, email: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Teléfono</label>
+                                        <input
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            placeholder="+34 600 000 000"
+                                            value={newPatient.phone || ''}
+                                            onChange={e => setNewPatient({ ...newPatient, phone: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="col-span-2">
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Nº Historia (Obligatorio)</label>
+                                        <input
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            placeholder="Ej. HC-2024-001"
+                                            value={newPatient.historyNumber || ''}
+                                            onChange={e => setNewPatient({ ...newPatient, historyNumber: e.target.value })}
+                                        />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400">Email</label>
-                                    <input
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                        placeholder="juan@email.com"
-                                        value={newPatient.email}
-                                        onChange={e => setNewPatient({ ...newPatient, email: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400">Teléfono</label>
-                                    <input
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                        placeholder="+34 600 000 000"
-                                        value={newPatient.phone || ''}
-                                        onChange={e => setNewPatient({ ...newPatient, phone: e.target.value })}
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="text-[10px] font-black uppercase text-slate-400">Nº Historia (Obligatorio)</label>
-                                    <input
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                        placeholder="Ej. HC-2024-001"
-                                        value={newPatient.historyNumber || ''}
-                                        onChange={e => setNewPatient({ ...newPatient, historyNumber: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-                          </div>{/* end scrollable area */}
-                          <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
+                            </div>{/* end scrollable area */}
+                            <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                                 <button onClick={() => setIsNewPatientModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
                                 <button onClick={handleCreatePatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg">Guardar</button>
-                          </div>
+                            </div>
                         </div>
                     </div>
                 )

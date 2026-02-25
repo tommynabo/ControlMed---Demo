@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, DollarSign, Wallet, X, Check, FileText } from 'lucide-react';
+import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft } from 'lucide-react';
 import { Payment, Patient, Budget } from '../../types';
 import { api } from '../services/api';
 
@@ -9,10 +9,22 @@ interface PaymentModalProps {
     patient: Patient;
     budgets: Budget[];
     onPaymentComplete: (payment: Payment, invoice: any) => void;
-    appointment?: Appointment; // Context for direct payment
+    appointment?: any;
     defaultAmount?: number;
     defaultConcept?: string;
 }
+
+interface PaymentSplit {
+    method: 'cash' | 'card' | 'transfer' | 'wallet';
+    amount: number;
+}
+
+const METHOD_LABELS: Record<string, string> = {
+    cash: 'Efectivo',
+    card: 'Tarjeta',
+    transfer: 'Transferencia',
+    wallet: 'Monedero'
+};
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({
     isOpen,
@@ -24,28 +36,60 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     defaultAmount,
     defaultConcept
 }) => {
-    // Mode determination
     const isDirectPayment = !!appointment || (!!defaultAmount && defaultAmount > 0);
 
-    const [amount, setAmount] = useState('');
+    const [totalAmount, setTotalAmount] = useState('');
     const [concept, setConcept] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'wallet'>('card');
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+
+    // Combined payment state
+    const [useCombinedPayment, setUseCombinedPayment] = useState(false);
+    const [primaryMethod, setPrimaryMethod] = useState<'cash' | 'card' | 'transfer' | 'wallet'>('card');
+    const [splits, setSplits] = useState<PaymentSplit[]>([]);
+    const [walletAmount, setWalletAmount] = useState('');
 
     const availableWallet = patient.wallet || 0;
 
     useEffect(() => {
         if (isOpen) {
-            setAmount(defaultAmount ? defaultAmount.toString() : '');
+            const amt = defaultAmount ? defaultAmount.toString() : '';
+            setTotalAmount(amt);
             setConcept(defaultConcept || (appointment ? `Pago Cita ${appointment.date}` : 'Anticipo / Saldo de Cuenta'));
-            setPaymentMethod('card');
+            setPrimaryMethod('card');
             setNotes('');
+            setUseCombinedPayment(false);
+            setSplits([]);
+            setWalletAmount('');
         }
     }, [isOpen, defaultAmount, defaultConcept, appointment]);
 
+    // Auto-suggest wallet split when patient has balance and it's a direct payment
+    useEffect(() => {
+        if (useCombinedPayment && availableWallet > 0 && isDirectPayment) {
+            const total = parseFloat(totalAmount) || 0;
+            const walletUse = Math.min(availableWallet, total);
+            setWalletAmount(walletUse.toString());
+        }
+    }, [useCombinedPayment]);
+
+    const getPaymentBreakdown = (): PaymentSplit[] => {
+        if (!useCombinedPayment) {
+            return [{ method: primaryMethod, amount: parseFloat(totalAmount) || 0 }];
+        }
+        const walletAmt = parseFloat(walletAmount) || 0;
+        const total = parseFloat(totalAmount) || 0;
+        const remaining = total - walletAmt;
+
+        const breakdown: PaymentSplit[] = [];
+        if (walletAmt > 0) breakdown.push({ method: 'wallet', amount: walletAmt });
+        if (remaining > 0) breakdown.push({ method: primaryMethod === 'wallet' ? 'card' : primaryMethod, amount: remaining });
+        return breakdown;
+    };
+
     const handleSubmit = async () => {
-        if (!amount || parseFloat(amount) <= 0) {
+        const numericAmount = parseFloat(totalAmount);
+        if (!numericAmount || numericAmount <= 0) {
             alert('Introduce un importe válido');
             return;
         }
@@ -54,61 +98,66 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             return;
         }
 
-        const numericAmount = parseFloat(amount);
+        const breakdown = getPaymentBreakdown();
+        const walletUsed = breakdown.find(b => b.method === 'wallet');
+        if (walletUsed && walletUsed.amount > availableWallet) {
+            alert(`Saldo insuficiente en monedero (${availableWallet.toFixed(2)}€ disponibles)`);
+            return;
+        }
 
-        // Validation for wallet payment
-        if (paymentMethod === 'wallet' && numericAmount > availableWallet) {
-            alert(`Saldo insuficiente en monedero (${availableWallet}€ disponibles)`);
+        // Check total matches
+        const breakdownTotal = breakdown.reduce((sum, b) => sum + b.amount, 0);
+        if (Math.abs(breakdownTotal - numericAmount) > 0.01) {
+            alert('El desglose no coincide con el total');
             return;
         }
 
         setIsProcessing(true);
 
         try {
-            // 1. Create Invoice
+            // Determine primary method for invoice
+            const mainMethod = breakdown.length === 1 ? breakdown[0].method :
+                breakdown.sort((a, b) => b.amount - a.amount)[0].method;
+
             const invoiceData = {
                 patientId: patient.id,
                 patient: patient,
                 amount: numericAmount,
                 items: [{ name: concept, price: numericAmount }],
-                paymentMethod,
-                type: isDirectPayment ? 'INVOICE' : 'ADVANCE_PAYMENT', // Direct charge vs Top-up
+                paymentMethod: mainMethod,
+                type: isDirectPayment ? 'INVOICE' : 'ADVANCE_PAYMENT',
                 concept: concept,
-                appointmentId: appointment?.id
+                appointmentId: appointment?.id,
+                paymentBreakdown: breakdown
             };
-
-            // If paying with wallet, we might need a specific endpoint or logic
-            // Assuming api.invoices.create handles 'wallet' method correctly by deducting balance
 
             const response = await api.invoices.create(invoiceData) as any;
 
             if (!response || (!response.url && !response.previewUrl)) {
-                if (response.error) throw new Error(response.error);
+                if (response?.error) throw new Error(response.error);
             }
 
-            const invoiceUrl = response.previewUrl || response.url;
+            const invoiceUrl = response?.previewUrl || response?.url;
 
-            // 2. Create Payment Record
             const payment: Payment = {
                 id: `pay_${Date.now()}`,
                 patientId: patient.id,
                 amount: numericAmount,
-                method: paymentMethod,
+                method: mainMethod,
                 type: isDirectPayment ? 'DIRECT_CHARGE' : 'ADVANCE_PAYMENT',
+                paymentBreakdown: breakdown,
                 notes: notes || undefined,
                 createdAt: new Date().toISOString(),
                 budgetId: appointment?.budgetId
             };
 
-            // 3. Mark appointment as paid if applicable
             if (appointment) {
                 await api.appointments.update(appointment.id, { paid: true, status: 'COMPLETADO' });
             }
 
-            // 4. Complete
             onPaymentComplete(payment, response);
 
-            alert(`✅ Operación realizada con éxito.`);
+            alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);
 
             if (invoiceUrl) {
                 window.open(invoiceUrl, '_blank');
@@ -125,6 +174,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     if (!isOpen) return null;
 
+    const numericTotal = parseFloat(totalAmount) || 0;
+    const walletAmt = parseFloat(walletAmount) || 0;
+    const remainingAfterWallet = numericTotal - walletAmt;
+
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in">
             <div className="bg-white max-w-2xl w-full rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 duration-500">
@@ -136,7 +189,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             {isDirectPayment ? 'Cobrar / Pagar' : 'Añadir Saldo a Cuenta'}
                         </h2>
                         <p className="text-sm text-slate-300 mt-1">
-                            Paciente: <strong>{patient.name}</strong> | Saldo Monedero: <strong>{availableWallet}€</strong>
+                            Paciente: <strong>{patient.name}</strong> | Saldo Monedero: <strong>{availableWallet.toFixed(2)}€</strong>
                         </p>
                     </div>
                     <button
@@ -162,12 +215,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <div className="grid grid-cols-2 gap-6">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
-                                Importe (€)
+                                Importe Total (€)
                             </label>
                             <input
                                 type="number"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
+                                value={totalAmount}
+                                onChange={(e) => setTotalAmount(e.target.value)}
                                 placeholder="0.00"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xl font-bold outline-none focus:ring-2 focus:ring-blue-100"
                             />
@@ -186,15 +239,68 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Método de Pago */}
+                    {/* Combined Payment Toggle */}
+                    {isDirectPayment && availableWallet > 0 && (
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={() => setUseCombinedPayment(!useCombinedPayment)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${useCombinedPayment
+                                        ? 'bg-purple-50 text-purple-700 border-purple-300'
+                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                                    }`}
+                            >
+                                <ArrowRightLeft size={14} />
+                                Pago Combinado (Monedero + Otro)
+                            </button>
+                            {useCombinedPayment && (
+                                <span className="text-[10px] text-slate-400">
+                                    Disponible: {availableWallet.toFixed(2)}€
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Combined Payment: Wallet split */}
+                    {useCombinedPayment && (
+                        <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-5 border border-emerald-200 space-y-4">
+                            <h4 className="text-xs font-black text-emerald-700 uppercase tracking-wide flex items-center gap-2">
+                                <Wallet size={14} /> Desglose de Pago
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-emerald-600 mb-1 block">Del Monedero</label>
+                                    <input
+                                        type="number"
+                                        value={walletAmount}
+                                        onChange={(e) => {
+                                            const val = Math.min(parseFloat(e.target.value) || 0, availableWallet, numericTotal);
+                                            setWalletAmount(val.toString());
+                                        }}
+                                        max={Math.min(availableWallet, numericTotal)}
+                                        className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-lg font-bold text-emerald-700 outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">
+                                        Restante ({METHOD_LABELS[primaryMethod === 'wallet' ? 'card' : primaryMethod]})
+                                    </label>
+                                    <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-lg font-bold text-slate-600">
+                                        {(remainingAfterWallet > 0 ? remainingAfterWallet : 0).toFixed(2)}€
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Payment Method Selection */}
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-400 mb-3 block">
-                            Método de Pago
+                            {useCombinedPayment ? 'Método para el Restante' : 'Método de Pago'}
                         </label>
-                        <div className="grid grid-cols-4 gap-3">
+                        <div className={`grid gap-3 ${useCombinedPayment ? 'grid-cols-3' : 'grid-cols-4'}`}>
                             <button
-                                onClick={() => setPaymentMethod('cash')}
-                                className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${paymentMethod === 'cash'
+                                onClick={() => setPrimaryMethod('cash')}
+                                className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${primaryMethod === 'cash'
                                     ? 'bg-slate-900 text-white border-slate-900'
                                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
                                     }`}
@@ -203,8 +309,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 <br />Efectivo
                             </button>
                             <button
-                                onClick={() => setPaymentMethod('card')}
-                                className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${paymentMethod === 'card'
+                                onClick={() => setPrimaryMethod('card')}
+                                className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${primaryMethod === 'card'
                                     ? 'bg-slate-900 text-white border-slate-900'
                                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
                                     }`}
@@ -213,8 +319,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 <br />Tarjeta
                             </button>
                             <button
-                                onClick={() => setPaymentMethod('transfer')}
-                                className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${paymentMethod === 'transfer'
+                                onClick={() => setPrimaryMethod('transfer')}
+                                className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${primaryMethod === 'transfer'
                                     ? 'bg-slate-900 text-white border-slate-900'
                                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
                                     }`}
@@ -222,11 +328,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 <Wallet className="inline mb-1" size={18} />
                                 <br />Transfer
                             </button>
-                            {isDirectPayment && (
+                            {!useCombinedPayment && isDirectPayment && (
                                 <button
-                                    onClick={() => setPaymentMethod('wallet')}
+                                    onClick={() => setPrimaryMethod('wallet')}
                                     disabled={availableWallet <= 0}
-                                    className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${paymentMethod === 'wallet'
+                                    className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${primaryMethod === 'wallet'
                                         ? 'bg-emerald-600 text-white border-emerald-600'
                                         : availableWallet > 0 ? 'bg-white text-emerald-600 border-emerald-200 hover:border-emerald-400' : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
                                         }`}
@@ -262,7 +368,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={isProcessing || !amount}
+                        disabled={isProcessing || !totalAmount}
                         className="flex-1 bg-slate-900 text-white py-4 rounded-xl text-sm font-black uppercase shadow-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {isProcessing ? (
@@ -271,7 +377,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             isDirectPayment ? (
                                 <>
                                     <Check size={20} />
-                                    Cobrar {amount}€
+                                    Cobrar {totalAmount}€
                                 </>
                             ) : (
                                 <>

@@ -2697,6 +2697,306 @@ app.post('/api/ai/improve', async (req, res) => {
     }
 });
 
+// --- CLINICAL TREATMENT PLANS (Feature 1) ---
+
+app.get('/api/clinical-plans/:patientId', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { patientId } = req.params;
+
+        const { data: plans, error } = await supabase
+            .from('clinical_treatment_plans')
+            .select('*, steps:clinical_treatment_steps(*)')
+            .eq('patient_id', patientId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Sort steps by step_order within each plan
+        const sorted = (plans || []).map(p => ({
+            ...p,
+            steps: (p.steps || []).sort((a, b) => a.step_order - b.step_order)
+        }));
+
+        res.json(sorted);
+    } catch (e) {
+        console.error('Error fetching clinical plans:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/clinical-plans', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { patientId, name, notes, steps } = req.body;
+
+        if (!patientId) return res.status(400).json({ error: 'patientId is required' });
+
+        // 1. Create Plan
+        const planId = crypto.randomUUID();
+        const { data: plan, error: planError } = await supabase
+            .from('clinical_treatment_plans')
+            .insert([{
+                id: planId,
+                patient_id: patientId,
+                name: name || 'Plan de Tratamiento',
+                status: 'ACTIVE',
+                notes: notes || null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+        if (planError) throw planError;
+
+        // 2. Create Steps
+        if (steps && steps.length > 0) {
+            const stepsToInsert = steps.map((s, idx) => ({
+                id: crypto.randomUUID(),
+                plan_id: planId,
+                step_order: idx,
+                treatment_name: s.treatmentName || s.treatment_name,
+                tooth_id: s.toothId || s.tooth_id || null,
+                status: 'PENDIENTE',
+                notes: s.notes || null,
+                created_at: new Date().toISOString()
+            }));
+
+            const { error: stepsError } = await supabase
+                .from('clinical_treatment_steps')
+                .insert(stepsToInsert);
+
+            if (stepsError) throw stepsError;
+        }
+
+        // Return plan with steps
+        const { data: fullPlan } = await supabase
+            .from('clinical_treatment_plans')
+            .select('*, steps:clinical_treatment_steps(*)')
+            .eq('id', planId)
+            .single();
+
+        res.status(201).json(fullPlan);
+    } catch (e) {
+        console.error('Error creating clinical plan:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/clinical-plans/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { name, status, notes } = req.body;
+
+        const updates = { updated_at: new Date().toISOString() };
+        if (name !== undefined) updates.name = name;
+        if (status !== undefined) updates.status = status;
+        if (notes !== undefined) updates.notes = notes;
+
+        const { data, error } = await supabase
+            .from('clinical_treatment_plans')
+            .update(updates)
+            .eq('id', id)
+            .select('*, steps:clinical_treatment_steps(*)')
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        console.error('Error updating clinical plan:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/clinical-plans/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+
+        // Cascade delete removes steps automatically
+        const { error } = await supabase
+            .from('clinical_treatment_plans')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting clinical plan:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Clinical Plan Steps - Individual CRUD
+app.post('/api/clinical-plan-steps', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { planId, treatmentName, toothId, notes, stepOrder } = req.body;
+
+        if (!planId || !treatmentName) {
+            return res.status(400).json({ error: 'planId and treatmentName are required' });
+        }
+
+        // Get current max step_order
+        const { data: existing } = await supabase
+            .from('clinical_treatment_steps')
+            .select('step_order')
+            .eq('plan_id', planId)
+            .order('step_order', { ascending: false })
+            .limit(1);
+
+        const maxOrder = existing && existing.length > 0 ? existing[0].step_order : -1;
+
+        const { data, error } = await supabase
+            .from('clinical_treatment_steps')
+            .insert([{
+                id: crypto.randomUUID(),
+                plan_id: planId,
+                step_order: stepOrder !== undefined ? stepOrder : maxOrder + 1,
+                treatment_name: treatmentName,
+                tooth_id: toothId || null,
+                status: 'PENDIENTE',
+                notes: notes || null,
+                created_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (e) {
+        console.error('Error creating clinical step:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/clinical-plan-steps/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { id } = req.params;
+        const { status, stepOrder, treatmentName, notes, toothId } = req.body;
+
+        const updates = {};
+        if (status !== undefined) {
+            updates.status = status;
+            if (status === 'COMPLETADO') updates.completed_at = new Date().toISOString();
+            else updates.completed_at = null;
+        }
+        if (stepOrder !== undefined) updates.step_order = stepOrder;
+        if (treatmentName !== undefined) updates.treatment_name = treatmentName;
+        if (notes !== undefined) updates.notes = notes;
+        if (toothId !== undefined) updates.tooth_id = toothId;
+
+        const { data, error } = await supabase
+            .from('clinical_treatment_steps')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        console.error('Error updating clinical step:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/clinical-plan-steps/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { error } = await supabase
+            .from('clinical_treatment_steps')
+            .delete()
+            .eq('id', req.params.id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting clinical step:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- AGENDA CLOSURES (Feature 4) ---
+
+app.get('/api/agenda-closures', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { date, doctorId } = req.query;
+
+        let query = supabase.from('agenda_closures').select('*').order('date', { ascending: false });
+
+        if (date) query = query.eq('date', date);
+        if (doctorId) query = query.or(`doctor_id.eq.${doctorId},doctor_id.is.null`);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        console.error('Error fetching agenda closures:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/agenda-closures', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { date, doctorId, reason, createdBy } = req.body;
+
+        if (!date) return res.status(400).json({ error: 'date is required' });
+
+        // Check if already closed
+        let checkQuery = supabase.from('agenda_closures').select('id').eq('date', date);
+        if (doctorId) {
+            checkQuery = checkQuery.eq('doctor_id', doctorId);
+        } else {
+            checkQuery = checkQuery.is('doctor_id', null);
+        }
+        const { data: existing } = await checkQuery;
+        if (existing && existing.length > 0) {
+            return res.status(409).json({ error: 'This agenda is already closed for this date' });
+        }
+
+        const { data, error } = await supabase
+            .from('agenda_closures')
+            .insert([{
+                id: crypto.randomUUID(),
+                date,
+                doctor_id: doctorId || null,
+                reason: reason || null,
+                created_by: createdBy || null,
+                created_at: new Date().toISOString()
+            }])
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (e) {
+        console.error('Error creating agenda closure:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/agenda-closures/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { error } = await supabase
+            .from('agenda_closures')
+            .delete()
+            .eq('id', req.params.id);
+
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting agenda closure:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Note: Using regex pattern for Express 5 compatibility
 app.get(/^\/(?!api).*/, (req, res) => {
     // Check if file exists, if not send error (debugging)

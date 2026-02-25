@@ -123,12 +123,13 @@ export interface Invoice {
 export interface Payment {
   id: string;
   patientId: string;
-  budgetId?: string; // Si es cobro de presupuesto
+  budgetId?: string;
   amount: number;
   method: 'cash' | 'card' | 'wallet' | 'transfer';
-  type: 'DIRECT_CHARGE' | 'ADVANCE_PAYMENT'; // Cobro directo o pago a cuenta
+  type: 'DIRECT_CHARGE' | 'ADVANCE_PAYMENT';
+  paymentBreakdown?: { method: string; amount: number }[];
   createdAt: string;
-  invoiceId?: string; // Factura generada automáticamente
+  invoiceId?: string;
   notes?: string;
 }
 
@@ -151,17 +152,18 @@ export interface Appointment {
   doctorId: string;
   patientId: string;
   date: string;
-  dayIdx?: number; // Nuevo campo para diferenciar días en la vista semanal
+  dayIdx?: number;
   time: string;
-  duration?: number; // Duración en minutos (15, 30, 45, 60, 90, 120)
-  observations?: string; // Notas/observaciones de la cita
-  status?: string; // Scheduled, Completed, Canceled, NoShow
-  paid?: boolean; // Para diferenciación de colores (verde=pagada, naranja=no pagada)
+  duration?: number;
+  observations?: string;
+  visitDetails?: string; // Detalles de la visita (visible en agenda)
+  status?: string;
+  paid?: boolean;
   treatment?: string;
   treatmentId?: string;
-  budgetId?: string; // Optional link to a budget
-  budgetItemId?: string; // Concepto específico del presupuesto
-  amount?: number; // Importe editable del tratamiento/concepto
+  budgetId?: string;
+  budgetItemId?: string;
+  amount?: number;
 }
 
 export interface InventoryItem {
@@ -225,4 +227,38 @@ export interface DocumentTemplate {
   date: string;
   size: string;
   type: 'docx' | 'pdf';
+}
+
+// --- Clinical Treatment Plans ---
+export interface ClinicalTreatmentStep {
+  id: string;
+  planId: string;
+  stepOrder: number;
+  treatmentName: string;
+  toothId?: number;
+  status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO';
+  notes?: string;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface ClinicalTreatmentPlan {
+  id: string;
+  patientId: string;
+  name: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  notes?: string;
+  steps: ClinicalTreatmentStep[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Agenda Closures ---
+export interface AgendaClosure {
+  id: string;
+  date: string;
+  doctorId?: string;
+  reason?: string;
+  createdBy?: string;
+  createdAt: string;
 }

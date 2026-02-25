@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-    ChevronLeft, ChevronRight, Search, Plus, Calendar, User, Clock, CheckCircle2, ExternalLink
+    ChevronLeft, ChevronRight, Search, Plus, Calendar, User, Clock, CheckCircle2, ExternalLink,
+    Lock, Unlock, Eye, EyeOff, Save, X, AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
-import { Appointment, Doctor } from '../../types';
+import { Appointment, Doctor, AgendaClosure } from '../../types';
 
 interface DoctorSchedule {
     id?: string;
@@ -55,6 +56,25 @@ const Agenda: React.FC = () => {
     const [bookingBudgetItemId, setBookingBudgetItemId] = useState<string>('');
     const [selectedBudgetItems, setSelectedBudgetItems] = useState<any[]>([]);
 
+    // Feature 4: Agenda Closures
+    const [agendaClosures, setAgendaClosures] = useState<any[]>([]);
+    const [showClosureModal, setShowClosureModal] = useState(false);
+    const [closureReason, setClosureReason] = useState('');
+    const [closureDoctorId, setClosureDoctorId] = useState<string>('');
+
+    // Feature 5: Doctor on-duty filter
+    const [showOnDutyOnly, setShowOnDutyOnly] = useState(false);
+
+    // Feature 6: Mini calendar
+    const [showMiniCal, setShowMiniCal] = useState(false);
+    const [miniCalMonth, setMiniCalMonth] = useState(new Date());
+
+    // Feature 7: Visit details editing
+    const [bookingVisitDetails, setBookingVisitDetails] = useState('');
+
+    // Feature 8: Editable duration for existing appointments
+    const [isEditingAppt, setIsEditingAppt] = useState(false);
+
     // Load Doctor Schedules from Supabase
     useEffect(() => {
         const loadSchedules = async () => {
@@ -74,7 +94,7 @@ const Agenda: React.FC = () => {
             }
         };
         loadSchedules();
-        
+
         // Reload schedules every 5 seconds to catch changes from Settings
         const interval = setInterval(loadSchedules, 5000);
         return () => clearInterval(interval);
@@ -90,6 +110,78 @@ const Agenda: React.FC = () => {
             setPatientBudgets([]);
         }
     }, [bookingPatientId]);
+
+    // Load Agenda Closures (Feature 4)
+    useEffect(() => {
+        const loadClosures = async () => {
+            try {
+                const data = await api.agendaClosures.getAll();
+                setAgendaClosures(data || []);
+            } catch (err) {
+                console.error('Error loading closures:', err);
+            }
+        };
+        loadClosures();
+    }, [api]);
+
+    const isDateClosedForDoctor = (date: Date, doctorId?: string): boolean => {
+        const dateStr = date.toISOString().split('T')[0];
+        return agendaClosures.some(c => {
+            const cDate = typeof c.date === 'string' ? c.date.split('T')[0] : '';
+            if (cDate !== dateStr) return false;
+            if (!c.doctor_id) return true; // All doctors closed
+            return doctorId ? c.doctor_id === doctorId : false;
+        });
+    };
+
+    const getClosureForDate = (date: Date, doctorId?: string) => {
+        const dateStr = date.toISOString().split('T')[0];
+        return agendaClosures.find(c => {
+            const cDate = typeof c.date === 'string' ? c.date.split('T')[0] : '';
+            if (cDate !== dateStr) return false;
+            if (!c.doctor_id) return true;
+            return doctorId ? c.doctor_id === doctorId : false;
+        });
+    };
+
+    const handleCloseAgenda = async () => {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        try {
+            await api.agendaClosures.create({
+                date: dateStr,
+                doctorId: closureDoctorId || undefined,
+                reason: closureReason || 'Agenda cerrada'
+            });
+            const data = await api.agendaClosures.getAll();
+            setAgendaClosures(data || []);
+            setShowClosureModal(false);
+            setClosureReason('');
+            setClosureDoctorId('');
+            alert('✅ Agenda cerrada correctamente');
+        } catch (e: any) {
+            alert('Error: ' + (e.message || e));
+        }
+    };
+
+    const handleOpenAgenda = async (closureId: string) => {
+        try {
+            await api.agendaClosures.delete(closureId);
+            const data = await api.agendaClosures.getAll();
+            setAgendaClosures(data || []);
+            alert('✅ Agenda abierta correctamente');
+        } catch (e: any) {
+            alert('Error: ' + (e.message || e));
+        }
+    };
+
+    // Feature 5: Filter doctors working today
+    const doctorsOnDuty = useMemo(() => {
+        if (!showOnDutyOnly) return doctors;
+        return doctors.filter(doc => {
+            const slots = getAvailableTimeSlots(currentDate, doc.id);
+            return slots.length > 0 && !isDateClosedForDoctor(currentDate, doc.id);
+        });
+    }, [doctors, showOnDutyOnly, currentDate, doctorSchedules, agendaClosures]);
 
     // Helpers
     const getWeekRange = (d: Date) => {
@@ -239,6 +331,8 @@ const Agenda: React.FC = () => {
         setBookingPrice((appt as any).amount || 0);
         setBookingDuration(appt.duration || 30);
         setBookingObservation(appt.observations || '');
+        setBookingVisitDetails((appt as any).visitDetails || '');
+        setIsEditingAppt(false);
 
         // Load budget items if a budget is linked
         if ((appt as any).budgetId) {
@@ -308,6 +402,7 @@ const Agenda: React.FC = () => {
             budgetItemIds: selectedBudgetItems.length > 0 ? selectedBudgetItems.map(item => item.id || item._idx) : null,
             amount: bookingPrice || null,
             observations: bookingObservation || null,
+            visitDetails: bookingVisitDetails || null,
             status: 'Scheduled',
             duration: bookingDuration
         };
@@ -324,6 +419,7 @@ const Agenda: React.FC = () => {
             setBookingBudgetItemId('');
             setSelectedBudgetItems([]);
             setBookingObservation('');
+            setBookingVisitDetails('');
             setBookingPrice(0);
             setBookingDuration(30);
             alert("✅ Cita guardada correctamente.");
@@ -377,6 +473,160 @@ const Agenda: React.FC = () => {
                 </div>
             </div>
 
+            {/* MINI CALENDAR WIDGET (Feature 6) */}
+            {showMiniCal && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-lg p-5 animate-in slide-in-from-top-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <button onClick={() => { const m = new Date(miniCalMonth); m.setMonth(m.getMonth() - 1); setMiniCalMonth(m); }} className="p-1 hover:bg-slate-50 rounded-lg">
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-sm font-black text-slate-700 uppercase">
+                            {miniCalMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                        </span>
+                        <button onClick={() => { const m = new Date(miniCalMonth); m.setMonth(m.getMonth() + 1); setMiniCalMonth(m); }} className="p-1 hover:bg-slate-50 rounded-lg">
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                        {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => (
+                            <div key={d} className="text-[10px] font-bold text-slate-400 py-1">{d}</div>
+                        ))}
+                        {(() => {
+                            const year = miniCalMonth.getFullYear();
+                            const month = miniCalMonth.getMonth();
+                            const firstDay = new Date(year, month, 1).getDay();
+                            const daysInMonth = new Date(year, month + 1, 0).getDate();
+                            const offset = firstDay === 0 ? 6 : firstDay - 1;
+                            const cells = [];
+                            for (let i = 0; i < offset; i++) cells.push(<div key={`e-${i}`} />);
+                            const today = new Date();
+                            for (let d = 1; d <= daysInMonth; d++) {
+                                const cellDate = new Date(year, month, d);
+                                const isToday = cellDate.toDateString() === today.toDateString();
+                                const isSelected = cellDate.toDateString() === currentDate.toDateString();
+                                cells.push(
+                                    <button
+                                        key={d}
+                                        onClick={() => {
+                                            setCurrentDate(cellDate);
+                                            setViewMode('daily');
+                                            setShowMiniCal(false);
+                                        }}
+                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${isSelected ? 'bg-slate-900 text-white' :
+                                                isToday ? 'bg-blue-100 text-blue-700' :
+                                                    'text-slate-600 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        {d}
+                                    </button>
+                                );
+                            }
+                            return cells;
+                        })()}
+                    </div>
+                </div>
+            )}
+
+            {/* CONTROLS BAR (Features 4, 5, 6) */}
+            <div className="flex items-center gap-3 flex-wrap">
+                {/* Mini Calendar Toggle (Feature 6) */}
+                <button
+                    onClick={() => { setShowMiniCal(!showMiniCal); setMiniCalMonth(new Date(currentDate)); }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${showMiniCal ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                        }`}
+                >
+                    <Calendar size={14} /> Calendario
+                </button>
+
+                {/* Doctor On-Duty Filter (Feature 5) */}
+                {viewMode === 'daily' && selectedDoctorId === 'all' && (
+                    <button
+                        onClick={() => setShowOnDutyOnly(!showOnDutyOnly)}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${showOnDutyOnly ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                            }`}
+                    >
+                        {showOnDutyOnly ? <Eye size={14} /> : <EyeOff size={14} />}
+                        {showOnDutyOnly ? 'Solo en turno' : 'Mostrar todos'}
+                    </button>
+                )}
+
+                {/* Agenda Closure Controls (Feature 4) */}
+                {(() => {
+                    const closure = getClosureForDate(currentDate);
+                    if (closure) {
+                        return (
+                            <button
+                                onClick={() => handleOpenAgenda(closure.id)}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-all"
+                            >
+                                <Unlock size={14} /> Abrir Agenda
+                            </button>
+                        );
+                    }
+                    return (
+                        <button
+                            onClick={() => setShowClosureModal(true)}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:border-red-300 hover:text-red-600 transition-all"
+                        >
+                            <Lock size={14} /> Cerrar Agenda
+                        </button>
+                    );
+                })()}
+
+                {/* Day closed banner */}
+                {isDateClosedForDoctor(currentDate) && (
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold border border-red-200">
+                        <AlertTriangle size={14} /> AGENDA CERRADA
+                        {getClosureForDate(currentDate)?.reason && (
+                            <span className="text-red-500"> — {getClosureForDate(currentDate)?.reason}</span>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Closure Modal (Feature 4) */}
+            {showClosureModal && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[90] flex items-center justify-center p-6">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 space-y-5">
+                        <h3 className="text-xl font-black text-slate-900">Cerrar Agenda</h3>
+                        <p className="text-xs text-slate-400">
+                            Fecha: <strong>{currentDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}</strong>
+                        </p>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Doctor (vacío = todos)</label>
+                            <select
+                                value={closureDoctorId}
+                                onChange={(e) => setClosureDoctorId(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                            >
+                                <option value="">Todos los doctores</option>
+                                {doctors.map(d => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Motivo (opcional)</label>
+                            <input
+                                type="text"
+                                value={closureReason}
+                                onChange={(e) => setClosureReason(e.target.value)}
+                                placeholder="Ej: Festivo, vacaciones..."
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowClosureModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-500">
+                                Cancelar
+                            </button>
+                            <button onClick={handleCloseAgenda} className="flex-1 bg-red-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-red-700 transition-colors">
+                                Cerrar Agenda
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* CALENDAR GRID (COLUMN BASED) */}
             <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden relative">
                 <div className="overflow-x-auto pb-4">
@@ -385,17 +635,17 @@ const Agenda: React.FC = () => {
                         <div className="w-14 flex-shrink-0 pr-4">
                             <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
                             {TIME_SLOTS.map((time, idx) => {
-                                    const hour = parseInt(time.split(':')[0], 10);
-                                    // Only render on the start of each hour (every 4 slots)
-                                    if (idx % 4 === 0) {
-                                        return (
-                                            <div key={`time-label-${time}`} className="h-48 flex items-center justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300">
-                                                {hour}
-                                            </div>
-                                        );
-                                    }
-                                    return null;
-                                })}
+                                const hour = parseInt(time.split(':')[0], 10);
+                                // Only render on the start of each hour (every 4 slots)
+                                if (idx % 4 === 0) {
+                                    return (
+                                        <div key={`time-label-${time}`} className="h-48 flex items-center justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300">
+                                            {hour}
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })}
                         </div>
 
                         {/* SCHEDULER GRID */}
@@ -405,8 +655,9 @@ const Agenda: React.FC = () => {
                                 <div className="flex h-12 mb-4">
                                     {viewMode === 'daily' ? (
                                         selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
-                                            doctors.map(doc => (
-                                                <div key={doc.id} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-900 uppercase tracking-wide flex items-center justify-center">
+                                            doctorsOnDuty.map(doc => (
+                                                <div key={doc.id} className={`flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide flex items-center justify-center ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
+                                                    }`}>
                                                     {doc.name}
                                                 </div>
                                             ))
@@ -439,7 +690,7 @@ const Agenda: React.FC = () => {
                                             if (availableSlots.length === 0) {
                                                 return (
                                                     <div style={{ height: `${TIME_SLOTS.length * SLOT_H}px` }}
-                                                         className="flex items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                                        className="flex items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                                                         <div className="text-center">
                                                             <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-2" />
                                                             <p className="text-sm font-bold text-slate-400">Día libre</p>
@@ -471,8 +722,8 @@ const Agenda: React.FC = () => {
                                                 if (item.kind === 'block') {
                                                     return (
                                                         <div key={`blk-${idx}`}
-                                                             style={{ height: `${item.count * SLOT_H}px` }}
-                                                             className="flex relative border-t border-slate-100">
+                                                            style={{ height: `${item.count * SLOT_H}px` }}
+                                                            className="flex relative border-t border-slate-100">
                                                             <div className="flex-1 bg-slate-50/80 flex items-center justify-center">
                                                                 <span className="text-xs text-slate-300 font-bold uppercase tracking-widest select-none">
                                                                     Sin consulta
@@ -501,23 +752,25 @@ const Agenda: React.FC = () => {
 
                                         // ── CASE B: Daily + all doctors (admin multi-column) ──
                                         if (viewMode === 'daily' && selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION')) {
+                                            const activeDoctors = doctorsOnDuty;
                                             return TIME_SLOTS.map(time => {
                                                 const hourStart = time.endsWith(':00');
                                                 return (
                                                     <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
-                                                        {doctors.map(doc => {
+                                                        {activeDoctors.map(doc => {
                                                             const ok = getAvailableTimeSlots(currentDate, doc.id).includes(time);
+                                                            const closed = isDateClosedForDoctor(currentDate, doc.id);
                                                             return (
                                                                 <div key={`${doc.id}-${time}`}
-                                                                     className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
-                                                                     onClick={() => {
-                                                                         if (!ok) return;
-                                                                         setActiveSlot({ time, dayIdx: 0 });
-                                                                         setSelectedDoctorId(doc.id);
-                                                                         setBookingDoctorId(doc.id);
-                                                                         setSelectedAppt(null);
-                                                                         setIsAppointmentModalOpen(true);
-                                                                     }}
+                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && !closed ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                    onClick={() => {
+                                                                        if (!ok || closed) return;
+                                                                        setActiveSlot({ time, dayIdx: 0 });
+                                                                        setSelectedDoctorId(doc.id);
+                                                                        setBookingDoctorId(doc.id);
+                                                                        setSelectedAppt(null);
+                                                                        setIsAppointmentModalOpen(true);
+                                                                    }}
                                                                 />
                                                             );
                                                         })}
@@ -533,12 +786,12 @@ const Agenda: React.FC = () => {
                                                 return (
                                                     <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
                                                         <div className="flex-1 h-full hover:bg-slate-50/50 cursor-pointer transition-colors z-0"
-                                                             onClick={() => {
-                                                                 setActiveSlot({ time, dayIdx: 0 });
-                                                                 setBookingDoctorId('');
-                                                                 setSelectedAppt(null);
-                                                                 setIsAppointmentModalOpen(true);
-                                                             }}
+                                                            onClick={() => {
+                                                                setActiveSlot({ time, dayIdx: 0 });
+                                                                setBookingDoctorId('');
+                                                                setSelectedAppt(null);
+                                                                setIsAppointmentModalOpen(true);
+                                                            }}
                                                         />
                                                     </div>
                                                 );
@@ -560,14 +813,14 @@ const Agenda: React.FC = () => {
                                                             : true;
                                                         return (
                                                             <div key={`w-${dayIdx}-${time}`}
-                                                                 className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
-                                                                 onClick={() => {
-                                                                     if (!ok) return;
-                                                                     setActiveSlot({ time, dayIdx });
-                                                                     setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
-                                                                     setSelectedAppt(null);
-                                                                     setIsAppointmentModalOpen(true);
-                                                                 }}
+                                                                className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                onClick={() => {
+                                                                    if (!ok) return;
+                                                                    setActiveSlot({ time, dayIdx });
+                                                                    setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
+                                                                    setSelectedAppt(null);
+                                                                    setIsAppointmentModalOpen(true);
+                                                                }}
                                                             />
                                                         );
                                                     })}
@@ -605,7 +858,7 @@ const Agenda: React.FC = () => {
                                             if (viewMode === 'daily') {
                                                 const dateStr = currentDate.toISOString().split('T')[0];
                                                 if (selectedDoctorId === 'all') {
-                                                    doctors.forEach(doc => {
+                                                    doctorsOnDuty.forEach(doc => {
                                                         columns.push(appointments.filter(a =>
                                                             (a.date === dateStr || a.date.startsWith(dateStr)) && a.doctorId === doc.id
                                                         ));
@@ -678,6 +931,12 @@ const Agenda: React.FC = () => {
                                                                     {appt.duration && appt.duration >= 60 && (appt as any).observation && (
                                                                         <p className="text-[9px] opacity-60 mt-1 line-clamp-2 italic leading-tight">
                                                                             "{(appt as any).observation}"
+                                                                        </p>
+                                                                    )}
+                                                                    {/* Feature 7: Visit Details visible on card */}
+                                                                    {(appt as any).visitDetails && (
+                                                                        <p className="text-[9px] text-purple-500 opacity-80 mt-0.5 line-clamp-1 italic">
+                                                                            📋 {(appt as any).visitDetails}
                                                                         </p>
                                                                     )}
                                                                 </div>
@@ -912,7 +1171,7 @@ const Agenda: React.FC = () => {
                                         className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
                                         value={bookingDuration}
                                         onChange={e => setBookingDuration(Number(e.target.value))}
-                                        disabled={!!selectedAppt}
+                                        disabled={!!selectedAppt && !isEditingAppt}
                                     >
                                         <option value={15}>15 Min</option>
                                         <option value={30}>30 Min</option>
@@ -927,19 +1186,61 @@ const Agenda: React.FC = () => {
                             <div>
                                 <label className="text-xs font-bold uppercase text-slate-400">Observaciones</label>
                                 <textarea
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-24 resize-none"
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-20 resize-none"
                                     placeholder="Notas adicionales..."
                                     value={bookingObservation}
                                     onChange={e => setBookingObservation(e.target.value)}
-                                    disabled={!!selectedAppt}
+                                    disabled={!!selectedAppt && !isEditingAppt}
+                                />
+                            </div>
+
+                            {/* Feature 7: Visit Details Field */}
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-400">Detalles de la Visita</label>
+                                <textarea
+                                    className="w-full bg-purple-50/50 p-3 rounded-xl border border-purple-200 mt-2 outline-none font-bold text-purple-700 h-16 resize-none"
+                                    placeholder="Pago pendiente, alergias, indicaciones especiales..."
+                                    value={bookingVisitDetails}
+                                    onChange={e => setBookingVisitDetails(e.target.value)}
+                                    disabled={!!selectedAppt && !isEditingAppt}
                                 />
                             </div>
 
                         </div>{/* end scrollable area */}
                         <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
-                            <button onClick={() => setIsAppointmentModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">
+                            <button onClick={() => { setIsAppointmentModalOpen(false); setIsEditingAppt(false); }} className="flex-1 py-3 font-bold text-slate-500">
                                 {selectedAppt ? 'Cerrar' : 'Cancelar'}
                             </button>
+                            {selectedAppt && !isEditingAppt && (
+                                <button
+                                    onClick={() => setIsEditingAppt(true)}
+                                    className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2"
+                                >
+                                    ✏️ Editar
+                                </button>
+                            )}
+                            {selectedAppt && isEditingAppt && (
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await api.appointments.update(selectedAppt.id, {
+                                                duration: bookingDuration,
+                                                observations: bookingObservation,
+                                                visitDetails: bookingVisitDetails
+                                            });
+                                            // Refresh appointments
+                                            const appts = await api.appointments.getAll();
+                                            // Use context setter
+                                            window.location.reload(); // Simple refresh
+                                        } catch (e: any) {
+                                            alert('Error: ' + (e.message || e));
+                                        }
+                                    }}
+                                    className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2"
+                                >
+                                    <Save size={16} /> Guardar Cambios
+                                </button>
+                            )}
                             {!selectedAppt && (
                                 <button onClick={handleBooking} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg">
                                     Confirmar

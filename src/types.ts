@@ -37,12 +37,16 @@ export interface Appointment {
     id: string;
     patientId: string;
     doctorId: string;
-    date: string; // ISO string
+    date: string;
     time: string;
-    duration?: number; // Minutes
+    duration?: number;
     treatment: string;
     budgetId?: string;
+    observations?: string;
+    visitDetails?: string;
     status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'PRESUPUESTADO' | 'Scheduled';
+    paid?: boolean;
+    amount?: number;
 }
 
 export interface Invoice {
@@ -143,9 +147,44 @@ export interface Payment {
     id: string;
     patientId: string;
     amount: number;
-    method: 'card' | 'cash' | 'transfer' | 'other';
-    type: 'INVOICE' | 'ADVANCE_PAYMENT' | 'PAGO_A_CUENTA' | 'OTHER';
+    method: 'card' | 'cash' | 'transfer' | 'wallet' | 'other';
+    type: 'INVOICE' | 'ADVANCE_PAYMENT' | 'PAGO_A_CUENTA' | 'DIRECT_CHARGE' | 'OTHER';
+    paymentBreakdown?: { method: string; amount: number }[];
     invoiceId?: string;
     createdAt: string;
     notes?: string;
+}
+
+// --- Clinical Treatment Plans ---
+export interface ClinicalTreatmentStep {
+    id: string;
+    planId: string;
+    stepOrder: number;
+    treatmentName: string;
+    toothId?: number;
+    status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO';
+    notes?: string;
+    completedAt?: string;
+    createdAt: string;
+}
+
+export interface ClinicalTreatmentPlan {
+    id: string;
+    patientId: string;
+    name: string;
+    status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+    notes?: string;
+    steps: ClinicalTreatmentStep[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+// --- Agenda Closures ---
+export interface AgendaClosure {
+    id: string;
+    date: string;
+    doctorId?: string;
+    reason?: string;
+    createdBy?: string;
+    createdAt: string;
 }
