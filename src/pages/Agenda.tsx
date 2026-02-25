@@ -63,7 +63,7 @@ const Agenda: React.FC = () => {
     const [closureDoctorId, setClosureDoctorId] = useState<string>('');
 
     // Feature 5: Doctor on-duty filter
-    const [showOnDutyOnly, setShowOnDutyOnly] = useState(false);
+    const [showOnDutyOnly, setShowOnDutyOnly] = useState(true);
 
     // Feature 6: Mini calendar
     const [showMiniCal, setShowMiniCal] = useState(false);
@@ -513,8 +513,8 @@ const Agenda: React.FC = () => {
                                             setShowMiniCal(false);
                                         }}
                                         className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${isSelected ? 'bg-slate-900 text-white' :
-                                                isToday ? 'bg-blue-100 text-blue-700' :
-                                                    'text-slate-600 hover:bg-slate-50'
+                                            isToday ? 'bg-blue-100 text-blue-700' :
+                                                'text-slate-600 hover:bg-slate-50'
                                             }`}
                                     >
                                         {d}
@@ -539,14 +539,14 @@ const Agenda: React.FC = () => {
                 </button>
 
                 {/* Doctor On-Duty Filter (Feature 5) */}
-                {viewMode === 'daily' && selectedDoctorId === 'all' && (
+                {viewMode === 'daily' && (
                     <button
                         onClick={() => setShowOnDutyOnly(!showOnDutyOnly)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${showOnDutyOnly ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all border ${showOnDutyOnly ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
                             }`}
                     >
                         {showOnDutyOnly ? <Eye size={14} /> : <EyeOff size={14} />}
-                        {showOnDutyOnly ? 'Solo en turno' : 'Mostrar todos'}
+                        {showOnDutyOnly ? '✅ Solo doctores en turno' : 'Ver todos los doctores'}
                     </button>
                 )}
 

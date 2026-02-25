@@ -192,8 +192,11 @@ model Payment {
   budgetId          String?  // Si es cobro de un presupuesto
   amount            Float
   method            String   // "cash", "card", "wallet", "transfer"
-  type              String   // "DIRECT_CHARGE" (cobro directo) o "ADVANCE_PAYMENT" (pago a cuenta)
+  type              String   // "DIRECT_CHARGE", "ADVANCE_PAYMENT", "TRANSFER"
   paymentBreakdown  String?  // JSON: [{method, amount}] for combined payments
+  doctorId          String?  // Doctor assigned (for commissions)
+  sourcePaymentId   String?  // Reference to original advance payment (for transfers)
+  treatmentId       String?  // Treatment linked to this payment
   createdAt         DateTime @default(now())
   invoiceId         String?  @unique // Factura generada al cobrar
   invoice           Invoice? @relation(fields: [invoiceId], references: [id])

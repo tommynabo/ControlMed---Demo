@@ -154,9 +154,39 @@ const Patients: React.FC = () => {
         }
     }, [selectedPatient, patientTab]);
 
-    const handlePrintBudget = (budget: any) => {
+    const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
+            // Fetch clinic data dynamically from Settings > Clínica
+            let clinicName = 'Clínica Dental';
+            let clinicSubtitle = '';
+            let clinicCIF = '';
+            let clinicAddress = '';
+            let clinicPhone = '';
+            let clinicEmail = '';
+            try {
+                const [clinicInfo, addresses, billing] = await Promise.all([
+                    api.clinic.getInfo(),
+                    api.clinic.getAddresses(),
+                    api.clinic.getBillingInfo()
+                ]);
+                if (clinicInfo) {
+                    clinicName = clinicInfo.name || clinicName;
+                    clinicEmail = clinicInfo.email || '';
+                    clinicPhone = clinicInfo.phone || '';
+                }
+                if (billing) {
+                    clinicCIF = billing.cif || billing.tax_id || '';
+                    clinicSubtitle = billing.business_name || billing.razon_social || '';
+                }
+                if (addresses && addresses.length > 0) {
+                    const addr = addresses[0];
+                    clinicAddress = [addr.street, addr.city, addr.postal_code, addr.country].filter(Boolean).join(', ');
+                }
+            } catch (err) {
+                console.warn('Could not load clinic info for print, using defaults');
+            }
+
             const total = budget.items?.reduce((sum: number, item: any) => sum + ((Number(item.price) || 0) * (item.quantity || 1)), 0) || 0;
             const statusLabel = budget.status === 'ACCEPTED' ? 'ACEPTADO' : budget.status === 'REJECTED' ? 'RECHAZADO' : budget.status === 'CONVERTED' ? 'CONVERTIDO' : 'PENDIENTE';
             const statusColor = budget.status === 'ACCEPTED' ? '#16a34a' : budget.status === 'REJECTED' ? '#dc2626' : '#94a3b8';
@@ -191,14 +221,14 @@ const Patients: React.FC = () => {
         <!-- HEADER -->
         <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;border-bottom:3px solid #0f172a">
             <div>
-                <h1 style="font-size:28px;font-weight:900;letter-spacing:-0.5px;color:#0f172a">CLINICA DENTAL</h1>
-                <p style="font-size:13px;font-weight:600;color:#64748b;margin-top:4px">Dr. Martin & Asociados</p>
-                <p style="font-size:11px;color:#94a3b8;margin-top:2px">CIF: B-12345678</p>
+                <h1 style="font-size:28px;font-weight:900;letter-spacing:-0.5px;color:#0f172a">${clinicName.toUpperCase()}</h1>
+                <p style="font-size:13px;font-weight:600;color:#64748b;margin-top:4px">${clinicSubtitle || ''}</p>
+                ${clinicCIF ? `<p style="font-size:11px;color:#94a3b8;margin-top:2px">CIF: ${clinicCIF}</p>` : ''}
             </div>
             <div style="text-align:right">
-                <p style="font-size:11px;color:#94a3b8;line-height:1.6">C/ Ejemplo 123, 28001 Madrid</p>
-                <p style="font-size:11px;color:#94a3b8;line-height:1.6">Tel: 91 123 45 67</p>
-                <p style="font-size:11px;color:#94a3b8;line-height:1.6">info@clinicadental.es</p>
+                ${clinicAddress ? `<p style="font-size:11px;color:#94a3b8;line-height:1.6">${clinicAddress}</p>` : ''}
+                ${clinicPhone ? `<p style="font-size:11px;color:#94a3b8;line-height:1.6">Tel: ${clinicPhone}</p>` : ''}
+                ${clinicEmail ? `<p style="font-size:11px;color:#94a3b8;line-height:1.6">${clinicEmail}</p>` : ''}
             </div>
         </div>
 
