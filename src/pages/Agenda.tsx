@@ -174,15 +174,6 @@ const Agenda: React.FC = () => {
         }
     };
 
-    // Feature 5: Filter doctors working today
-    const doctorsOnDuty = useMemo(() => {
-        if (!showOnDutyOnly) return doctors;
-        return doctors.filter(doc => {
-            const slots = getAvailableTimeSlots(currentDate, doc.id);
-            return slots.length > 0 && !isDateClosedForDoctor(currentDate, doc.id);
-        });
-    }, [doctors, showOnDutyOnly, currentDate, doctorSchedules, agendaClosures]);
-
     // Helpers
     const getWeekRange = (d: Date) => {
         const day = d.getDay();
@@ -271,6 +262,16 @@ const Agenda: React.FC = () => {
             });
         });
     };
+
+    // Feature 5: Filter doctors working today (must be AFTER getAvailableTimeSlots)
+    const doctorsOnDuty = useMemo(() => {
+        if (!showOnDutyOnly) return doctors;
+        return doctors.filter(doc => {
+            const slots = getAvailableTimeSlots(currentDate, doc.id);
+            return slots.length > 0 && !isDateClosedForDoctor(currentDate, doc.id);
+        });
+    }, [doctors, showOnDutyOnly, currentDate, doctorSchedules, agendaClosures]);
+
 
     const filteredAppointments = useMemo(() => {
         return appointments.filter(a => {
