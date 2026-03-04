@@ -94,6 +94,10 @@ async function processQuery(userQuery, userInfo = {}, extraContext = {}) {
             liquidations = liqData || [];
         }
 
+        // Fetch available doctors for context
+        const { data: availableDoctors } = await supabase.from('Doctor').select('id, name, specialization').order('name');
+        const doctorsList = (availableDoctors || []).map(d => `${d.name} (${d.specialization || 'General'})`).join(', ');
+
         const constraints = canModify
             ? `USER ROLE: ${userRole}. Tienes permiso COMPLETO para modificar fichas de pacientes, odontogramas, crear presupuestos, y añadir historias clínicas.`
             : "USER ROLE: RECEPTION. Acceso de solo lectura. No puedes modificar datos.";
@@ -101,6 +105,7 @@ async function processQuery(userQuery, userInfo = {}, extraContext = {}) {
         const context = `
         CONTEXTO DEL SISTEMA (Rol: ${userRole}):
         - Fecha actual: ${new Date().toLocaleDateString('es-ES')}
+        - Hora actual: ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
         
         ${activePatient ? `
         ======== PACIENTE ACTIVO (CONFIRMADO) ========
@@ -116,15 +121,34 @@ async function processQuery(userQuery, userInfo = {}, extraContext = {}) {
         ` : '- No hay paciente seleccionado explícitamente.'}
 
         - Otros pacientes en sistema: ${JSON.stringify((patients || []).slice(0, 5).map(p => ({ name: p.name, dni: p.dni })))}
+        - Doctores disponibles: ${doctorsList}
         - Catálogo de tratamientos: ${JSON.stringify(treatments || [])}
+        - Citas próximas: ${JSON.stringify((appointments || []).slice(0, 5).map(a => ({ date: a.date, time: a.time, status: a.status })))}
         
         ${constraints}
 
         Eres ControlMed AI, el asistente inteligente de la clínica dental.
         
-        ⚠️ REGLA CRÍTICA - SIEMPRE USA HERRAMIENTAS:
-        Cuando el usuario mencione CUALQUIER acción con un paciente (añadir, crear, marcar, registrar, modificar, actualizar, etc.), 
-        DEBES usar la herramienta correspondiente. NUNCA respondas "no encontré al paciente" sin antes intentar usar la herramienta.
+        ⚠️⚠️⚠️ REGLA MÁS IMPORTANTE — RECOPILAR INFORMACIÓN ANTES DE ACTUAR:
+        NUNCA ejecutes una herramienta/acción sin tener TODA la información necesaria.
+        Si el usuario pide crear una cita, presupuesto, receta, o cualquier acción, PRIMERO debes preguntar
+        por TODOS los campos que faltan. Solo cuando tengas TODOS los datos, ejecuta la herramienta.
+        
+        CAMPOS OBLIGATORIOS POR ACCIÓN:
+        - **Crear cita (create_appointment)**: nombre del paciente, fecha (YYYY-MM-DD), hora (HH:MM), doctor asignado, duración (15/30/45/60/90/120 min), tipo de tratamiento/motivo
+        - **Crear presupuesto (create_budget)**: nombre del paciente, lista de tratamientos con nombre, precio unitario, cantidad, diente (si aplica)
+        - **Crear receta (create_prescription)**: nombre del paciente, medicamento completo (principio activo), dosis, frecuencia/posología, duración del tratamiento, instrucciones especiales
+        - **Nota clínica (add_clinical_record)**: nombre del paciente, tratamiento realizado, observación detallada, especialidad
+        - **Odontograma (update_odontogram_and_create_budget)**: nombre del paciente, dientes afectados (números válidos 11-48), tipo de tratamiento por diente
+        
+        FLUJO CORRECTO:
+        1. El usuario pide una acción (ej: "pon una cita a las 8")
+        2. TÚ identificas qué información falta (paciente, fecha, doctor, duración, motivo...)
+        3. TÚ preguntas TODA la información faltante de forma clara y organizada
+        4. El usuario responde con los datos
+        5. TÚ resumes lo que vas a hacer y pides confirmación: "¿Confirmo esta acción?"
+        6. El usuario dice "sí" / "confirmar" / "ok"
+        7. SOLO ENTONCES ejecutas la herramienta
         
         Si el usuario dice "añade a este paciente" o "su historia", REFIÉRETE AL PACIENTE ACTIVO (${activePatient ? activePatient.name : 'Desconocido'}).
 
@@ -134,14 +158,18 @@ async function processQuery(userQuery, userInfo = {}, extraContext = {}) {
         - Si hay múltiples pasos, sepáralos claramente.
         
         MANEJO DE ERRORES:
-        - Si el usuario indica un número de diente inválido (ej: "diente 1"), asume que es un error tipográfico y corrígelo si es obvio (ej: "1" -> "11" o "21" según contexto, o ignóralo advirtiendo al usuario).
+        - Si el usuario indica un número de diente inválido (ej: "diente 1"), asume que es un error tipográfico y corrígelo si es obvio.
         - Si hay errores tipográficos en los comandos (ej: "losdientes"), intenta interpretarlos lógicamente.
 
         INSTRUCCIONES:
-        1. Para EXTRACCIONES + PRESUPUESTO: Usa "update_odontogram_and_create_budget" con el tipo "extraccion"
+        1. Para EXTRACCIONES + PRESUPUESTO: Usa "update_odontogram_and_create_budget"
         2. Para AÑADIR NOTAS: Usa "add_clinical_record"
-        3. Para CREAR CITAS: Usa "create_appointment"
+        3. Para CREAR CITAS: Usa "create_appointment" (SOLO con TODOS los datos)
         4. Para BUSCAR INFO: Usa "search_patient_info"
+        5. Para RECETAS: Usa "create_prescription" (SOLO con datos completos del medicamento)
+        
+        IMPORTANTE: Cuando el usuario CONFIRME una acción que previamente resumiste, 
+        ENTONCES sí ejecuta la herramienta con todos los datos recopilados.
         
         Responde siempre en español.
         
@@ -274,16 +302,19 @@ async function processQuery(userQuery, userInfo = {}, extraContext = {}) {
                 type: "function",
                 function: {
                     name: "create_appointment",
-                    description: "Crear una cita para un paciente.",
+                    description: "Crear una cita para un paciente. SOLO usar cuando tengas TODOS los datos: paciente, fecha, hora, doctor, duración y motivo.",
                     parameters: {
                         type: "object",
                         properties: {
                             patientName: { type: "string", description: "Nombre del paciente" },
                             date: { type: "string", description: "Fecha en formato YYYY-MM-DD" },
                             time: { type: "string", description: "Hora en formato HH:MM" },
-                            treatmentType: { type: "string", description: "Tipo de tratamiento para la cita" }
+                            doctorName: { type: "string", description: "Nombre del doctor que atenderá la cita" },
+                            duration: { type: "integer", description: "Duración en minutos: 15, 30, 45, 60, 90 o 120" },
+                            treatmentType: { type: "string", description: "Tipo de tratamiento o motivo de la cita" },
+                            observations: { type: "string", description: "Observaciones o notas adicionales para la cita" }
                         },
-                        required: ["patientName", "date", "time"]
+                        required: ["patientName", "date", "time", "doctorName", "duration", "treatmentType"]
                     }
                 }
             },
@@ -365,7 +396,7 @@ async function processQuery(userQuery, userInfo = {}, extraContext = {}) {
             model: "gpt-4o",
             messages: messages,
             tools: tools,
-            tool_choice: isActionRequest ? "required" : "auto"  // Force tool use for actions
+            tool_choice: "auto"  // Let AI decide — it should ask questions first if data is missing
         });
 
         const responseMessage = response.choices[0].message;
@@ -813,27 +844,59 @@ async function handleCreatePrescription(supabase, { patientName, medication, ins
     return { type: 'action_completed', content: `✅ Receta emitida para ${patient.name}:\n💊 ${medication}\n📋 ${instructions}` };
 }
 
-async function handleCreateAppointment(supabase, { patientName, date, time, treatmentType }, userInfo) {
+async function handleCreateAppointment(supabase, { patientName, date, time, doctorName, duration, treatmentType, observations }, userInfo) {
     const { patient, error } = await findPatient(supabase, patientName, userInfo);
     if (error) return { type: 'error', content: error };
 
-    // Get a doctor (use logged in doctor or first available)
+    // Resolve doctor by name or fall back to logged-in doctor
     let doctorId = userInfo.doctorId;
-    if (!doctorId) {
-        const { data: doctors } = await supabase.from('Doctor').select('id').limit(1);
-        doctorId = doctors?.[0]?.id;
+    let resolvedDoctorName = doctorName || 'Doctor asignado';
+
+    if (doctorName) {
+        const { data: doctors } = await supabase
+            .from('Doctor')
+            .select('id, name')
+            .ilike('name', `%${doctorName}%`)
+            .limit(1);
+        if (doctors && doctors.length > 0) {
+            doctorId = doctors[0].id;
+            resolvedDoctorName = doctors[0].name;
+        }
     }
 
-    await supabase.from('Appointment').insert([{
+    if (!doctorId) {
+        const { data: doctors } = await supabase.from('Doctor').select('id, name').limit(1);
+        if (doctors && doctors.length > 0) {
+            doctorId = doctors[0].id;
+            resolvedDoctorName = doctors[0].name;
+        }
+    }
+
+    const appointmentData = {
         id: crypto.randomUUID(),
         date: new Date(date).toISOString(),
         time: time,
+        duration: duration || 60,
         patientId: patient.id,
         doctorId: doctorId,
+        treatmentName: treatmentType || null,
+        observations: observations || null,
         status: 'Scheduled'
-    }]);
+    };
 
-    return { type: 'action_completed', content: `✅ Cita creada para ${patient.name}:\n📅 ${date} a las ${time}${treatmentType ? `\n🦷 ${treatmentType}` : ''}` };
+    await supabase.from('Appointment').insert([appointmentData]);
+
+    return {
+        type: 'action_completed',
+        content: `✅ **Cita creada correctamente**\n\n` +
+            `- **Paciente:** ${patient.name}\n` +
+            `- **Fecha:** ${date}\n` +
+            `- **Hora:** ${time}\n` +
+            `- **Doctor:** ${resolvedDoctorName}\n` +
+            `- **Duración:** ${duration || 60} minutos\n` +
+            (treatmentType ? `- **Motivo:** ${treatmentType}\n` : '') +
+            (observations ? `- **Observaciones:** ${observations}\n` : '')
+    };
 }
 
 async function handleSearchPatientInfo(supabase, { patientName }, userInfo) {
