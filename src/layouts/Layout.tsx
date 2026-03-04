@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import {
     Users, Activity, Calendar, Settings,
     PieChart, Brain, Package, LogOut, Search, Bell, Menu, ChevronRight,
@@ -8,10 +8,15 @@ import {
 import { useAppContext } from '../context/AppContext';
 
 const Layout: React.FC = () => {
-    const { currentUser, role, logout } = useAppContext();
+    const { currentUser, isAuthenticated, currentUserRole: role, logout } = useAppContext();
     const location = useLocation();
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // === TabGuard: Route protection — redirect to login if session not found ===
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
 
     const handleLogout = () => {
         logout();

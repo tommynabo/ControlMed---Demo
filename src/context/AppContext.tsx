@@ -1,6 +1,50 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
 import { Patient, Appointment, Invoice, InventoryItem, ClinicalRecord, Doctor, Liquidation, AIChatMessage, ToothState, DocumentTemplate, Expense, TreatmentPlan } from '../../types';
 import { api } from '../services/api';
+
+// === TabGuard: Session Storage Keys ===
+const SESSION_KEY = 'crm_session';
+const HEARTBEAT_KEY = 'crm_heartbeat';
+const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
+
+// Helper: save session to sessionStorage
+const persistSession = (user: any) => {
+    try {
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+        sessionStorage.setItem(HEARTBEAT_KEY, Date.now().toString());
+        console.log('[TabGuard] ✅ Sesión persistida en sessionStorage');
+    } catch (e) {
+        console.warn('[TabGuard] Error al persistir sesión:', e);
+    }
+};
+
+// Helper: restore session from sessionStorage
+const restoreSession = (): any | null => {
+    try {
+        const raw = sessionStorage.getItem(SESSION_KEY);
+        if (!raw) return null;
+        const user = JSON.parse(raw);
+        if (user && user.role) {
+            console.log('[TabGuard] ✅ Sesión restaurada desde sessionStorage:', user.name);
+            return user;
+        }
+        return null;
+    } catch (e) {
+        console.warn('[TabGuard] Error al restaurar sesión:', e);
+        return null;
+    }
+};
+
+// Helper: clear session from sessionStorage
+const clearSession = () => {
+    try {
+        sessionStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(HEARTBEAT_KEY);
+        console.log('[TabGuard] 🔒 Sesión eliminada de sessionStorage');
+    } catch (e) {
+        console.warn('[TabGuard] Error al limpiar sesión:', e);
+    }
+};
 
 // Define Context Shape
 interface AppContextProps {
@@ -53,9 +97,12 @@ export const INITIAL_STOCK: InventoryItem[] = [
 ];
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [currentUser, setCurrentUser] = useState<any>(null);
-    const [role, setRole] = useState<'ADMIN' | 'RECEPTION' | 'DOCTOR'>('ADMIN');
+    // === TabGuard: Restore session on initial mount ===
+    const restoredUser = restoreSession();
+
+    const [isAuthenticated, setIsAuthenticated] = useState(!!restoredUser);
+    const [currentUser, setCurrentUser] = useState<any>(restoredUser);
+    const [role, setRole] = useState<'ADMIN' | 'RECEPTION' | 'DOCTOR'>(restoredUser?.role || 'ADMIN');
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -67,6 +114,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+    // === TabGuard: Heartbeat to protect against tab discard ===
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        // Initial heartbeat
+        sessionStorage.setItem(HEARTBEAT_KEY, Date.now().toString());
+
+        const heartbeatInterval = setInterval(() => {
+            sessionStorage.setItem(HEARTBEAT_KEY, Date.now().toString());
+        }, HEARTBEAT_INTERVAL_MS);
+
+        console.log('[TabGuard] ✅ Protección anti-descarte activada');
+
+        return () => {
+            clearInterval(heartbeatInterval);
+        };
+    }, [isAuthenticated]);
 
     // Initial Data Load
     useEffect(() => {
@@ -94,11 +159,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setCurrentUser(user);
         setRole(user.role);
         setIsAuthenticated(true);
+        // === TabGuard: Persist session ===
+        persistSession(user);
     };
 
     const logout = () => {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        // === TabGuard: Clear session ===
+        clearSession();
     };
 
     const refreshPatients = async () => {
@@ -142,3 +211,4 @@ export const useAppContext = () => {
     if (!context) throw new Error("useAppContext must be used within AppProvider");
     return context;
 };
+

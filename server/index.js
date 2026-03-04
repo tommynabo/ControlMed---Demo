@@ -242,7 +242,7 @@ app.delete('/api/system-users/:id', async (req, res) => {
 app.get('/api/doctor-schedules', async (req, res) => {
     try {
         const supabase = getSupabase();
-        const { data, error } = await supabase.from('doctor_schedules').select('*');
+        const { data, error } = await supabase.from('doctor_schedules').select('*').eq('is_active', true);
         if (error) throw error;
         res.json(data || []);
     } catch (e) {
