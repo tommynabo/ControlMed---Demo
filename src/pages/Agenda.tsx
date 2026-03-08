@@ -942,15 +942,20 @@ const Agenda: React.FC = () => {
                                                                         <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
                                                                         {appt.duration && appt.duration > 45 && <span className="text-[9px] opacity-70 ml-1">{appt.time}</span>}
                                                                     </div>
-                                                                    {(typeof appt.treatment === 'object' && appt.treatment !== null
-                                                                        ? (appt.treatment as any).name
-                                                                        : appt.treatment || (appt as any).treatmentName) && (
-                                                                        <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
-                                                                            {typeof appt.treatment === 'object' && appt.treatment !== null
-                                                                                ? (appt.treatment as any).name
-                                                                                : appt.treatment || (appt as any).treatmentName || ''}
-                                                                        </span>
-                                                                    )}
+                                                                    {(() => {
+                                                                        const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
+                                                                            ? (appt.treatment as any).name
+                                                                            : appt.treatment || (appt as any).treatmentName;
+                                                                        const budgetItems = (appt as any).budget?.items;
+                                                                        const displayTreatment = treatmentText || (budgetItems && budgetItems.length > 0
+                                                                            ? budgetItems.map((item: any) => item.name).join(', ')
+                                                                            : null);
+                                                                        return displayTreatment ? (
+                                                                            <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
+                                                                                {displayTreatment}
+                                                                            </span>
+                                                                        ) : null;
+                                                                    })()}
                                                                     {appt.observations && (
                                                                         <p className="text-[9px] opacity-60 mt-0.5 line-clamp-2 leading-tight">
                                                                             {appt.observations}

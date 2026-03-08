@@ -157,6 +157,11 @@ async function processQuery(userQuery, userInfo = {}, extraContext = {}) {
         - Usa **negrita** para resaltar precios, nombres de pacientes y conceptos clave.
         - Si hay múltiples pasos, sepáralos claramente.
         
+        BÚSQUEDA DE PACIENTES:
+        - El sistema busca pacientes de forma parcial e insensible a mayúsculas (fuzzy).
+        - Si el usuario dice solo un nombre (ej: "Kevin"), usa ese nombre directamente en la herramienta — el sistema encontrará coincidencias parciales (ej: "Kevin Chrabieh").
+        - NO pidas el nombre completo si el usuario ya dio un nombre parcial. Deja que el sistema busque.
+
         MANEJO DE ERRORES:
         - Si el usuario indica un número de diente inválido (ej: "diente 1"), asume que es un error tipográfico y corrígelo si es obvio.
         - Si hay errores tipográficos en los comandos (ej: "losdientes"), intenta interpretarlos lógicamente.
@@ -537,30 +542,50 @@ async function improveMessage(text, patientName, type = 'whatsapp') {
 async function findPatient(supabase, patientName, userInfo) {
     let patient = null;
 
-    // 1. Direct Search by Name
+    // 1. Fuzzy Search: try each word of the name individually for partial matching
     if (patientName && patientName.trim().length > 0) {
+        // First try full name match
         const { data: patients } = await supabase
             .from('Patient')
             .select('id, name, assignedDoctorId, email, phone')
-            .ilike('name', `%${patientName}%`)
-            .limit(1);
-        patient = patients?.[0];
+            .ilike('name', `%${patientName.trim()}%`)
+            .limit(5);
+
+        if (patients && patients.length === 1) {
+            // Single match — use it directly
+            patient = patients[0];
+        } else if (patients && patients.length > 1) {
+            // Multiple matches — prefer exact match, otherwise take first
+            const exact = patients.find(p => p.name.toLowerCase() === patientName.trim().toLowerCase());
+            patient = exact || patients[0];
+        } else {
+            // No results — try searching by individual words (e.g. first name only)
+            const words = patientName.trim().split(/\s+/).filter(w => w.length >= 2);
+            for (const word of words) {
+                const { data: wordResults } = await supabase
+                    .from('Patient')
+                    .select('id, name, assignedDoctorId, email, phone')
+                    .ilike('name', `%${word}%`)
+                    .limit(5);
+                if (wordResults && wordResults.length === 1) {
+                    patient = wordResults[0];
+                    console.log(`AI: Fuzzy matched "${patientName}" → ${patient.name} (via word "${word}")`);
+                    break;
+                }
+            }
+        }
     }
 
     // 2. Fallback: Context/Active Patient
-    // The agent might pass the name of the active patient, but if fuzzy search fails,
-    // or if no name provided (unlikely due to required arg, but possible in logic),
-    // we check if we have an explicit ID in context (passed via userInfo for convenience in this refactor).
     if (!patient && userInfo.activePatientId) {
         const { data: active } = await supabase.from('Patient').select('*').eq('id', userInfo.activePatientId).single();
-        // Verify name match loosely if provided, or just use it if name was "este paciente"
         if (active) {
             console.log(`AI: Using Active Patient Context: ${active.name}`);
             patient = active;
         }
     }
 
-    if (!patient) return { error: `No se encontró al paciente "${patientName}"` };
+    if (!patient) return { error: `No se encontró al paciente "${patientName}". Prueba con el nombre o apellido exacto.` };
 
     // Permission check for doctors
     if (userInfo.role === 'DOCTOR' && userInfo.doctorId && patient.assignedDoctorId !== userInfo.doctorId) {

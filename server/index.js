@@ -488,7 +488,7 @@ app.get('/api/doctors', async (req, res) => {
             .from('system_users')
             .select('full_name')
             .eq('is_active', true)
-            .eq('role', 'DOCTOR');
+            .in('role', ['DOCTOR', 'ADMIN']);
 
         let filteredDoctors = doctors;
         if (activeSystemUsers && activeSystemUsers.length > 0) {
@@ -915,7 +915,7 @@ app.get('/api/appointments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*');
+            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))');
 
         if (error) {
             console.error("❌ Supabase Fetch Error (Appointments):", error);
