@@ -80,7 +80,7 @@ const generateTitle = (msg: string): string => {
 };
 
 const AI: React.FC = () => {
-    const { api, selectedPatient } = useAppContext();
+    const { api, selectedPatient, refreshAppointments, refreshPatients } = useAppContext();
 
     // Conversations state
     const [conversations, setConversations] = useState<Conversation[]>(() => loadConversations());
@@ -192,6 +192,12 @@ const AI: React.FC = () => {
             const assistantMsg: ChatMessage = { role: 'assistant', content, timestamp: Date.now() };
             const updatedMessages = [...currentMessages, assistantMsg];
             updateConversation(convId, updatedMessages);
+
+            // Refresh global state when AI performed a mutation (budget, appointment, record, etc.)
+            if (response.type === 'action_completed') {
+                refreshAppointments();
+                refreshPatients();
+            }
         } catch (error) {
             const errorMsg: ChatMessage = { role: 'assistant', content: "Lo siento, hubo un error al procesar tu consulta.", timestamp: Date.now() };
             updateConversation(convId, [...currentMessages, errorMsg]);

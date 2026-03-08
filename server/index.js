@@ -467,7 +467,7 @@ app.get('/api/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
 
-        // Fetch ALL doctors from Doctor table (no is_active filter for now)
+        // Fetch ALL doctors from Doctor table
         const { data: doctors, error } = await supabase
             .from('Doctor')
             .select('id, name, specialization')
@@ -483,8 +483,21 @@ app.get('/api/doctors', async (req, res) => {
             return res.json([]);
         }
 
-        console.log(`✅ Loaded ${doctors.length} doctors`);
-        res.json(doctors);
+        // Filter out doctors whose corresponding system_user is inactive or deleted
+        const { data: activeSystemUsers } = await supabase
+            .from('system_users')
+            .select('full_name')
+            .eq('is_active', true)
+            .eq('role', 'DOCTOR');
+
+        let filteredDoctors = doctors;
+        if (activeSystemUsers && activeSystemUsers.length > 0) {
+            const activeNames = new Set(activeSystemUsers.map(u => u.full_name?.toLowerCase()));
+            filteredDoctors = doctors.filter(d => activeNames.has(d.name?.toLowerCase()));
+        }
+
+        console.log(`✅ Loaded ${filteredDoctors.length} active doctors (${doctors.length} total)`);
+        res.json(filteredDoctors);
     } catch (e) {
         console.error('Error fetching doctors:', e.message);
         res.status(500).json({ error: e.message });
@@ -2084,6 +2097,20 @@ app.post('/api/payments/create', async (req, res) => {
                 .from('Payment')
                 .update({ invoiceId: invoice.id })
                 .eq('id', paymentId);
+        }
+
+        // 7. Si hay appointmentId, marcar la cita como pagada para evitar doble cobro
+        const appointmentId = req.body.appointmentId;
+        if (appointmentId) {
+            try {
+                await prisma.appointment.update({
+                    where: { id: appointmentId },
+                    data: { paid: true, status: 'Completed' }
+                });
+                console.log(`✅ Appointment ${appointmentId} marked as paid`);
+            } catch (apptErr) {
+                console.error("⚠️ Could not mark appointment as paid:", apptErr.message);
+            }
         }
 
         res.json({

@@ -74,6 +74,7 @@ interface AppContextProps {
     // Actions
     refreshPatients: () => Promise<void>;
     refreshAppointments: () => Promise<void>;
+    refreshInvoices: () => Promise<void>;
     addPatient: (p: Patient) => void;
     addAppointment: (a: Appointment) => void;
     addInvoice: (i: Invoice) => void;
@@ -138,14 +139,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (isAuthenticated) {
             const fetchData = async () => {
                 try {
-                    const [pts, appts, docs] = await Promise.all([
+                    const [pts, appts, docs, invs] = await Promise.all([
                         api.getPatients().catch(err => { console.error("Failed to fetch patients", err); return []; }),
                         api.appointments.getAll().catch(err => { console.error("Failed to fetch appointments", err); return []; }),
-                        api.getDoctors().catch(err => { console.error("Failed to fetch doctors", err); return []; })
+                        api.getDoctors().catch(err => { console.error("Failed to fetch doctors", err); return []; }),
+                        api.invoices.getAll().catch(err => { console.error("Failed to fetch invoices", err); return []; })
                     ]);
                     setPatients(pts);
                     setAppointments(appts);
                     setDoctors(docs);
+                    setInvoices(invs);
                     // Stock and others can be added here
                 } catch (e) {
                     console.error("Error loading initial data", e);
@@ -188,6 +191,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const refreshInvoices = async () => {
+        try {
+            const invs = await api.invoices.getAll();
+            setInvoices(invs);
+        } catch (e) {
+            console.error("Error refreshing invoices", e);
+        }
+    };
+
     const addPatient = (p: Patient) => setPatients(prev => [p, ...prev]);
     const addAppointment = (a: Appointment) => setAppointments(prev => [...prev, a]);
     const addInvoice = (i: Invoice) => setInvoices(prev => [i, ...prev]);
@@ -198,7 +210,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             patients, setPatients, appointments, setAppointments, invoices, setInvoices,
             stock, setStock, clinicalRecords, setClinicalRecords, expenses, setExpenses,
             doctors, setDoctors,
-            refreshPatients, refreshAppointments, addPatient, addAppointment, addInvoice, api,
+            refreshPatients, refreshAppointments, refreshInvoices, addPatient, addAppointment, addInvoice, api,
             searchQuery, setSearchQuery, selectedPatient, setSelectedPatient
         }}>
             {children}

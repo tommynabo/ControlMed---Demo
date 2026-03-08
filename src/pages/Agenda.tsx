@@ -27,7 +27,7 @@ interface DoctorSchedule {
 
 const Agenda: React.FC = () => {
     const {
-        appointments, addAppointment, patients, currentUser, currentUserRole, api, setSelectedPatient, doctors
+        appointments, addAppointment, setAppointments, patients, currentUser, currentUserRole, api, setSelectedPatient, doctors, refreshAppointments
     } = useAppContext();
     const navigate = useNavigate();
 
@@ -339,7 +339,6 @@ const Agenda: React.FC = () => {
         if ((appt as any).budgetId) {
             const budget = patientBudgets.find(b => b.id === (appt as any).budgetId);
             if (budget && budget.items) {
-                // If budgetItemId is set, select those items
                 if ((appt as any).budgetItemId) {
                     const selectedItems = budget.items.filter((item: any) => item.id === (appt as any).budgetItemId);
                     setSelectedBudgetItems(selectedItems);
@@ -353,6 +352,23 @@ const Agenda: React.FC = () => {
 
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
+    };
+
+    // Reset form fields for a new appointment
+    const resetAppointmentForm = () => {
+        setApptSearch('');
+        setBookingPatientId('');
+        setBookingTreatment('');
+        setBookingDoctorId('');
+        setBookingBudgetId('');
+        setBookingBudgetItemId('');
+        setSelectedBudgetItems([]);
+        setBookingObservation('');
+        setBookingVisitDetails('');
+        setBookingPrice(0);
+        setBookingDuration(30);
+        setPatientBudgets([]);
+        setIsEditingAppt(false);
     };
 
     // Handle Booking
@@ -740,6 +756,7 @@ const Agenda: React.FC = () => {
                                                         <div
                                                             className="flex-1 h-full hover:bg-purple-50/30 cursor-pointer transition-colors z-0"
                                                             onClick={() => {
+                                                                resetAppointmentForm();
                                                                 setActiveSlot({ time: t, dayIdx: 0 });
                                                                 setBookingDoctorId(selectedDoctorId);
                                                                 setSelectedAppt(null);
@@ -766,6 +783,7 @@ const Agenda: React.FC = () => {
                                                                     className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && !closed ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                     onClick={() => {
                                                                         if (!ok || closed) return;
+                                                                        resetAppointmentForm();
                                                                         setActiveSlot({ time, dayIdx: 0 });
                                                                         setSelectedDoctorId(doc.id);
                                                                         setBookingDoctorId(doc.id);
@@ -788,6 +806,7 @@ const Agenda: React.FC = () => {
                                                     <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
                                                         <div className="flex-1 h-full hover:bg-slate-50/50 cursor-pointer transition-colors z-0"
                                                             onClick={() => {
+                                                                resetAppointmentForm();
                                                                 setActiveSlot({ time, dayIdx: 0 });
                                                                 setBookingDoctorId('');
                                                                 setSelectedAppt(null);
@@ -817,6 +836,7 @@ const Agenda: React.FC = () => {
                                                                 className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                 onClick={() => {
                                                                     if (!ok) return;
+                                                                    resetAppointmentForm();
                                                                     setActiveSlot({ time, dayIdx });
                                                                     setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
                                                                     setSelectedAppt(null);
@@ -919,19 +939,21 @@ const Agenda: React.FC = () => {
                                                                     className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-start ${getAppointmentColors(appt.status, appt.paid)}`}
                                                                 >
                                                                     <div className="flex justify-between items-start">
-                                                                        <span className="truncate">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
+                                                                        <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
                                                                         {appt.duration && appt.duration > 45 && <span className="text-[9px] opacity-70 ml-1">{appt.time}</span>}
                                                                     </div>
-                                                                    {appt.duration && appt.duration >= 30 && (
-                                                                        <span className="text-[10px] opacity-80 truncate mt-1">
+                                                                    {(typeof appt.treatment === 'object' && appt.treatment !== null
+                                                                        ? (appt.treatment as any).name
+                                                                        : appt.treatment || (appt as any).treatmentName) && (
+                                                                        <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
                                                                             {typeof appt.treatment === 'object' && appt.treatment !== null
-                                                                                ? (appt.treatment as any).name || 'Tratamiento'
-                                                                                : appt.treatment || '-'}
+                                                                                ? (appt.treatment as any).name
+                                                                                : appt.treatment || (appt as any).treatmentName || ''}
                                                                         </span>
                                                                     )}
-                                                                    {appt.duration && appt.duration >= 60 && (appt as any).observation && (
-                                                                        <p className="text-[9px] opacity-60 mt-1 line-clamp-2 italic leading-tight">
-                                                                            "{(appt as any).observation}"
+                                                                    {appt.observations && (
+                                                                        <p className="text-[9px] opacity-60 mt-0.5 line-clamp-2 leading-tight">
+                                                                            {appt.observations}
                                                                         </p>
                                                                     )}
                                                                     {/* Feature 7: Visit Details visible on card */}
@@ -1229,10 +1251,11 @@ const Agenda: React.FC = () => {
                                                 observations: bookingObservation,
                                                 visitDetails: bookingVisitDetails
                                             });
-                                            // Refresh appointments
-                                            const appts = await api.appointments.getAll();
-                                            // Use context setter
-                                            window.location.reload(); // Simple refresh
+                                            // Refresh appointments via context
+                                            await refreshAppointments();
+                                            setIsAppointmentModalOpen(false);
+                                            setIsEditingAppt(false);
+                                            setSelectedAppt(null);
                                         } catch (e: any) {
                                             alert('Error: ' + (e.message || e));
                                         }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Calendar, Trash2 } from 'lucide-react';
+import { ArrowLeft, CreditCard, Calendar, Trash2, Check } from 'lucide-react';
 import { Appointment, Patient, Budget, Payment } from '../../types';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAppContext } from '../context/AppContext';
@@ -9,7 +9,7 @@ export const AppointmentDetails: React.FC = () => {
     const { appointmentId } = useParams<{ appointmentId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
-    const { patients, api, refreshAppointments } = useAppContext();
+    const { patients, api, refreshAppointments, refreshInvoices } = useAppContext();
 
     const [appointment, setAppointment] = useState<Appointment | null>(null);
     const [patient, setPatient] = useState<Patient | null>(null);
@@ -50,6 +50,9 @@ export const AppointmentDetails: React.FC = () => {
     const handlePaymentComplete = (payment: Payment, invoice: any) => {
         console.log('Payment completed:', payment);
 
+        // Mark appointment as paid locally to update UI immediately 
+        setAppointment({ ...appointment, paid: true, status: 'Completed' });
+
         if (payment.type === 'ADVANCE_PAYMENT' && patient) {
             const updatedPatient = {
                 ...patient,
@@ -61,6 +64,10 @@ export const AppointmentDetails: React.FC = () => {
         if (patient) {
             api.budget.getByPatient(patient.id).then(setBudgets);
         }
+
+        // Refresh global state so CashRegister/Caja and Agenda reflect the payment
+        refreshAppointments();
+        refreshInvoices();
     };
 
     const getStatusStyle = (status: string) => {
@@ -124,13 +131,20 @@ export const AppointmentDetails: React.FC = () => {
                         </div>
                     </div>
 
-                    <button
-                        onClick={() => setIsPaymentModalOpen(true)}
-                        className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-4 rounded-2xl text-sm font-black uppercase shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
-                    >
-                        <CreditCard size={20} />
-                        Cobrar / Pagar
-                    </button>
+                    {appointment.paid ? (
+                        <div className="bg-green-100 text-green-700 px-8 py-4 rounded-2xl text-sm font-black uppercase flex items-center gap-2 border border-green-200">
+                            <Check size={20} />
+                            Cobrado ✓
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => setIsPaymentModalOpen(true)}
+                            className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-4 rounded-2xl text-sm font-black uppercase shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                        >
+                            <CreditCard size={20} />
+                            Cobrar / Pagar
+                        </button>
+                    )}
                 </div>
 
                 {/* Patient Info Card */}

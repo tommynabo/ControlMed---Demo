@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Expense, Doctor, Specialization } from '../../types';
-import { DOCTORS } from '../constants';
-// DOCTORS imported from constants
 
 const Payroll: React.FC = () => {
-    const { api, setExpenses } = useAppContext();
+    const { api, setExpenses, doctors } = useAppContext();
     const [payrollViewMode, setPayrollViewMode] = useState<string>('general');
     const [liquidations, setLiquidations] = useState<{ records: any[], totalToPay: number } | null>(null);
     const [editedRecords, setEditedRecords] = useState<Record<string, { grossAmount?: number, labCost?: number, commissionRate?: number }>>({});
@@ -46,7 +44,7 @@ const Payroll: React.FC = () => {
     };
 
     const handleCreateInvoice = async () => {
-        const doc = DOCTORS.find(d => d.id === payrollViewMode);
+        const doc = doctors.find(d => d.id === payrollViewMode);
         if (doc) {
             const total = getEffectiveTotal();
             try {
@@ -88,7 +86,7 @@ const Payroll: React.FC = () => {
             <div className="w-64 shrink-0 space-y-2">
                 <button onClick={() => setPayrollViewMode('general')} className={`w-full text-left px-5 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${payrollViewMode === 'general' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'text-slate-400 hover:bg-slate-50'}`}>Vista General</button>
                 <p className="px-5 pt-4 pb-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Doctores</p>
-                {DOCTORS.map(d => (
+                {doctors.map(d => (
                     <button key={d.id} onClick={() => setPayrollViewMode(d.id)} className={`w-full text-left px-5 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${payrollViewMode === d.id ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'text-slate-500 hover:bg-slate-50'}`}>
                         {d.name}
                     </button>
@@ -100,7 +98,7 @@ const Payroll: React.FC = () => {
                     <div>
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Liquidaciones y Comisiones</h3>
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                            {payrollViewMode === 'general' ? 'Resumen Global' : `Detalle: ${DOCTORS.find(d => d.id === payrollViewMode)?.name}`}
+                            {payrollViewMode === 'general' ? 'Resumen Global' : `Detalle: ${doctors.find(d => d.id === payrollViewMode)?.name}`}
                         </p>
                     </div>
 

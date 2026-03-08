@@ -174,6 +174,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     if (!isOpen) return null;
 
+    // Guard: If appointment is already paid, show a message instead of the form
+    if (appointment?.paid) {
+        return (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in">
+                <div className="bg-white max-w-md w-full rounded-[2.5rem] shadow-2xl p-10 text-center space-y-6">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                        <Check size={40} className="text-green-600" />
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900">Ya Cobrado</h3>
+                    <p className="text-sm text-slate-500">Esta cita ya ha sido cobrada. No se puede volver a procesar el pago.</p>
+                    <button onClick={onClose} className="w-full bg-slate-900 text-white py-4 rounded-xl text-sm font-black uppercase">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     const numericTotal = parseFloat(totalAmount) || 0;
     const walletAmt = parseFloat(walletAmount) || 0;
     const remainingAfterWallet = numericTotal - walletAmt;

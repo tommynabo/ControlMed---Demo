@@ -76,7 +76,7 @@ const Layout: React.FC = () => {
                     {navItems.map((item) => {
                         // Basic Role Based Access Control (RBAC) Filtering
                         if (role === 'RECEPTION' && ['payroll', 'ai'].includes(item.id)) return null;
-                        if (role === 'DOCTOR' && ['payroll'].includes(item.id)) return null;
+                        if (role === 'DOCTOR' && ['payroll', 'settings'].includes(item.id)) return null;
 
                         return (
                             <NavLink
