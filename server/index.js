@@ -19,14 +19,19 @@ const templateService = require('./services/templateService');
 const whatsappService = require('./services/whatsappService');
 const schedulerService = require('./services/schedulerService');
 
-const prisma = new PrismaClient({
-    log: ['query', 'info', 'warn', 'error'],
+const prisma = global.__prisma || new PrismaClient({
+    log: process.env.NODE_ENV === 'production' ? ['warn', 'error'] : ['query', 'info', 'warn', 'error'],
     datasources: {
         db: {
-            url: process.env.DIRECT_URL || process.env.DATABASE_URL
+            url: process.env.DATABASE_URL
         },
     },
 });
+
+// Singleton: avoid exhausting connection pool on hot-reloads (serverless/dev)
+if (process.env.NODE_ENV !== 'production') {
+    global.__prisma = prisma;
+}
 
 // Global Error Handler for Prisma Connection
 // Global Error Handler for Prisma Connection

@@ -599,6 +599,7 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
     const { patient, error } = await findPatient(supabase, patientName, userInfo);
     if (error) return { type: 'error', content: error };
 
+  try {
     const results = [];
     const budgetItems = [];
 
@@ -676,13 +677,15 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
     const teethStateJson = JSON.stringify(teethState);
 
     if (currentOdontogram) {
-        await supabase.from('Odontogram').update({ teethState: teethStateJson }).eq('patientId', patient.id);
+        const { error: odErr } = await supabase.from('Odontogram').update({ teethState: teethStateJson }).eq('patientId', patient.id);
+        if (odErr) throw new Error(`Error guardando odontograma: ${odErr.message}`);
     } else {
-        await supabase.from('Odontogram').insert([{
+        const { error: odErr } = await supabase.from('Odontogram').insert([{
             id: crypto.randomUUID(),
             patientId: patient.id,
             teethState: teethStateJson
         }]);
+        if (odErr) throw new Error(`Error creando odontograma: ${odErr.message}`);
     }
 
     // 4. Create budget if requested
@@ -691,16 +694,17 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
         const budgetId = crypto.randomUUID();
         budgetTotal = budgetItems.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
 
-        await supabase.from('Budget').insert([{
+        const { error: budgetErr } = await supabase.from('Budget').insert([{
             id: budgetId,
             patientId: patient.id,
             status: 'DRAFT',
             totalAmount: budgetTotal,
             date: new Date().toISOString()
         }]);
+        if (budgetErr) throw new Error(`Error creando presupuesto: ${budgetErr.message}`);
 
         for (const item of budgetItems) {
-            await supabase.from('BudgetLineItem').insert([{
+            const { error: itemErr } = await supabase.from('BudgetLineItem').insert([{
                 id: crypto.randomUUID(),
                 budgetId: budgetId,
                 name: item.name,
@@ -708,6 +712,7 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
                 tooth: item.tooth,
                 quantity: item.quantity || 1
             }]);
+            if (itemErr) throw new Error(`Error creando línea de presupuesto: ${itemErr.message}`);
         }
     }
 
@@ -737,7 +742,7 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
 
     // 5. Add clinical record
     const clinicalNote = `Tratamientos registrados:\n${results.join('\n')}`;
-    await supabase.from('ClinicalRecord').insert([{
+    const { error: crErr } = await supabase.from('ClinicalRecord').insert([{
         id: crypto.randomUUID(),
         patientId: patient.id,
         date: new Date().toISOString(),
@@ -748,6 +753,7 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
         }),
         authorId: userInfo.id || 'ai-agent'
     }]);
+    if (crErr) console.error("Error creating clinical record from AI:", crErr);
 
     let response = `✅ **Odontograma actualizado para ${patient.name}**\n\n${results.join('\n')}`;
 
@@ -756,12 +762,17 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
     }
 
     return { type: 'action_completed', content: response };
+  } catch (dbError) {
+    console.error('❌ AI Tool DB Error (handleUpdateOdontogramAndBudget):', dbError.message);
+    return { type: 'error', content: `❌ Error de base de datos al actualizar odontograma/presupuesto: ${dbError.message}. Pide al usuario que lo intente de nuevo.` };
+  }
 }
 
 async function handleUpdateOdontogram(supabase, { patientName, teeth }, userInfo) {
     const { patient, error } = await findPatient(supabase, patientName, userInfo);
     if (error) return { type: 'error', content: error };
 
+  try {
     const { data: currentOdontogram } = await supabase
         .from('Odontogram')
         .select('*')
@@ -787,23 +798,30 @@ async function handleUpdateOdontogram(supabase, { patientName, teeth }, userInfo
     const teethStateJson = JSON.stringify(teethState);
 
     if (currentOdontogram) {
-        await supabase.from('Odontogram').update({ teethState: teethStateJson }).eq('patientId', patient.id);
+        const { error: dbErr } = await supabase.from('Odontogram').update({ teethState: teethStateJson }).eq('patientId', patient.id);
+        if (dbErr) throw new Error(`Error guardando odontograma: ${dbErr.message}`);
     } else {
-        await supabase.from('Odontogram').insert([{
+        const { error: dbErr } = await supabase.from('Odontogram').insert([{
             id: crypto.randomUUID(),
             patientId: patient.id,
             teethState: teethStateJson
         }]);
+        if (dbErr) throw new Error(`Error creando odontograma: ${dbErr.message}`);
     }
 
     return { type: 'action_completed', content: `✅ Odontograma de ${patient.name} actualizado:\n${updates.join('\n')}` };
+  } catch (dbError) {
+    console.error('❌ AI Tool DB Error (handleUpdateOdontogram):', dbError.message);
+    return { type: 'error', content: `❌ Error de base de datos al actualizar odontograma: ${dbError.message}. Pide al usuario que lo intente de nuevo.` };
+  }
 }
 
 async function handleAddClinicalRecord(supabase, { patientName, treatment, observation, specialization }, userInfo) {
     const { patient, error } = await findPatient(supabase, patientName, userInfo);
     if (error) return { type: 'error', content: error };
 
-    await supabase.from('ClinicalRecord').insert([{
+  try {
+    const { error: dbErr } = await supabase.from('ClinicalRecord').insert([{
         id: crypto.randomUUID(),
         patientId: patient.id,
         date: new Date().toISOString(),
@@ -814,27 +832,34 @@ async function handleAddClinicalRecord(supabase, { patientName, treatment, obser
         }),
         authorId: userInfo.id || 'ai-agent'
     }]);
+    if (dbErr) throw new Error(dbErr.message);
 
     return { type: 'action_completed', content: `✅ Historia clínica actualizada para ${patient.name}:\n• Tratamiento: ${treatment}\n• Observación: ${observation}` };
+  } catch (dbError) {
+    console.error('❌ AI Tool DB Error (handleAddClinicalRecord):', dbError.message);
+    return { type: 'error', content: `❌ Error de base de datos al guardar historia clínica: ${dbError.message}. Pide al usuario que lo intente de nuevo.` };
+  }
 }
 
 async function handleCreateBudget(supabase, { patientName, items }, userInfo) {
     const { patient, error } = await findPatient(supabase, patientName, userInfo);
     if (error) return { type: 'error', content: error };
 
+  try {
     const budgetId = crypto.randomUUID();
     const total = items.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
 
-    await supabase.from('Budget').insert([{
+    const { error: budgetErr } = await supabase.from('Budget').insert([{
         id: budgetId,
         patientId: patient.id,
         status: 'DRAFT',
         totalAmount: total,
         date: new Date().toISOString()
     }]);
+    if (budgetErr) throw new Error(`Error creando presupuesto: ${budgetErr.message}`);
 
     for (const item of items) {
-        await supabase.from('BudgetLineItem').insert([{
+        const { error: itemErr } = await supabase.from('BudgetLineItem').insert([{
             id: crypto.randomUUID(),
             budgetId: budgetId,
             name: item.name,
@@ -842,19 +867,25 @@ async function handleCreateBudget(supabase, { patientName, items }, userInfo) {
             tooth: item.tooth || null,
             quantity: item.quantity || 1
         }]);
+        if (itemErr) throw new Error(`Error creando línea de presupuesto: ${itemErr.message}`);
     }
 
     const itemsList = items.map(i => `• ${i.name}: ${i.price}€${i.tooth ? ` (Diente ${i.tooth})` : ''}`).join('\n');
     return { type: 'action_completed', content: `✅ Presupuesto creado para ${patient.name}:\n${itemsList}\n\n💰 **Total: ${total}€**` };
+  } catch (dbError) {
+    console.error('❌ AI Tool DB Error (handleCreateBudget):', dbError.message);
+    return { type: 'error', content: `❌ Error de base de datos al crear presupuesto: ${dbError.message}. Pide al usuario que lo intente de nuevo.` };
+  }
 }
 
 async function handleCreatePrescription(supabase, { patientName, medication, instructions }, userInfo) {
     const { patient, error } = await findPatient(supabase, patientName, userInfo);
     if (error) return { type: 'error', content: error };
 
+  try {
     const prescriptionNote = `[RECETA]\nMedicamento: ${medication}\nInstrucciones: ${instructions}`;
 
-    await supabase.from('ClinicalRecord').insert([{
+    const { error: dbErr } = await supabase.from('ClinicalRecord').insert([{
         id: crypto.randomUUID(),
         patientId: patient.id,
         date: new Date().toISOString(),
@@ -865,14 +896,20 @@ async function handleCreatePrescription(supabase, { patientName, medication, ins
         }),
         authorId: userInfo.id || 'ai-agent'
     }]);
+    if (dbErr) throw new Error(dbErr.message);
 
     return { type: 'action_completed', content: `✅ Receta emitida para ${patient.name}:\n💊 ${medication}\n📋 ${instructions}` };
+  } catch (dbError) {
+    console.error('❌ AI Tool DB Error (handleCreatePrescription):', dbError.message);
+    return { type: 'error', content: `❌ Error de base de datos al crear receta: ${dbError.message}. Pide al usuario que lo intente de nuevo.` };
+  }
 }
 
 async function handleCreateAppointment(supabase, { patientName, date, time, doctorName, duration, treatmentType, observations }, userInfo) {
     const { patient, error } = await findPatient(supabase, patientName, userInfo);
     if (error) return { type: 'error', content: error };
 
+  try {
     // Resolve doctor by name or fall back to logged-in doctor
     let doctorId = userInfo.doctorId;
     let resolvedDoctorName = doctorName || 'Doctor asignado';
@@ -909,7 +946,8 @@ async function handleCreateAppointment(supabase, { patientName, date, time, doct
         status: 'Scheduled'
     };
 
-    await supabase.from('Appointment').insert([appointmentData]);
+    const { error: dbErr } = await supabase.from('Appointment').insert([appointmentData]);
+    if (dbErr) throw new Error(dbErr.message);
 
     return {
         type: 'action_completed',
@@ -922,6 +960,10 @@ async function handleCreateAppointment(supabase, { patientName, date, time, doct
             (treatmentType ? `- **Motivo:** ${treatmentType}\n` : '') +
             (observations ? `- **Observaciones:** ${observations}\n` : '')
     };
+  } catch (dbError) {
+    console.error('❌ AI Tool DB Error (handleCreateAppointment):', dbError.message);
+    return { type: 'error', content: `❌ Error de base de datos al crear cita: ${dbError.message}. Pide al usuario que lo intente de nuevo.` };
+  }
 }
 
 async function handleSearchPatientInfo(supabase, { patientName }, userInfo) {
