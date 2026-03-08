@@ -544,11 +544,15 @@ async function findPatient(supabase, patientName, userInfo) {
 
     // 1. Fuzzy Search: try each word of the name individually for partial matching
     if (patientName && patientName.trim().length > 0) {
+        // Clean: remove numbered prefixes like "10. " or "3- " that LLM sometimes adds
+        let cleanName = patientName.trim().replace(/^\d+[.\-\)\s]+\s*/, '').trim();
+        if (!cleanName) cleanName = patientName.trim();
+
         // First try full name match
         const { data: patients } = await supabase
             .from('Patient')
             .select('id, name, assignedDoctorId, email, phone')
-            .ilike('name', `%${patientName.trim()}%`)
+            .ilike('name', `%${cleanName}%`)
             .limit(5);
 
         if (patients && patients.length === 1) {
@@ -556,11 +560,11 @@ async function findPatient(supabase, patientName, userInfo) {
             patient = patients[0];
         } else if (patients && patients.length > 1) {
             // Multiple matches — prefer exact match, otherwise take first
-            const exact = patients.find(p => p.name.toLowerCase() === patientName.trim().toLowerCase());
+            const exact = patients.find(p => p.name.toLowerCase() === cleanName.toLowerCase());
             patient = exact || patients[0];
         } else {
             // No results — try searching by individual words (e.g. first name only)
-            const words = patientName.trim().split(/\s+/).filter(w => w.length >= 2);
+            const words = cleanName.split(/\s+/).filter(w => w.length >= 2);
             for (const word of words) {
                 const { data: wordResults } = await supabase
                     .from('Patient')
@@ -699,7 +703,9 @@ async function handleUpdateOdontogramAndBudget(supabase, { patientName, treatmen
             patientId: patient.id,
             status: 'DRAFT',
             totalAmount: budgetTotal,
-            date: new Date().toISOString()
+            date: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         }]);
         if (budgetErr) throw new Error(`Error creando presupuesto: ${budgetErr.message}`);
 
@@ -854,7 +860,9 @@ async function handleCreateBudget(supabase, { patientName, items }, userInfo) {
         patientId: patient.id,
         status: 'DRAFT',
         totalAmount: total,
-        date: new Date().toISOString()
+        date: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
     }]);
     if (budgetErr) throw new Error(`Error creando presupuesto: ${budgetErr.message}`);
 
