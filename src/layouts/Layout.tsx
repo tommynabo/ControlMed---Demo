@@ -3,12 +3,13 @@ import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-route
 import {
     Users, Activity, Calendar, Settings,
     PieChart, Brain, Package, LogOut, Search, Bell, Menu, ChevronRight,
-    Stethoscope, DollarSign
+    Stethoscope, DollarSign, UserCog
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { ROLE_LABELS } from '../config/roles';
 
 const Layout: React.FC = () => {
-    const { currentUser, isAuthenticated, currentUserRole: role, logout } = useAppContext();
+    const { currentUser, isAuthenticated, currentUserRole: role, logout, canAccessPage } = useAppContext();
     const location = useLocation();
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -29,8 +30,10 @@ const Layout: React.FC = () => {
         { id: 'agenda', label: 'Agenda', icon: Calendar, path: '/agenda' },
         { id: 'caja', label: 'Caja', icon: DollarSign, path: '/caja' },
         { id: 'billing', label: 'Facturación', icon: Activity, path: '/billing' },
+        { id: 'stock', label: 'Stock', icon: Package, path: '/stock' },
         { id: 'ai', label: 'Asistente IA', icon: Brain, path: '/ai' },
         { id: 'payroll', label: 'Nóminas', icon: Users, path: '/payroll' },
+        { id: 'users', label: 'Usuarios', icon: UserCog, path: '/users' },
         { id: 'settings', label: 'Configuración', icon: Settings, path: '/settings' },
     ];
 
@@ -74,9 +77,8 @@ const Layout: React.FC = () => {
 
                 <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto custom-scrollbar">
                     {navItems.map((item) => {
-                        // Basic Role Based Access Control (RBAC) Filtering
-                        if (role === 'RECEPTION' && ['payroll', 'ai'].includes(item.id)) return null;
-                        if (role === 'DOCTOR' && ['payroll', 'settings'].includes(item.id)) return null;
+                        // RBAC: filter nav items by role
+                        if (!canAccessPage(item.id)) return null;
 
                         return (
                             <NavLink
@@ -131,7 +133,7 @@ const Layout: React.FC = () => {
                             </div>
                             <div className="text-right hidden sm:block">
                                 <p className="text-xs font-bold text-slate-900">{currentUser?.name || 'Usuario'}</p>
-                                <p className="text-[10px] text-slate-400 font-semibold">{role}</p>
+                                <p className="text-[10px] text-slate-400 font-semibold">{ROLE_LABELS[role] || role}</p>
                             </div>
                         </div>
                     </div>

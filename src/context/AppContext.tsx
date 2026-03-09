@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
 import { Patient, Appointment, Invoice, InventoryItem, ClinicalRecord, Doctor, Liquidation, AIChatMessage, ToothState, DocumentTemplate, Expense, TreatmentPlan } from '../../types';
 import { api } from '../services/api';
+import { UserRole, canAccessPage, canAccessRoute, hasPermission } from '../config/roles';
 
 // === TabGuard: Session Storage Keys ===
 const SESSION_KEY = 'crm_session';
@@ -50,10 +51,15 @@ const clearSession = () => {
 interface AppContextProps {
     // Auth
     currentUser: any;
-    currentUserRole: 'ADMIN' | 'RECEPTION' | 'DOCTOR';
+    currentUserRole: UserRole;
     isAuthenticated: boolean;
     login: (user: any) => void;
     logout: () => void;
+
+    // RBAC helpers
+    canAccessPage: (pageId: string) => boolean;
+    canAccessRoute: (path: string) => boolean;
+    hasPermission: (permission: string) => boolean;
 
     // Data
     patients: Patient[];
@@ -103,7 +109,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const [isAuthenticated, setIsAuthenticated] = useState(!!restoredUser);
     const [currentUser, setCurrentUser] = useState<any>(restoredUser);
-    const [role, setRole] = useState<'ADMIN' | 'RECEPTION' | 'DOCTOR'>(restoredUser?.role || 'ADMIN');
+    const [role, setRole] = useState<UserRole>(restoredUser?.role || 'ADMIN');
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -204,9 +210,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const addAppointment = (a: Appointment) => setAppointments(prev => [...prev, a]);
     const addInvoice = (i: Invoice) => setInvoices(prev => [i, ...prev]);
 
+    // RBAC helpers bound to current role
+    const canAccessPageFn = (pageId: string) => canAccessPage(role, pageId);
+    const canAccessRouteFn = (path: string) => canAccessRoute(role, path);
+    const hasPermissionFn = (permission: string) => hasPermission(role, permission);
+
     return (
         <AppContext.Provider value={{
             currentUser, currentUserRole: role, isAuthenticated, login, logout,
+            canAccessPage: canAccessPageFn, canAccessRoute: canAccessRouteFn, hasPermission: hasPermissionFn,
             patients, setPatients, appointments, setAppointments, invoices, setInvoices,
             stock, setStock, clinicalRecords, setClinicalRecords, expenses, setExpenses,
             doctors, setDoctors,

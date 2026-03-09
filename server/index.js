@@ -1224,6 +1224,111 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// --- USER MANAGEMENT API (ADMIN ONLY) ---
+const VALID_ROLES = ['ADMIN', 'RECEPTION', 'AUXILIAR', 'DOCTOR'];
+
+// GET all users (without passwords)
+app.get('/api/auth/users', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+            .from('User')
+            .select('id, email, gmail, name, role, doctorId, createdAt')
+            .order('role')
+            .order('name');
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        console.error('Error fetching users:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST create user
+app.post('/api/auth/users', async (req, res) => {
+    try {
+        const { email, gmail, name, password, role, doctorId } = req.body;
+        if (!email || !name || !password || !role) {
+            return res.status(400).json({ error: 'Email, nombre, contraseña y rol son obligatorios' });
+        }
+        if (!VALID_ROLES.includes(role)) {
+            return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
+        }
+
+        const supabase = getSupabase();
+
+        // Check duplicate email
+        const { data: existing } = await supabase.from('User').select('id').eq('email', email).single();
+        if (existing) {
+            return res.status(409).json({ error: 'Ya existe un usuario con ese email' });
+        }
+
+        const newId = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const { data, error } = await supabase
+            .from('User')
+            .insert([{ id: newId, email, gmail: gmail || null, name, password, role, doctorId: doctorId || null }])
+            .select('id, email, gmail, name, role, doctorId, createdAt')
+            .single();
+        if (error) throw error;
+
+        console.log(`✅ User created: ${name} (${role})`);
+        res.status(201).json(data);
+    } catch (e) {
+        console.error('Error creating user:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PUT update user
+app.put('/api/auth/users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { email, gmail, name, password, role, doctorId } = req.body;
+
+        if (role && !VALID_ROLES.includes(role)) {
+            return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
+        }
+
+        const supabase = getSupabase();
+        const updateData = {};
+        if (email) updateData.email = email;
+        if (gmail !== undefined) updateData.gmail = gmail || null;
+        if (name) updateData.name = name;
+        if (password) updateData.password = password;
+        if (role) updateData.role = role;
+        if (doctorId !== undefined) updateData.doctorId = doctorId || null;
+
+        const { data, error } = await supabase
+            .from('User')
+            .update(updateData)
+            .eq('id', id)
+            .select('id, email, gmail, name, role, doctorId, createdAt')
+            .single();
+        if (error) throw error;
+
+        console.log(`✅ User updated: ${data.name} (${data.role})`);
+        res.json(data);
+    } catch (e) {
+        console.error('Error updating user:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE user
+app.delete('/api/auth/users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const supabase = getSupabase();
+        const { error } = await supabase.from('User').delete().eq('id', id);
+        if (error) throw error;
+        console.log(`🗑️ User deleted: ${id}`);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting user:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- DEBUG ENDPOINT (Temporary) ---
 app.get('/api/debug/db-check', async (req, res) => {
     try {
