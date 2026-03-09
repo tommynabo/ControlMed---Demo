@@ -3,16 +3,18 @@ import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-route
 import {
     Users, Activity, Calendar, Settings,
     PieChart, Brain, Package, LogOut, Search, Bell, Menu, ChevronRight,
-    Stethoscope, DollarSign, UserCog
+    Stethoscope, DollarSign, UserCog, KeyRound
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ROLE_LABELS } from '../config/roles';
+import ChangePasswordModal from '../components/ChangePasswordModal';
 
 const Layout: React.FC = () => {
     const { currentUser, isAuthenticated, currentUserRole: role, logout, canAccessPage } = useAppContext();
     const location = useLocation();
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [showChangePassword, setShowChangePassword] = useState(false);
 
     // === TabGuard: Route protection — redirect to login if session not found ===
     if (!isAuthenticated) {
@@ -107,7 +109,14 @@ const Layout: React.FC = () => {
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-slate-800">
+                <div className="p-4 border-t border-slate-800 space-y-1">
+                    <button
+                        onClick={() => setShowChangePassword(true)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-500/10 hover:text-blue-400 transition-all w-full ${!isSidebarOpen && 'justify-center'}`}
+                    >
+                        <KeyRound size={20} />
+                        {isSidebarOpen && <span className="text-xs font-bold uppercase tracking-wide">Cambiar Contraseña</span>}
+                    </button>
                     <button
                         onClick={handleLogout}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-500 transition-all w-full ${!isSidebarOpen && 'justify-center'}`}
@@ -144,6 +153,9 @@ const Layout: React.FC = () => {
                     <Outlet />
                 </main>
             </div>
+
+            {/* Change Password Modal */}
+            <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} />
         </div>
     );
 };

@@ -1329,6 +1329,50 @@ app.delete('/api/auth/users/:id', async (req, res) => {
     }
 });
 
+// CHANGE PASSWORD (user self-service)
+app.post('/api/auth/change-password', async (req, res) => {
+    try {
+        const { userId, currentPassword, newPassword } = req.body;
+        if (!userId || !currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+        }
+
+        const supabase = getSupabase();
+
+        // Verify current password
+        const { data: user, error: fetchErr } = await supabase
+            .from('User')
+            .select('id, password')
+            .eq('id', userId)
+            .single();
+
+        if (fetchErr || !user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        if (user.password !== currentPassword) {
+            return res.status(401).json({ error: 'La contraseña actual es incorrecta' });
+        }
+
+        // Update password
+        const { error: updateErr } = await supabase
+            .from('User')
+            .update({ password: newPassword })
+            .eq('id', userId);
+
+        if (updateErr) throw updateErr;
+
+        console.log(`🔑 Password changed for user: ${userId}`);
+        res.json({ success: true, message: 'Contraseña actualizada correctamente' });
+    } catch (e) {
+        console.error('Error changing password:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- DEBUG ENDPOINT (Temporary) ---
 app.get('/api/debug/db-check', async (req, res) => {
     try {
