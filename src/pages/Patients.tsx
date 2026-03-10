@@ -525,19 +525,19 @@ const Patients: React.FC = () => {
     }, [isWhatsAppModalOpen]);
 
     const handleCreatePatient = async () => {
-        if ((!newPatient.firstName && !newPatient.name) || !newPatient.dni) {
-            alert("Por favor rellene nombre y DNI.");
-            return;
-        }
         try {
             const created = await api.createPatient(newPatient);
             setPatients(prev => [...prev, created]);
             setIsNewPatientModalOpen(false);
-            setNewPatient({ name: '', dni: '', email: '', phone: '' });
+            setNewPatient({
+                name: '', firstName: '', lastName1: '', lastName2: '', dni: '', email: '', phone: '',
+                birthDate: '', smoker: false, diseases: '', allergies: '', medications: '', criticalAlerts: ''
+            });
             alert("✅ Paciente creado correctamente");
-        } catch (e) {
+        } catch (e: any) {
             console.error("Error creating patient:", e);
-            alert("Error al crear paciente. Revise la consola.");
+            const errorMsg = e.message || "Error al crear paciente. Revise la consola.";
+            alert("⚠️ " + errorMsg);
         }
     };
 

@@ -689,26 +689,21 @@ app.post('/api/patients', async (req, res) => {
             console.log("✅ ID present in payload:", data.id);
         }
 
-        // --- FIX: Ensure birthDate exists (DB constraint) ---
-        if (!data.birthDate) {
-            console.log("⚠️ birthDate missing, using current date");
-            data.birthDate = new Date().toISOString();
-        }
+        // --- VALIDATION & TRANSFORMATION ---
+        const { firstName, lastName1, dni, birthDate } = data;
+
+        if (!firstName) return res.status(400).json({ error: "Falta rellenar el campo: Nombre" });
+        if (!lastName1) return res.status(400).json({ error: "Falta rellenar el campo: Primer Apellido" });
+        if (!dni) return res.status(400).json({ error: "Falta rellenar el campo: DNI" });
+        if (!birthDate) return res.status(400).json({ error: "Falta rellenar el campo: Fecha de Nacimiento" });
+
+        // Prisma ISO-8601 Fix
+        data.birthDate = new Date(birthDate).toISOString();
 
         // Auto-construir campo 'name' si se proporcionan firstName, lastName1, lastName2
-        if (data.firstName || data.lastName1 || data.lastName2) {
-            const firstName = data.firstName || '';
-            const lastName1 = data.lastName1 || '';
-            const lastName2 = data.lastName2 || '';
-            data.name = `${firstName} ${lastName1} ${lastName2}`.trim();
-            console.log(`🏷️ Auto-generated name: "${data.name}"`);
-        }
-
-        // Validate
-        if (!data.name || !data.dni) {
-            console.error("❌ Missing name or dni");
-            return res.status(400).json({ error: "Name and DNI are required" });
-        }
+        const lastName2 = data.lastName2 || '';
+        data.name = `${firstName} ${lastName1} ${lastName2}`.trim();
+        console.log(`🏷️ Scaled and validated name: "${data.name}", ISO Date: ${data.birthDate}`);
 
         // --- AUTO-GENERATE HISTORY NUMBER ---
         // Ensure array fields (if any) are correctly stored as strings, to prevent Prisma errors
@@ -2165,15 +2160,29 @@ app.post('/api/payments/create', async (req, res) => {
 
         // Fetch doctor info if needed for payroll
         let doctor = null;
-        if (doctorId) {
-            doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
-        } else if (appointmentId) {
-            const appt = await prisma.appointment.findUnique({
+        let appointment = null;
+
+        if (appointmentId) {
+            appointment = await prisma.appointment.findUnique({
                 where: { id: appointmentId },
-                include: { doctor: true }
+                include: { doctor: true, budget: { include: { items: true } } }
             });
-            doctor = appt?.doctor;
+            doctor = appointment?.doctor;
+        } else if (doctorId) {
+            doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
         }
+
+        // --- DYNAMIC CONCEPT DERIVATION ---
+        let solvedTreatmentName = treatmentName;
+        if (!solvedTreatmentName) {
+            if (appointment) {
+                solvedTreatmentName = appointment.treatmentName;
+                if (!solvedTreatmentName && appointment.budget?.items?.length > 0) {
+                    solvedTreatmentName = appointment.budget.items.map(i => i.name).join(', ');
+                }
+            }
+        }
+        if (!solvedTreatmentName) solvedTreatmentName = type === 'ADVANCE_PAYMENT' ? 'Pago a Cuenta' : 'Tratamiento General';
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Create Payment record
@@ -2201,7 +2210,6 @@ app.post('/api/payments/create', async (req, res) => {
 
             // 3. Generate Invoice (Internal)
             const invoiceNumber = `F-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-            const concept = type === 'ADVANCE_PAYMENT' ? 'Pago a Cuenta' : (treatmentName || 'Cobro de Cita');
 
             const invoice = await tx.invoice.create({
                 data: {
@@ -2212,7 +2220,7 @@ app.post('/api/payments/create', async (req, res) => {
                     date: new Date(),
                     status: 'issued',
                     paymentMethod: method,
-                    concept,
+                    concept: solvedTreatmentName,
                     relatedPaymentId: payment.id
                 }
             });
@@ -2222,7 +2230,7 @@ app.post('/api/payments/create', async (req, res) => {
                 data: {
                     id: crypto.randomUUID(),
                     invoiceId: invoice.id,
-                    name: concept,
+                    name: solvedTreatmentName,
                     price: numericAmount
                 }
             });
@@ -2235,8 +2243,10 @@ app.post('/api/payments/create', async (req, res) => {
 
             // 4. Create Liquidation (Payroll) entry if direct charge and appointment/doctor linked
             if (appointmentId && doctor && type === 'DIRECT_CHARGE') {
-                const commissionRate = doctor.commissionPercentage || 0;
-                const labCost = 0; // Default
+                // FALLBACK MATH: Use doctor.commissionPercentage or 30%
+                const rawRate = doctor.commissionPercentage || 30;
+                const commissionRate = rawRate / 100;
+                const labCost = 0; // Default fallback
                 const finalAmount = (numericAmount - labCost) * commissionRate;
 
                 // Patient name for convenience in reporting
@@ -2249,9 +2259,9 @@ app.post('/api/payments/create', async (req, res) => {
                         appointmentId: appointmentId,
                         grossAmount: numericAmount,
                         labCost,
-                        commissionRate,
+                        commissionRate: rawRate, // Store as percentage integer
                         finalAmount,
-                        treatmentName: treatmentName || concept,
+                        treatmentName: solvedTreatmentName,
                         patientName: patient?.name || 'Paciente',
                         paymentMethod: method,
                         status: 'PENDING',
