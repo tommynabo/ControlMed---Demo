@@ -38,7 +38,7 @@ const Payroll: React.FC = () => {
             const gross = edit.grossAmount !== undefined ? edit.grossAmount : r.grossAmount;
             const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
             const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
-            total += (gross - lab) * rate;
+            total += (gross - lab) * (rate / 100);
         });
         return total;
     };
@@ -151,7 +151,7 @@ const Payroll: React.FC = () => {
                                     const gross = edit.grossAmount !== undefined ? edit.grossAmount : r.grossAmount;
                                     const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
                                     const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
-                                    const final = (gross - lab) * rate;
+                                    const final = (gross - lab) * (rate / 100);
 
                                     // Payment method badge
                                     const getPaymentBadge = (method: string) => {
@@ -195,8 +195,8 @@ const Payroll: React.FC = () => {
                                                 <input
                                                     type="number"
                                                     className="w-12 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-blue-300 focus:border-blue-500 outline-none transition-all text-blue-600 font-bold"
-                                                    value={Math.round(rate * 100)}
-                                                    onChange={e => updateRecord(r.id, 'commissionRate', Number(e.target.value) / 100)}
+                                                    value={rate}
+                                                    onChange={e => updateRecord(r.id, 'commissionRate', Number(e.target.value))}
                                                 />%
                                             </td>
                                             <td className="p-4 text-right font-bold text-emerald-600 text-sm bg-emerald-50/30">

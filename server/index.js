@@ -2150,7 +2150,7 @@ app.get('/api/patients/:id/payments', async (req, res) => {
 
 app.post('/api/payments/create', async (req, res) => {
     try {
-        const { patientId, budgetId, appointmentId, amount, method, type, notes, doctorId, treatmentName } = req.body;
+        const { patientId, budgetId, appointmentId, amount, method, type, notes, doctorId } = req.body;
 
         if (!patientId || !amount || !method || !type) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -2172,17 +2172,19 @@ app.post('/api/payments/create', async (req, res) => {
             doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
         }
 
-        // --- DYNAMIC CONCEPT DERIVATION ---
-        let solvedTreatmentName = treatmentName;
-        if (!solvedTreatmentName) {
-            if (appointment) {
-                solvedTreatmentName = appointment.treatmentName;
-                if (!solvedTreatmentName && appointment.budget?.items?.length > 0) {
-                    solvedTreatmentName = appointment.budget.items.map(i => i.name).join(', ');
-                }
+        // --- DYNAMIC CONCEPT DERIVATION (Ignore Frontend) ---
+        let solvedTreatmentName = '';
+        if (appointment) {
+            solvedTreatmentName = appointment.treatmentName;
+            if (!solvedTreatmentName && appointment.budget?.items?.length > 0) {
+                solvedTreatmentName = appointment.budget.items.map(i => i.name).join(', ');
             }
         }
-        if (!solvedTreatmentName) solvedTreatmentName = type === 'ADVANCE_PAYMENT' ? 'Pago a Cuenta' : 'Tratamiento General';
+
+        // Final Fallback
+        if (!solvedTreatmentName) {
+            solvedTreatmentName = type === 'ADVANCE_PAYMENT' ? 'Pago a Cuenta' : 'Tratamiento General';
+        }
 
         const result = await prisma.$transaction(async (tx) => {
             // 1. Create Payment record
@@ -2242,24 +2244,25 @@ app.post('/api/payments/create', async (req, res) => {
             });
 
             // 4. Create Liquidation (Payroll) entry if direct charge and appointment/doctor linked
+            let liquidation = null;
             if (appointmentId && doctor && type === 'DIRECT_CHARGE') {
-                // FALLBACK MATH: Use doctor.commissionPercentage or 30%
+                // FIXED MATH: commissionRate stored as whole number (30)
                 const rawRate = doctor.commissionPercentage || 30;
-                const commissionRate = rawRate / 100;
-                const labCost = 0; // Default fallback
-                const finalAmount = (numericAmount - labCost) * commissionRate;
+                const commissionRateDecimal = rawRate / 100;
+                const labCost = req.body.costeLab || 0; // Support lab cost from req if provided
+                const finalAmount = (numericAmount - labCost) * commissionRateDecimal;
 
                 // Patient name for convenience in reporting
                 const patient = await tx.patient.findUnique({ where: { id: patientId } });
 
-                await tx.liquidation.create({
+                liquidation = await tx.liquidation.create({
                     data: {
                         id: crypto.randomUUID(),
                         doctorId: doctor.id,
                         appointmentId: appointmentId,
                         grossAmount: numericAmount,
                         labCost,
-                        commissionRate: rawRate, // Store as percentage integer
+                        commissionRate: rawRate, // Correctly store 30 as 30%
                         finalAmount,
                         treatmentName: solvedTreatmentName,
                         patientName: patient?.name || 'Paciente',
@@ -2279,10 +2282,10 @@ app.post('/api/payments/create', async (req, res) => {
                 });
             }
 
-            return { payment, invoice };
+            return { payment, invoice, payroll: liquidation };
         });
 
-        res.json(result);
+        res.status(200).json({ success: true, ...result });
     } catch (e) {
         console.error("❌ Payment creation error:", e);
         res.status(500).json({ error: e.message || 'Unknown transaction error' });
