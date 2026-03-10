@@ -218,6 +218,7 @@ model Invoice {
   externalId     String?       // External ID from Invoicing Provider (Quipu/FD)
   items          InvoiceItem[]
   concept        String?       // "Pago a Cuenta" | "Tratamiento: Endodoncia" etc
+  appointmentId  String?       // Link to Appointment
   relatedPaymentId String?     @unique
   relatedPayment Payment?
 }

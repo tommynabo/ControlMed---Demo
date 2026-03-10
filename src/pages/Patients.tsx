@@ -727,7 +727,7 @@ const Patients: React.FC = () => {
             {/* LEFT COLUMN: PATIENT LIST */}
             <div className={`flex flex-col gap-6 transition-all duration-500 ease-in-out ${selectedPatient ? 'w-1/3 min-w-[320px] hidden xl:flex' : 'w-full max-w-5xl mx-auto'} `}>
                 {/* Same list code as before... */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-4">
                     <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Pacientes</h2>
                     <div className="flex gap-2">
                         <button onClick={() => setIsNewPatientModalOpen(true)} className="bg-slate-900 text-white p-4 rounded-2xl hover:scale-105 transition-transform shadow-xl shadow-slate-900/20">
@@ -735,8 +735,8 @@ const Patients: React.FC = () => {
                         </button>
                     </div>
                 </div>
-                <div className="flex gap-4 mb-6">
-                    <div className="relative group flex-1">
+                <div className="flex flex-wrap gap-4 mb-6">
+                    <div className="relative group flex-1 min-w-[280px]">
                         <Search className="absolute left-5 top-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                         <input
                             value={searchQuery}
@@ -746,7 +746,6 @@ const Patients: React.FC = () => {
                         />
                         <button className="absolute right-4 top-4 p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-slate-900"><Filter size={16} /></button>
                     </div>
-
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
                     {filteredPatients.map(patient => (
@@ -821,7 +820,7 @@ const Patients: React.FC = () => {
                         {/* FICHA TAB */}
                         {patientTab === 'ficha' && (
                             <div className="max-w-4xl mx-auto space-y-6">
-                                <div className="flex justify-between items-center mb-6">
+                                <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                                     <h2 className="text-3xl font-black text-slate-900 tracking-tight">Ficha del Paciente</h2>
                                     <button
                                         onClick={async () => {
@@ -1072,14 +1071,18 @@ const Patients: React.FC = () => {
                                     </button>
                                 </div>
                                 <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-sm text-center">
-                                    <div className="grid grid-cols-12 gap-4 pb-4 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-widest text-left">
-                                        <div className="col-span-1 text-center">Pieza(s)</div>
-                                        <div className="col-span-4">Tratamiento</div>
-                                        <div className="col-span-3">Estado</div>
-                                        <div className="col-span-3">Precio (Total)</div>
-                                        <div className="col-span-1 text-right">Acciones</div>
+                                    <div className="w-full overflow-x-auto">
+                                        <div className="min-w-[700px]">
+                                            <div className="grid grid-cols-12 gap-4 pb-4 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-widest text-left">
+                                                <div className="col-span-1 text-center">Pieza(s)</div>
+                                                <div className="col-span-4">Tratamiento</div>
+                                                <div className="col-span-3">Estado</div>
+                                                <div className="col-span-3">Precio (Total)</div>
+                                                <div className="col-span-1 text-right">Acciones</div>
+                                            </div>
+                                            <TreatmentsList patientId={selectedPatient.id} />
+                                        </div>
                                     </div>
-                                    <TreatmentsList patientId={selectedPatient.id} />
                                 </div>
                             </div>
                         )}
@@ -1188,14 +1191,14 @@ const Patients: React.FC = () => {
                                         <div className="flex gap-3">
                                             <button
                                                 onClick={() => setIsPaymentModalOpen(true)}
-                                                className="bg-white text-slate-900 px-6 py-4 rounded-xl font-black uppercase shadow-lg hover:bg-blue-50 transition-all flex items-center gap-2 text-sm"
+                                                className="bg-white text-slate-900 px-6 py-4 rounded-xl font-black uppercase shadow-lg hover:bg-blue-50 transition-all flex items-center gap-2 text-sm whitespace-nowrap"
                                             >
                                                 <Plus size={18} />
                                                 Añadir Saldo
                                             </button>
                                             <button
                                                 onClick={() => setIsTransferModalOpen(true)}
-                                                className="bg-emerald-500 text-white px-6 py-4 rounded-xl font-black uppercase shadow-lg hover:bg-emerald-600 transition-all flex items-center gap-2 text-sm"
+                                                className="bg-emerald-500 text-white px-6 py-4 rounded-xl font-black uppercase shadow-lg hover:bg-emerald-600 transition-all flex items-center gap-2 text-sm whitespace-nowrap"
                                             >
                                                 <ArrowUp className="rotate-90" size={18} />
                                                 Asignar a Tratamiento
@@ -1330,9 +1333,9 @@ const Patients: React.FC = () => {
                         {
                             patientTab === 'budget' && (
                                 <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
-                                    <div className="flex justify-between items-center">
+                                    <div className="flex flex-wrap justify-between items-center gap-4">
                                         <h2 className="text-3xl font-black text-slate-900 tracking-tight">Presupuestos</h2>
-                                        <button onClick={() => setIsBudgetModalOpen(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg"><Plus size={16} /> Nuevo Presupuesto</button>
+                                        <button onClick={() => setIsBudgetModalOpen(true)} className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg whitespace-nowrap"><Plus size={16} /> Nuevo Presupuesto</button>
                                     </div>
                                     <div className="space-y-4">
                                         {budgets.length === 0 ? (

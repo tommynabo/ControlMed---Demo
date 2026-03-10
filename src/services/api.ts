@@ -97,6 +97,12 @@ export const api = {
         getByPatient: async (patientId: string): Promise<Invoice[]> => {
             const all = await api.invoices.getAll();
             return all.filter((inv: any) => inv.patientId === patientId);
+        },
+        getByAppointment: async (appointmentId: string): Promise<any | null> => {
+            const res = await fetch(`${API_URL}/finance/invoices/appointment/${appointmentId}`, { headers });
+            if (res.status === 404) return null;
+            if (!res.ok) throw new Error('Failed to fetch invoice for appointment');
+            return res.json();
         }
     },
 

@@ -136,7 +136,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 throw new Error("No se recibió respuesta del servidor");
             }
 
-            const invoiceUrl = response?.invoice?.url;
+            const pdfUrl = response?.pdfUrl || response?.invoice?.url;
 
             const payment: Payment = {
                 id: `pay_${Date.now()}`,
@@ -158,8 +158,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);
 
-            if (invoiceUrl) {
-                window.open(invoiceUrl, '_blank');
+            if (pdfUrl) {
+                window.open(pdfUrl, '_blank');
             }
 
             onClose();

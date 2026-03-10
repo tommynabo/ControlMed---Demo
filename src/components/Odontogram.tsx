@@ -217,7 +217,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                 </div>
 
                 {/* Odontogram Visual */}
-                <div className="relative z-10 bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-slate-100 shadow-inner">
+                <div className="relative z-10 bg-white/70 backdrop-blur-sm rounded-3xl p-8 border border-slate-100 shadow-inner overflow-x-auto custom-scrollbar">
 
                     {/* Grid Layout */}
                     <div className="flex flex-col items-center gap-2">
@@ -327,74 +327,76 @@ export const Odontogram: React.FC<OdontogramProps> = ({
 
             {/* Treatments Table */}
             <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-lg">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                     <h4 className="text-lg font-black text-slate-900">📋 Tratamientos ({treatments.length})</h4>
                     <button onClick={handleCreateBudget} disabled={selectedTreatmentsForBudget.length === 0}
-                        className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-6 py-3 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-6 py-3 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
                         <FileText size={16} /> Presupuestar ({selectedTreatmentsForBudget.length})
                     </button>
                 </div>
-                <div className="grid grid-cols-12 gap-4 pb-3 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400">
-                    <div className="col-span-1"><input type="checkbox" checked={selectedTreatmentsForBudget.length === treatments.length && treatments.length > 0} onChange={(e) => { e.target.checked ? setSelectedTreatmentsForBudget(treatments.map(t => t.id)) : setSelectedTreatmentsForBudget([]); }} className="w-4 h-4 rounded cursor-pointer" /></div>
-                    <div className="col-span-1">Diente</div><div className="col-span-5">Tratamiento</div><div className="col-span-2">Precio</div><div className="col-span-2">Estado</div><div className="col-span-1 text-right">-</div>
-                </div>
-                <div className="space-y-2 mt-4">
-                    {treatments.length === 0 ? (
-                        <div className="text-center py-12 text-slate-400"><p className="text-sm font-bold mb-2">No hay tratamientos</p><p className="text-xs">Selecciona dientes arriba</p></div>
-                    ) : (
-                        treatments.map((treatment) => (
-                            <div key={treatment.id} className="grid grid-cols-12 gap-4 items-center p-4 bg-slate-50 rounded-xl text-sm border border-slate-100 hover:border-violet-200 transition-colors">
-                                <div className="col-span-1"><input type="checkbox" checked={selectedTreatmentsForBudget.includes(treatment.id)} onChange={(e) => { e.target.checked ? setSelectedTreatmentsForBudget(prev => [...prev, treatment.id]) : setSelectedTreatmentsForBudget(prev => prev.filter(id => id !== treatment.id)); }} className="w-4 h-4 rounded cursor-pointer" /></div>
-                                <div className="col-span-1 font-black text-violet-600 text-center text-lg">{treatment.toothId}</div>
-                                <div className="col-span-5 font-bold text-slate-900">{treatment.serviceName}</div>
-                                <div className="col-span-2 font-black text-slate-900">{treatment.price}€</div>
-                                <div className="col-span-2"><span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${treatment.status === 'COMPLETADO' ? 'bg-green-100 text-green-600' : treatment.status === 'EN_PROCESO' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}`}>{treatment.status}</span></div>
-                                <div className="col-span-1 flex justify-end"><button onClick={() => handleDeleteTreatment(treatment.id)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button></div>
+                <div className="w-full overflow-x-auto">
+                    <div className="min-w-[600px] space-y-2">
+                        <div className="grid grid-cols-12 gap-4 pb-3 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400">
+                            <div className="col-span-1"><input type="checkbox" checked={selectedTreatmentsForBudget.length === treatments.length && treatments.length > 0} onChange={(e) => { e.target.checked ? setSelectedTreatmentsForBudget(treatments.map(t => t.id)) : setSelectedTreatmentsForBudget([]); }} className="w-4 h-4 rounded cursor-pointer" /></div>
+                            <div className="col-span-1">Diente</div><div className="col-span-5">Tratamiento</div><div className="col-span-2">Precio</div><div className="col-span-2">Estado</div><div className="col-span-1 text-right">-</div>
+                        </div>
+                        <div className="space-y-2 mt-4">
+                            {treatments.length === 0 ? (
+                                <div className="text-center py-12 text-slate-400"><p className="text-sm font-bold mb-2">No hay tratamientos</p><p className="text-xs">Selecciona dientes arriba</p></div>
+                            ) : (
+                                treatments.map((treatment) => (
+                                    <div key={treatment.id} className="grid grid-cols-12 gap-4 items-center p-4 bg-slate-50 rounded-xl text-sm border border-slate-100 hover:border-violet-200 transition-colors">
+                                        <div className="col-span-1"><input type="checkbox" checked={selectedTreatmentsForBudget.includes(treatment.id)} onChange={(e) => { e.target.checked ? setSelectedTreatmentsForBudget(prev => [...prev, treatment.id]) : setSelectedTreatmentsForBudget(prev => prev.filter(id => id !== treatment.id)); }} className="w-4 h-4 rounded cursor-pointer" /></div>
+                                        <div className="col-span-1 font-black text-violet-600 text-center text-lg">{treatment.toothId}</div>
+                                        <div className="col-span-5 font-bold text-slate-900">{treatment.serviceName}</div>
+                                        <div className="col-span-2 font-black text-slate-900">{treatment.price}€</div>
+                                        <div className="col-span-2"><span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${treatment.status === 'COMPLETADO' ? 'bg-green-100 text-green-600' : treatment.status === 'EN_PROCESO' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}`}>{treatment.status}</span></div>
+                                        <div className="col-span-1 flex justify-end"><button onClick={() => handleDeleteTreatment(treatment.id)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button></div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        {treatments.length > 0 && (
+                            <div className="mt-6 pt-6 border-t border-slate-200 flex justify-between items-center">
+                                <p className="text-sm font-bold text-slate-600">Total:</p>
+                                <p className="text-2xl font-black text-slate-900">{treatments.reduce((sum, t) => sum + t.price, 0)}€</p>
                             </div>
-                        ))
-                    )}
-                </div>
-                {treatments.length > 0 && (
-                    <div className="mt-6 pt-6 border-t border-slate-200 flex justify-between items-center">
-                        <p className="text-sm font-bold text-slate-600">Total:</p>
-                        <p className="text-2xl font-black text-slate-900">{treatments.reduce((sum, t) => sum + t.price, 0)}€</p>
+                        )}
                     </div>
-                )}
-            </div>
-        </div>
-    );
+                </div>
+                );
 };
 
-// Tooth Component
-const Tooth: React.FC<{
+                // Tooth Component
+                const Tooth: React.FC<{
     id: number;
-    treatments: PatientTreatment[];
-    isSelected: boolean;
+                treatments: PatientTreatment[];
+                isSelected: boolean;
     onClick: (e: React.MouseEvent) => void;
-    isChild?: boolean;
-}> = ({ id, treatments, isSelected, onClick, isChild }) => {
+                isChild?: boolean;
+}> = ({id, treatments, isSelected, onClick, isChild}) => {
     const shape = getToothShape(id);
     const hasTreatment = treatments.length > 0;
 
-    return (
-        <div className={`relative flex flex-col items-center group cursor-pointer ${isChild ? 'w-[36px] md:w-[48px]' : 'w-[40px] md:w-[52px]'}`} onClick={onClick}>
-            <div className={`relative transition-all duration-200 ${isSelected ? 'scale-110 -translate-y-1' : 'hover:scale-105'}`}>
-                <svg width={isChild ? "36" : "44"} height={isChild ? "50" : "60"} viewBox="0 0 30 50" className="overflow-visible drop-shadow-sm">
-                    <defs>
-                        <linearGradient id={`toothGrad-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stopColor={isSelected ? '#ede9fe' : '#ffffff'} />
-                            <stop offset="100%" stopColor={isSelected ? '#ddd6fe' : '#f1f5f9'} />
-                        </linearGradient>
-                    </defs>
-                    <path d={shape} fill={`url(#toothGrad-${id})`} stroke={isSelected ? '#8b5cf6' : (hasTreatment ? '#f59e0b' : '#cbd5e1')} strokeWidth={isSelected ? 2.5 : 1.5} className="transition-all duration-200" />
-                </svg>
-                {hasTreatment && (
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white shadow-sm animate-pulse"></div>
-                )}
-            </div>
-            <span className={`mt-1 text-[9px] font-black transition-colors ${isSelected ? 'text-violet-700' : 'text-slate-500'}`}>{id}</span>
-        </div>
-    );
+                return (
+                <div className={`relative flex flex-col items-center group cursor-pointer ${isChild ? 'w-[36px] md:w-[48px]' : 'w-[40px] md:w-[52px]'}`} onClick={onClick}>
+                    <div className={`relative transition-all duration-200 ${isSelected ? 'scale-110 -translate-y-1' : 'hover:scale-105'}`}>
+                        <svg width={isChild ? "36" : "44"} height={isChild ? "50" : "60"} viewBox="0 0 30 50" className="overflow-visible drop-shadow-sm">
+                            <defs>
+                                <linearGradient id={`toothGrad-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stopColor={isSelected ? '#ede9fe' : '#ffffff'} />
+                                    <stop offset="100%" stopColor={isSelected ? '#ddd6fe' : '#f1f5f9'} />
+                                </linearGradient>
+                            </defs>
+                            <path d={shape} fill={`url(#toothGrad-${id})`} stroke={isSelected ? '#8b5cf6' : (hasTreatment ? '#f59e0b' : '#cbd5e1')} strokeWidth={isSelected ? 2.5 : 1.5} className="transition-all duration-200" />
+                        </svg>
+                        {hasTreatment && (
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white shadow-sm animate-pulse"></div>
+                        )}
+                    </div>
+                    <span className={`mt-1 text-[9px] font-black transition-colors ${isSelected ? 'text-violet-700' : 'text-slate-500'}`}>{id}</span>
+                </div>
+                );
 };
 
-export default Odontogram;
+                export default Odontogram;

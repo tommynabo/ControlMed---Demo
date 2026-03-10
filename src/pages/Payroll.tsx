@@ -94,7 +94,7 @@ const Payroll: React.FC = () => {
             </div>
 
             <div className="flex-1 space-y-8">
-                <div className="flex justify-between items-start mb-10">
+                <div className="flex flex-wrap justify-between items-start mb-10 gap-6">
                     <div>
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Liquidaciones y Comisiones</h3>
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
@@ -132,81 +132,83 @@ const Payroll: React.FC = () => {
 
                 {liquidations && liquidations.records && (
                     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
-                                <tr>
-                                    <th className="p-4">Paciente</th>
-                                    <th className="p-4">Tratamiento</th>
-                                    <th className="p-4">Pago</th>
-                                    <th className="p-4">Fecha</th>
-                                    <th className="p-4 text-right">Importe Bruto</th>
-                                    <th className="p-4 text-right">Coste Lab</th>
-                                    <th className="p-4 text-right">% Comisión</th>
-                                    <th className="p-4 text-right">Neto Dr.</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50">
-                                {liquidations.records.map((r: any) => {
-                                    const edit = editedRecords[r.id] || {};
-                                    const gross = edit.grossAmount !== undefined ? edit.grossAmount : r.grossAmount;
-                                    const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
-                                    const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
-                                    const final = (gross - lab) * (rate / 100);
+                        <div className="w-full overflow-x-auto">
+                            <table className="w-full min-w-max text-left">
+                                <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
+                                    <tr>
+                                        <th className="p-4">Paciente</th>
+                                        <th className="p-4">Tratamiento</th>
+                                        <th className="p-4">Pago</th>
+                                        <th className="p-4">Fecha</th>
+                                        <th className="p-4 text-right">Importe Bruto</th>
+                                        <th className="p-4 text-right">Coste Lab</th>
+                                        <th className="p-4 text-right">% Comisión</th>
+                                        <th className="p-4 text-right">Neto Dr.</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {liquidations.records.map((r: any) => {
+                                        const edit = editedRecords[r.id] || {};
+                                        const gross = edit.grossAmount !== undefined ? edit.grossAmount : r.grossAmount;
+                                        const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
+                                        const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
+                                        const final = (gross - lab) * (rate / 100);
 
-                                    // Payment method badge
-                                    const getPaymentBadge = (method: string) => {
-                                        switch (method?.toLowerCase()) {
-                                            case 'wallet': return { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Saldo' };
-                                            case 'cash': return { bg: 'bg-green-100', text: 'text-green-700', label: 'Efectivo' };
-                                            case 'card': return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Tarjeta' };
-                                            case 'transfer': return { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Transf.' };
-                                            default: return { bg: 'bg-slate-100', text: 'text-slate-600', label: method || '-' };
-                                        }
-                                    };
-                                    const paymentBadge = getPaymentBadge(r.paymentMethod);
+                                        // Payment method badge
+                                        const getPaymentBadge = (method: string) => {
+                                            switch (method?.toLowerCase()) {
+                                                case 'wallet': return { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Saldo' };
+                                                case 'cash': return { bg: 'bg-green-100', text: 'text-green-700', label: 'Efectivo' };
+                                                case 'card': return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Tarjeta' };
+                                                case 'transfer': return { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Transf.' };
+                                                default: return { bg: 'bg-slate-100', text: 'text-slate-600', label: method || '-' };
+                                            }
+                                        };
+                                        const paymentBadge = getPaymentBadge(r.paymentMethod);
 
-                                    return (
-                                        <tr key={r.id} className="text-xs font-medium text-slate-600 hover:bg-slate-50">
-                                            <td className="p-4 font-bold text-slate-900">{r.patientName || 'Paciente'}</td>
-                                            <td className="p-4 font-medium">{r.treatmentName || 'Tratamiento'}</td>
-                                            <td className="p-4">
-                                                <span className={`px-2 py-1 rounded-lg text-[9px] font-bold ${paymentBadge.bg} ${paymentBadge.text}`}>
-                                                    {paymentBadge.label}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">{r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : 'N/A'}</td>
-                                            <td className="p-4 text-right">
-                                                <input
-                                                    type="number"
-                                                    className="w-20 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none transition-all"
-                                                    value={gross}
-                                                    onChange={e => updateRecord(r.id, 'grossAmount', Number(e.target.value))}
-                                                />€
-                                            </td>
-                                            <td className="p-4 text-right text-rose-400">
-                                                -<input
-                                                    type="number"
-                                                    className="w-16 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-rose-300 focus:border-rose-500 outline-none transition-all text-rose-500"
-                                                    value={lab}
-                                                    onChange={e => updateRecord(r.id, 'labCost', Number(e.target.value))}
-                                                />€
-                                            </td>
-                                            <td className="p-4 text-right text-blue-600">
-                                                <input
-                                                    type="number"
-                                                    className="w-12 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-blue-300 focus:border-blue-500 outline-none transition-all text-blue-600 font-bold"
-                                                    value={rate}
-                                                    onChange={e => updateRecord(r.id, 'commissionRate', Number(e.target.value))}
-                                                />%
-                                            </td>
-                                            <td className="p-4 text-right font-bold text-emerald-600 text-sm bg-emerald-50/30">
-                                                {final.toFixed(2)}€
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                        return (
+                                            <tr key={r.id} className="text-xs font-medium text-slate-600 hover:bg-slate-50">
+                                                <td className="p-4 font-bold text-slate-900">{r.patientName || 'Paciente'}</td>
+                                                <td className="p-4 font-medium">{r.treatmentName || 'Tratamiento'}</td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded-lg text-[9px] font-bold ${paymentBadge.bg} ${paymentBadge.text}`}>
+                                                        {paymentBadge.label}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">{r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : 'N/A'}</td>
+                                                <td className="p-4 text-right">
+                                                    <input
+                                                        type="number"
+                                                        className="w-20 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none transition-all"
+                                                        value={gross}
+                                                        onChange={e => updateRecord(r.id, 'grossAmount', Number(e.target.value))}
+                                                    />€
+                                                </td>
+                                                <td className="p-4 text-right text-rose-400">
+                                                    -<input
+                                                        type="number"
+                                                        className="w-16 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-rose-300 focus:border-rose-500 outline-none transition-all text-rose-500"
+                                                        value={lab}
+                                                        onChange={e => updateRecord(r.id, 'labCost', Number(e.target.value))}
+                                                    />€
+                                                </td>
+                                                <td className="p-4 text-right text-blue-600">
+                                                    <input
+                                                        type="number"
+                                                        className="w-12 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-blue-300 focus:border-blue-500 outline-none transition-all text-blue-600 font-bold"
+                                                        value={rate}
+                                                        onChange={e => updateRecord(r.id, 'commissionRate', Number(e.target.value))}
+                                                    />%
+                                                </td>
+                                                <td className="p-4 text-right font-bold text-emerald-600 text-sm bg-emerald-50/30">
+                                                    {final.toFixed(2)}€
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>

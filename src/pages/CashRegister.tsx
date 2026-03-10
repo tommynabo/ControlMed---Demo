@@ -78,7 +78,7 @@ const CashRegister: React.FC = () => {
                     <p className="text-xs text-slate-500 font-black uppercase tracking-widest mt-2">{new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Stats Card */}
                     <div className="col-span-2 bg-white p-10 rounded-2xl border border-slate-200 shadow-sm relative">
                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900 flex items-center gap-3 mb-8">
@@ -147,56 +147,58 @@ const CashRegister: React.FC = () => {
                             No hay movimientos registrados hoy
                         </div>
                     ) : (
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 tracking-widest">
-                                <tr>
-                                    <th className="p-6 pl-8">Hora</th>
-                                    <th className="p-6">Concepto / Paciente</th>
-                                    <th className="p-6 text-center">Tipo</th>
-                                    <th className="p-6 text-right pr-8">Importe</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 text-sm">
-                                {todayInvoices.map(inv => (
-                                    <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-6 pl-8 font-mono text-slate-500 text-xs">
-                                            {inv.date ? new Date(inv.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-                                        </td>
-                                        <td className="p-6 font-bold text-slate-700">
-                                            Factura {inv.invoiceNumber}
-                                            <span className="block text-xs font-normal text-slate-400">
-                                                {patients.find(p => p.id === inv.patientId)?.name || 'Paciente'}
-                                            </span>
-                                        </td>
-                                        <td className="p-6 text-center">
-                                            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase">
-                                                Ingreso ({inv.paymentMethod})
-                                            </span>
-                                        </td>
-                                        <td className="p-6 text-right pr-8 font-bold text-emerald-600">
-                                            +{inv.amount.toFixed(2)}€
-                                        </td>
+                        <div className="w-full overflow-x-auto">
+                            <table className="w-full min-w-max text-left">
+                                <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 tracking-widest">
+                                    <tr>
+                                        <th className="p-6 pl-8">Hora</th>
+                                        <th className="p-6">Concepto / Paciente</th>
+                                        <th className="p-6 text-center">Tipo</th>
+                                        <th className="p-6 text-right pr-8">Importe</th>
                                     </tr>
-                                ))}
-                                {todayExpenses.map(exp => (
-                                    <tr key={exp.id} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-6 pl-8 font-mono text-slate-500 text-xs">--:--</td>
-                                        <td className="p-6 font-bold text-slate-700">
-                                            {exp.description}
-                                            <span className="block text-xs font-normal text-slate-400">{exp.category}</span>
-                                        </td>
-                                        <td className="p-6 text-center">
-                                            <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold uppercase">
-                                                Gasto
-                                            </span>
-                                        </td>
-                                        <td className="p-6 text-right pr-8 font-bold text-rose-600">
-                                            -{exp.amount.toFixed(2)}€
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 text-sm">
+                                    {todayInvoices.map(inv => (
+                                        <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="p-6 pl-8 font-mono text-slate-500 text-xs">
+                                                {inv.date ? new Date(inv.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                                            </td>
+                                            <td className="p-6 font-bold text-slate-700">
+                                                Factura {inv.invoiceNumber}
+                                                <span className="block text-xs font-normal text-slate-400">
+                                                    {patients.find(p => p.id === inv.patientId)?.name || 'Paciente'}
+                                                </span>
+                                            </td>
+                                            <td className="p-6 text-center">
+                                                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase">
+                                                    Ingreso ({inv.paymentMethod})
+                                                </span>
+                                            </td>
+                                            <td className="p-6 text-right pr-8 font-bold text-emerald-600">
+                                                +{inv.amount.toFixed(2)}€
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {todayExpenses.map(exp => (
+                                        <tr key={exp.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="p-6 pl-8 font-mono text-slate-500 text-xs">--:--</td>
+                                            <td className="p-6 font-bold text-slate-700">
+                                                {exp.description}
+                                                <span className="block text-xs font-normal text-slate-400">{exp.category}</span>
+                                            </td>
+                                            <td className="p-6 text-center">
+                                                <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold uppercase">
+                                                    Gasto
+                                                </span>
+                                            </td>
+                                            <td className="p-6 text-right pr-8 font-bold text-rose-600">
+                                                -{exp.amount.toFixed(2)}€
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             </div>

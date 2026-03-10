@@ -453,8 +453,8 @@ const Agenda: React.FC = () => {
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header ... */}
-            <div className="flex flex-col xl:flex-row justify-between items-end xl:items-center gap-4 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                <div>
+            <div className="flex flex-wrap justify-between items-center gap-6 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                <div className="min-w-[200px]">
                     <h2 className="text-3xl font-black text-slate-900 tracking-tighter">Agenda Médica</h2>
                     <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">
                         {viewMode === 'daily' ? currentDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }) : getWeekRange(currentDate)}

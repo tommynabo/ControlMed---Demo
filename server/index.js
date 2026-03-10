@@ -2158,6 +2158,12 @@ app.post('/api/payments/create', async (req, res) => {
 
         const numericAmount = parseFloat(amount);
 
+        // Fetch patient for Quipu contact creation
+        const patient = await prisma.patient.findUnique({ where: { id: patientId } });
+        if (!patient) {
+            return res.status(404).json({ error: 'Patient not found' });
+        }
+
         // Fetch doctor info if needed for payroll
         let doctor = null;
         let appointment = null;
@@ -2172,26 +2178,47 @@ app.post('/api/payments/create', async (req, res) => {
             doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
         }
 
-        // --- DYNAMIC CONCEPT DERIVATION (Ignore Frontend) ---
+        // --- DYNAMIC CONCEPT DERIVATION ---
         let solvedTreatmentName = '';
         if (appointment) {
-            // 1. Snapshot/Direct name
             solvedTreatmentName = appointment.treatmentName;
-
-            // 2. Relation name from Catalog
             if (!solvedTreatmentName && appointment.treatment?.name) {
                 solvedTreatmentName = appointment.treatment.name;
             }
-
-            // 3. Fallback to budget items
             if (!solvedTreatmentName && appointment.budget?.items?.length > 0) {
                 solvedTreatmentName = appointment.budget.items.map(i => i.name).join(', ');
             }
         }
-
-        // Final Fallback
         if (!solvedTreatmentName) {
             solvedTreatmentName = type === 'ADVANCE_PAYMENT' ? 'Pago a Cuenta' : 'Tratamiento General';
+        }
+
+        // --- QUIPU INTEGRATION ---
+        console.log('💸 [Quipu] Starting invoice generation for payment...');
+        let quipuResult = { success: false };
+        try {
+            const contactData = {
+                name: patient.name,
+                tax_id: patient.dni || 'UNKNOWN',
+                email: patient.email,
+                address: patient.address,
+                city: patient.city,
+                zip_code: patient.zipCode || patient.zip_code
+            };
+            const contact = await quipuService.getOrCreateContact(contactData);
+
+            if (contact && contact.id) {
+                const today = new Date().toISOString().split('T')[0];
+                quipuResult = await quipuService.createInvoice(
+                    contact.id,
+                    [{ name: solvedTreatmentName, quantity: 1, price: numericAmount }],
+                    today,
+                    today,
+                    method === 'card' ? 'credit_card' : method
+                );
+            }
+        } catch (qErr) {
+            console.error('⚠️ Quipu Error (Continuing with local only):', qErr.message);
         }
 
         const result = await prisma.$transaction(async (tx) => {
@@ -2203,14 +2230,14 @@ app.post('/api/payments/create', async (req, res) => {
                     budgetId: budgetId || null,
                     amount: numericAmount,
                     method,
-                    type, // 'DIRECT_CHARGE', 'ADVANCE_PAYMENT', etc
+                    type,
                     notes: notes || null,
                     doctorId: doctor?.id || null,
                     createdAt: new Date().toISOString()
                 }
             });
 
-            // 2. Mark Appointment as Paid (Consistency)
+            // 2. Mark Appointment as Paid
             if (appointmentId) {
                 await tx.appointment.update({
                     where: { id: appointmentId },
@@ -2218,19 +2245,22 @@ app.post('/api/payments/create', async (req, res) => {
                 });
             }
 
-            // 3. Generate Invoice (Internal)
-            const invoiceNumber = `F-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+            // 3. Generate Invoice
+            const invoiceNumber = quipuResult.success ? quipuResult.number : `F-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
 
             const invoice = await tx.invoice.create({
                 data: {
                     id: crypto.randomUUID(),
                     invoiceNumber,
+                    externalId: quipuResult.success ? String(quipuResult.id) : null,
+                    url: quipuResult.success ? quipuResult.pdf_url : null,
                     patientId,
                     amount: numericAmount,
                     date: new Date(),
                     status: 'issued',
                     paymentMethod: method,
                     concept: solvedTreatmentName,
+                    appointmentId: appointmentId || null,
                     relatedPaymentId: payment.id
                 }
             });
@@ -2251,17 +2281,13 @@ app.post('/api/payments/create', async (req, res) => {
                 data: { invoiceId: invoice.id }
             });
 
-            // 4. Create Liquidation (Payroll) entry if direct charge and appointment/doctor linked
+            // 4. Create Liquidation
             let liquidation = null;
             if (appointmentId && doctor && type === 'DIRECT_CHARGE') {
-                // FIXED MATH: commissionRate stored as whole number (30)
                 const rawRate = doctor.commissionPercentage || 30;
                 const commissionRateDecimal = rawRate / 100;
-                const labCost = req.body.costeLab || 0; // Support lab cost from req if provided
+                const labCost = req.body.costeLab || 0;
                 const finalAmount = (numericAmount - labCost) * commissionRateDecimal;
-
-                // Patient name for convenience in reporting
-                const patient = await tx.patient.findUnique({ where: { id: patientId } });
 
                 liquidation = await tx.liquidation.create({
                     data: {
@@ -2270,7 +2296,7 @@ app.post('/api/payments/create', async (req, res) => {
                         appointmentId: appointmentId,
                         grossAmount: numericAmount,
                         labCost,
-                        commissionRate: rawRate, // Correctly store 30 as 30%
+                        commissionRate: rawRate,
                         finalAmount,
                         treatmentName: solvedTreatmentName,
                         patientName: patient?.name || 'Paciente',
@@ -2290,13 +2316,37 @@ app.post('/api/payments/create', async (req, res) => {
                 });
             }
 
-            return { payment, invoice, payroll: liquidation };
+            return {
+                payment,
+                invoice,
+                payroll: liquidation,
+                pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
+                previewUrl: quipuResult.success ? quipuResult.preview_url : null
+            };
         });
 
         res.status(200).json({ success: true, ...result });
     } catch (e) {
         console.error("❌ Payment creation error:", e);
         res.status(500).json({ error: e.message || 'Unknown transaction error' });
+    }
+});
+
+app.get('/api/finance/invoices/appointment/:appointmentId', async (req, res) => {
+    try {
+        const { appointmentId } = req.params;
+        const invoice = await prisma.invoice.findFirst({
+            where: { appointmentId },
+            orderBy: { date: 'desc' }
+        });
+
+        if (!invoice) {
+            return res.status(404).json({ error: 'Invoice not found for this appointment' });
+        }
+
+        res.json(invoice);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 

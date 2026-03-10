@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Calendar, Trash2, Check } from 'lucide-react';
-import { Appointment, Patient, Budget, Payment } from '../../types';
+import { ArrowLeft, CreditCard, Calendar, Trash2, Check, FileText } from 'lucide-react';
+import { Appointment, Patient, Budget, Payment, Invoice } from '../../types';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAppContext } from '../context/AppContext';
 
@@ -15,6 +15,7 @@ export const AppointmentDetails: React.FC = () => {
     const [patient, setPatient] = useState<Patient | null>(null);
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [invoice, setInvoice] = useState<any>(null);
 
     useEffect(() => {
         if (location.state?.appointment && location.state?.patient) {
@@ -24,6 +25,16 @@ export const AppointmentDetails: React.FC = () => {
             loadAppointmentData(appointmentId);
         }
     }, [appointmentId, location.state]);
+
+    useEffect(() => {
+        if (appointment?.paid && appointmentId) {
+            api.invoices.getByAppointment(appointmentId)
+                .then(setInvoice)
+                .catch(err => console.error('Error fetching invoice:', err));
+        } else {
+            setInvoice(null);
+        }
+    }, [appointment?.paid, appointmentId]);
 
     useEffect(() => {
         if (patient) {
@@ -47,11 +58,15 @@ export const AppointmentDetails: React.FC = () => {
         }
     };
 
-    const handlePaymentComplete = (payment: Payment, invoice: any) => {
+    const handlePaymentComplete = (payment: Payment, invoiceData: any) => {
         console.log('Payment completed:', payment);
 
         // Mark appointment as paid locally to update UI immediately 
         setAppointment({ ...appointment, paid: true, status: 'Completed' });
+
+        if (invoiceData?.invoice) {
+            setInvoice(invoiceData.invoice);
+        }
 
         if (payment.type === 'ADVANCE_PAYMENT' && patient) {
             const updatedPatient = {
@@ -101,7 +116,7 @@ export const AppointmentDetails: React.FC = () => {
     };
 
     const getTreatmentName = (appt: any) => {
-        if (!appt) return "Consulta / Tratamiento";
+        if (!appt) return "Tratamiento no especificado";
 
         // 1. Snapshot name / Manual name
         if (appt.treatmentName) return appt.treatmentName;
@@ -157,9 +172,20 @@ export const AppointmentDetails: React.FC = () => {
                     </div>
 
                     {appointment.paid ? (
-                        <div className="bg-green-100 text-green-700 px-8 py-4 rounded-2xl text-sm font-black uppercase flex items-center gap-2 border border-green-200">
-                            <Check size={20} />
-                            Cobrado ✓
+                        <div className="flex gap-4">
+                            <div className="bg-green-100 text-green-700 px-8 py-4 rounded-2xl text-sm font-black uppercase flex items-center gap-2 border border-green-200">
+                                <Check size={20} />
+                                Cobrado ✓
+                            </div>
+                            {invoice?.url && (
+                                <button
+                                    onClick={() => window.open(invoice.url, '_blank')}
+                                    className="bg-white border-2 border-slate-900 text-slate-900 px-8 py-4 rounded-2xl text-sm font-black uppercase hover:bg-slate-100 transition-all flex items-center gap-2"
+                                >
+                                    <FileText size={20} />
+                                    📄 Ver Factura
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <button
