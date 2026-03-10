@@ -331,9 +331,8 @@ const Billing: React.FC = () => {
                                                 </td>
                                                 <td className="p-8">
                                                     <span className="font-bold text-slate-600 text-sm">
-                                                        {inv.items && inv.items.length > 0
-                                                            ? (inv.items[0].name || 'Concepto Genérico') + (inv.items.length > 1 ? ` (+${inv.items.length - 1})` : '')
-                                                            : 'Sin Concepto'}
+                                                        {inv.concept || (inv.items && inv.items.length > 0 ? (inv.items[0].name || 'Concepto Genérico') : 'Sin Concepto')}
+                                                        {(!inv.concept && inv.items && inv.items.length > 1) ? ` (+${inv.items.length - 1})` : ''}
                                                     </span>
                                                 </td>
                                                 <td className="p-8">

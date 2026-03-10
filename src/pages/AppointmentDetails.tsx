@@ -100,6 +100,31 @@ export const AppointmentDetails: React.FC = () => {
         }
     };
 
+    const getTreatmentName = (appt: any) => {
+        if (!appt) return "Consulta / Tratamiento";
+
+        // 1. Snapshot name / Manual name
+        if (appt.treatmentName) return appt.treatmentName;
+
+        // 2. Relation name
+        if (typeof appt.treatment === 'object' && appt.treatment !== null) {
+            return (appt.treatment as any).name;
+        }
+
+        if (typeof appt.treatment === 'string' && appt.treatment) {
+            return appt.treatment;
+        }
+
+        // 3. Budget Items Fallback
+        if (appt.budget?.items?.length > 0) {
+            return appt.budget.items.map((i: any) => i.name).join(', ');
+        }
+
+        return "Tratamiento no especificado";
+    };
+
+    const displayConcept = getTreatmentName(appointment);
+
     if (!appointment || !patient) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -371,9 +396,7 @@ export const AppointmentDetails: React.FC = () => {
                             <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
                                 <p className="text-xs font-black uppercase text-blue-600 mb-2">QUÉ SE ESTÁ HACIENDO</p>
                                 <p className="text-lg font-black text-slate-900 break-words">
-                                    {typeof appointment.treatment === 'object' && appointment.treatment !== null
-                                        ? (appointment.treatment as any).name || 'Consulta'
-                                        : appointment.treatment || 'Consulta / Tratamiento'}
+                                    {displayConcept}
                                 </p>
                             </div>
 
@@ -418,7 +441,7 @@ export const AppointmentDetails: React.FC = () => {
                 onPaymentComplete={handlePaymentComplete}
                 appointment={appointment}
                 defaultAmount={appointment.amount || (typeof appointment.treatment === 'object' ? (appointment.treatment as any).price : 0)}
-                defaultConcept={typeof appointment.treatment === 'object' ? (appointment.treatment as any).name : appointment.treatment || 'Consulta / Tratamiento'}
+                defaultConcept={displayConcept}
             />
         </div>
     );

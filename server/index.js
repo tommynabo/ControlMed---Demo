@@ -2165,7 +2165,7 @@ app.post('/api/payments/create', async (req, res) => {
         if (appointmentId) {
             appointment = await prisma.appointment.findUnique({
                 where: { id: appointmentId },
-                include: { doctor: true, budget: { include: { items: true } } }
+                include: { doctor: true, treatment: true, budget: { include: { items: true } } }
             });
             doctor = appointment?.doctor;
         } else if (doctorId) {
@@ -2175,7 +2175,15 @@ app.post('/api/payments/create', async (req, res) => {
         // --- DYNAMIC CONCEPT DERIVATION (Ignore Frontend) ---
         let solvedTreatmentName = '';
         if (appointment) {
+            // 1. Snapshot/Direct name
             solvedTreatmentName = appointment.treatmentName;
+
+            // 2. Relation name from Catalog
+            if (!solvedTreatmentName && appointment.treatment?.name) {
+                solvedTreatmentName = appointment.treatment.name;
+            }
+
+            // 3. Fallback to budget items
             if (!solvedTreatmentName && appointment.budget?.items?.length > 0) {
                 solvedTreatmentName = appointment.budget.items.map(i => i.name).join(', ');
             }
