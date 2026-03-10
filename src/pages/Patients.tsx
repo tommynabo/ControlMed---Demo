@@ -1683,10 +1683,11 @@ const Patients: React.FC = () => {
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400">Nº Historia (Obligatorio)</label>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Nº Historia (Autogenerado)</label>
                                         <input
-                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                            placeholder="Ej. HC-2024-001"
+                                            disabled={true}
+                                            className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3 text-sm font-bold opacity-75 cursor-not-allowed"
+                                            placeholder="Se generará automáticamente al guardar"
                                             value={newPatient.historyNumber || ''}
                                             onChange={e => setNewPatient({ ...newPatient, historyNumber: e.target.value })}
                                         />

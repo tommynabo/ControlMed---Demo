@@ -119,25 +119,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             const mainMethod = breakdown.length === 1 ? breakdown[0].method :
                 breakdown.sort((a, b) => b.amount - a.amount)[0].method;
 
-            const invoiceData = {
+            const paymentData = {
                 patientId: patient.id,
-                patient: patient,
                 amount: numericAmount,
-                items: [{ name: concept, price: numericAmount }],
-                paymentMethod: mainMethod,
-                type: isDirectPayment ? 'INVOICE' : 'ADVANCE_PAYMENT',
-                concept: concept,
+                method: mainMethod,
+                type: isDirectPayment ? ('DIRECT_CHARGE' as const) : ('ADVANCE_PAYMENT' as const),
                 appointmentId: appointment?.id,
-                paymentBreakdown: breakdown
+                doctorId: appointment?.doctorId,
+                treatmentName: concept,
+                notes: notes || undefined,
             };
 
-            const response = await api.invoices.create(invoiceData) as any;
+            const response = await api.payments.create(paymentData) as any;
 
-            if (!response || (!response.url && !response.previewUrl)) {
-                if (response?.error) throw new Error(response.error);
+            if (!response) {
+                throw new Error("No se recibió respuesta del servidor");
             }
 
-            const invoiceUrl = response?.previewUrl || response?.url;
+            const invoiceUrl = response?.invoice?.url;
 
             const payment: Payment = {
                 id: `pay_${Date.now()}`,
@@ -263,8 +262,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             <button
                                 onClick={() => setUseCombinedPayment(!useCombinedPayment)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${useCombinedPayment
-                                        ? 'bg-purple-50 text-purple-700 border-purple-300'
-                                        : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                                    ? 'bg-purple-50 text-purple-700 border-purple-300'
+                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
                                     }`}
                             >
                                 <ArrowRightLeft size={14} />

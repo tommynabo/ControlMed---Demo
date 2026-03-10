@@ -711,35 +711,34 @@ app.post('/api/patients', async (req, res) => {
         }
 
         // --- AUTO-GENERATE HISTORY NUMBER ---
+        // Ensure array fields (if any) are correctly stored as strings, to prevent Prisma errors
+        if (Array.isArray(data.prescriptions)) data.prescriptions = JSON.stringify(data.prescriptions);
+        if (Array.isArray(data.medicalHistory)) data.medicalHistory = JSON.stringify(data.medicalHistory);
+        if (Array.isArray(data.criticalAlerts)) data.criticalAlerts = JSON.stringify(data.criticalAlerts);
+
+        let created;
         if (!data.historyNumber) {
-            const supabase = getSupabase();
-            // Get the highest existing history number
-            const { data: existingPatients, error: countError } = await supabase
-                .from('Patient')
-                .select('historyNumber')
-                .not('historyNumber', 'is', null)
-                .order('historyNumber', { ascending: false })
-                .limit(1);
+            created = await prisma.$transaction(async (tx) => {
+                const existingPatient = await tx.patient.findFirst({
+                    where: { historyNumber: { not: null } },
+                    orderBy: { historyNumber: 'desc' },
+                    select: { historyNumber: true }
+                });
 
-            let nextNumber = 1;
-            if (!countError && existingPatients && existingPatients.length > 0) {
-                // Parse the number from HCL-0001 format
-                const lastNumber = existingPatients[0].historyNumber;
-                const match = lastNumber?.match(/HCL-(\d+)/);
-                if (match) {
-                    nextNumber = parseInt(match[1], 10) + 1;
+                let nextNumber = 1;
+                if (existingPatient && existingPatient.historyNumber) {
+                    const match = existingPatient.historyNumber.match(/HC-(\d+)/) || existingPatient.historyNumber.match(/HCL-(\d+)/);
+                    if (match) {
+                        nextNumber = parseInt(match[1], 10) + 1;
+                    }
                 }
-            }
-            data.historyNumber = `HCL-${String(nextNumber).padStart(4, '0')}`;
-            console.log(`📋 Generated history number: ${data.historyNumber}`);
-        }
+                data.historyNumber = `HC-${String(nextNumber).padStart(4, '0')}`;
+                console.log(`📋 Generated history number: ${data.historyNumber}`);
 
-        // Explicitly insert the modified object 'data' NOT req.body
-        const { data: created, error } = await getSupabase().from('Patient').insert(data).select().single();
-
-        if (error) {
-            console.error("❌ Supabase Insert Error:", error);
-            throw error;
+                return await tx.patient.create({ data });
+            });
+        } else {
+            created = await prisma.patient.create({ data });
         }
 
         console.log("✅ Patient created:", created.id);
@@ -885,6 +884,7 @@ app.post('/api/appointments', async (req, res) => {
                 patientId,
                 doctorId: safeDoctorId,
                 treatmentId: safeTreatmentId,
+                treatmentName: treatmentName || null,
                 budgetId: safeBudgetId,
                 budget_item_id: safeBudgetItemId || null,
                 budget_item_ids: safeBudgetItemIds ? JSON.stringify(safeBudgetItemIds) : null,
@@ -2155,125 +2155,127 @@ app.get('/api/patients/:id/payments', async (req, res) => {
 
 app.post('/api/payments/create', async (req, res) => {
     try {
-        let supabase;
-        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-
-        const { patientId, budgetId, amount, method, type, notes } = req.body;
+        const { patientId, budgetId, appointmentId, amount, method, type, notes, doctorId, treatmentName } = req.body;
 
         if (!patientId || !amount || !method || !type) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        // 1. Crear registro de pago
-        const paymentId = crypto.randomUUID();
-        const { data: payment, error: paymentError } = await supabase
-            .from('Payment')
-            .insert([{
-                id: paymentId,
-                patientId,
-                budgetId: budgetId || null,
-                amount: parseFloat(amount),
-                method,
-                type,
-                notes: notes || null,
-                createdAt: new Date().toISOString()
-            }])
-            .select()
-            .single();
+        const numericAmount = parseFloat(amount);
 
-        if (paymentError) {
-            console.error("❌ Error creating payment:", paymentError);
-            return res.status(500).json({ error: paymentError.message });
+        // Fetch doctor info if needed for payroll
+        let doctor = null;
+        if (doctorId) {
+            doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+        } else if (appointmentId) {
+            const appt = await prisma.appointment.findUnique({
+                where: { id: appointmentId },
+                include: { doctor: true }
+            });
+            doctor = appt?.doctor;
         }
 
-        // 2 & 3. Recalculate Wallet (Single Source of Truth)
-        if (type === 'ADVANCE_PAYMENT' || (type === 'DIRECT_CHARGE' && method === 'wallet')) {
-            await calculateWalletBalance(supabase, patientId);
-        }
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Create Payment record
+            const payment = await tx.payment.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    patientId,
+                    budgetId: budgetId || null,
+                    amount: numericAmount,
+                    method,
+                    type, // 'DIRECT_CHARGE', 'ADVANCE_PAYMENT', etc
+                    notes: notes || null,
+                    doctorId: doctor?.id || null,
+                    createdAt: new Date().toISOString()
+                }
+            });
 
-        // 4. Generar factura automáticamente
-        const invoiceNumber = `F-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-
-        let concept = '';
-        let items = [];
-
-        if (type === 'ADVANCE_PAYMENT') {
-            concept = 'Pago a Cuenta';
-            items = [{ name: 'Anticipo', price: parseFloat(amount) }];
-        } else if (budgetId) {
-            // Obtener items del presupuesto
-            const { data: budget } = await supabase
-                .from('Budget')
-                .select('*, items:BudgetLineItem(*)')
-                .eq('id', budgetId)
-                .single();
-
-            concept = `Cobro Presupuesto #${budgetId.substring(0, 6)}`;
-            items = budget?.items?.map(i => ({ name: i.name, price: i.price })) || [];
-        }
-
-        const { data: invoice, error: invoiceError } = await supabase
-            .from('Invoice')
-            .insert([{
-                id: crypto.randomUUID(),
-                invoiceNumber,
-                patientId,
-                amount: parseFloat(amount),
-                date: new Date().toISOString(),
-                status: 'issued',
-                paymentMethod: method,
-                concept,
-                relatedPaymentId: paymentId
-            }])
-            .select()
-            .single();
-
-        if (invoiceError) {
-            console.error("❌ Error creating invoice:", invoiceError);
-            // No fallar el pago si falla la factura
-        }
-
-        // 5. Crear items de factura
-        if (invoice && items.length > 0) {
-            const invoiceItems = items.map(item => ({
-                id: crypto.randomUUID(),
-                invoiceId: invoice.id,
-                name: item.name,
-                price: item.price
-            }));
-
-            await supabase.from('InvoiceItem').insert(invoiceItems);
-        }
-
-        // 6. Actualizar payment con invoiceId
-        if (invoice) {
-            await supabase
-                .from('Payment')
-                .update({ invoiceId: invoice.id })
-                .eq('id', paymentId);
-        }
-
-        // 7. Si hay appointmentId, marcar la cita como pagada para evitar doble cobro
-        const appointmentId = req.body.appointmentId;
-        if (appointmentId) {
-            try {
-                await prisma.appointment.update({
+            // 2. Mark Appointment as Paid (Consistency)
+            if (appointmentId) {
+                await tx.appointment.update({
                     where: { id: appointmentId },
                     data: { paid: true, status: 'Completed' }
                 });
-                console.log(`✅ Appointment ${appointmentId} marked as paid`);
-            } catch (apptErr) {
-                console.error("⚠️ Could not mark appointment as paid:", apptErr.message);
             }
-        }
 
-        res.json({
-            payment: { ...payment, invoiceId: invoice?.id },
-            invoice: invoice || null
+            // 3. Generate Invoice (Internal)
+            const invoiceNumber = `F-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+            const concept = type === 'ADVANCE_PAYMENT' ? 'Pago a Cuenta' : (treatmentName || 'Cobro de Cita');
+
+            const invoice = await tx.invoice.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    invoiceNumber,
+                    patientId,
+                    amount: numericAmount,
+                    date: new Date(),
+                    status: 'issued',
+                    paymentMethod: method,
+                    concept,
+                    relatedPaymentId: payment.id
+                }
+            });
+
+            // Create Invoice Item
+            await tx.invoiceItem.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    invoiceId: invoice.id,
+                    name: concept,
+                    price: numericAmount
+                }
+            });
+
+            // Link invoice back to payment
+            await tx.payment.update({
+                where: { id: payment.id },
+                data: { invoiceId: invoice.id }
+            });
+
+            // 4. Create Liquidation (Payroll) entry if direct charge and appointment/doctor linked
+            if (appointmentId && doctor && type === 'DIRECT_CHARGE') {
+                const commissionRate = doctor.commissionPercentage || 0;
+                const labCost = 0; // Default
+                const finalAmount = (numericAmount - labCost) * commissionRate;
+
+                // Patient name for convenience in reporting
+                const patient = await tx.patient.findUnique({ where: { id: patientId } });
+
+                await tx.liquidation.create({
+                    data: {
+                        id: crypto.randomUUID(),
+                        doctorId: doctor.id,
+                        appointmentId: appointmentId,
+                        grossAmount: numericAmount,
+                        labCost,
+                        commissionRate,
+                        finalAmount,
+                        treatmentName: treatmentName || concept,
+                        patientName: patient?.name || 'Paciente',
+                        paymentMethod: method,
+                        status: 'PENDING',
+                        createdAt: new Date().toISOString()
+                    }
+                });
+            }
+
+            // 5. Update Patient Wallet/Balance
+            if (type === 'ADVANCE_PAYMENT' || (type === 'DIRECT_CHARGE' && method === 'wallet')) {
+                const balanceAdjustment = method === 'wallet' ? -numericAmount : numericAmount;
+                await tx.patient.update({
+                    where: { id: patientId },
+                    data: { wallet: { increment: balanceAdjustment } }
+                });
+            }
+
+            return { payment, invoice };
         });
+
+        res.json(result);
     } catch (e) {
         console.error("❌ Payment creation error:", e);
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: e.message || 'Unknown transaction error' });
     }
 });
 

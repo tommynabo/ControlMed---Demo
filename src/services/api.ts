@@ -128,9 +128,12 @@ export const api = {
         create: async (paymentData: {
             patientId: string;
             amount: number;
-            method: 'cash' | 'card' | 'transfer';
+            method: 'cash' | 'card' | 'transfer' | 'wallet';
             type: 'ADVANCE_PAYMENT' | 'DIRECT_CHARGE';
             budgetId?: string;
+            appointmentId?: string;
+            doctorId?: string;
+            treatmentName?: string;
             notes?: string;
         }) => {
             const res = await fetch(`${API_URL}/payments/create`, {
@@ -138,7 +141,10 @@ export const api = {
                 headers,
                 body: JSON.stringify(paymentData)
             });
-            if (!res.ok) throw new Error('Failed to create payment');
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to create payment');
+            }
             return res.json();
         },
         transfer: async (transferData: {

@@ -414,8 +414,12 @@ const Agenda: React.FC = () => {
             time: activeSlot.time,
             patientId: patient.id,
             doctorId: bookingDoctorId,
-            treatmentId: null,
+            treatmentId: !bookingBudgetId && bookingTreatment ? bookingTreatment : null, // Solo guarda si no hay presupuesto
+            treatmentName: !bookingBudgetId && bookingTreatment
+                ? DENTAL_SERVICES.find(t => t.id === bookingTreatment)?.name || null
+                : null,
             budgetId: bookingBudgetId || null,
+            budgetItemId: bookingBudgetItemId || null,
             budgetItemIds: selectedBudgetItems.length > 0 ? selectedBudgetItems.map(item => item.id || item._idx) : null,
             amount: bookingPrice || null,
             observations: bookingObservation || null,
@@ -756,6 +760,7 @@ const Agenda: React.FC = () => {
                                                         <div
                                                             className="flex-1 h-full hover:bg-purple-50/30 cursor-pointer transition-colors z-0"
                                                             onClick={() => {
+                                                                if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                 resetAppointmentForm();
                                                                 setActiveSlot({ time: t, dayIdx: 0 });
                                                                 setBookingDoctorId(selectedDoctorId);
@@ -780,9 +785,9 @@ const Agenda: React.FC = () => {
                                                             const closed = isDateClosedForDoctor(currentDate, doc.id);
                                                             return (
                                                                 <div key={`${doc.id}-${time}`}
-                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && !closed ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                     onClick={() => {
-                                                                        if (!ok || closed) return;
+                                                                        if (!ok || closed || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                         resetAppointmentForm();
                                                                         setActiveSlot({ time, dayIdx: 0 });
                                                                         setSelectedDoctorId(doc.id);
@@ -804,8 +809,9 @@ const Agenda: React.FC = () => {
                                                 const hourStart = time.endsWith(':00');
                                                 return (
                                                     <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
-                                                        <div className="flex-1 h-full hover:bg-slate-50/50 cursor-pointer transition-colors z-0"
+                                                        <div className={`flex-1 h-full transition-colors z-0 ${currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : ''}`}
                                                             onClick={() => {
+                                                                if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                 resetAppointmentForm();
                                                                 setActiveSlot({ time, dayIdx: 0 });
                                                                 setBookingDoctorId('');
@@ -833,9 +839,9 @@ const Agenda: React.FC = () => {
                                                             : true;
                                                         return (
                                                             <div key={`w-${dayIdx}-${time}`}
-                                                                className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                 onClick={() => {
-                                                                    if (!ok) return;
+                                                                    if (!ok || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                     resetAppointmentForm();
                                                                     setActiveSlot({ time, dayIdx });
                                                                     setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
@@ -947,9 +953,9 @@ const Agenda: React.FC = () => {
                                                                             ? (appt.treatment as any).name
                                                                             : appt.treatment || (appt as any).treatmentName;
                                                                         const budgetItems = (appt as any).budget?.items;
-                                                                        const displayTreatment = treatmentText || (budgetItems && budgetItems.length > 0
+                                                                        const displayTreatment = (budgetItems && budgetItems.length > 0)
                                                                             ? budgetItems.map((item: any) => item.name).join(', ')
-                                                                            : null);
+                                                                            : treatmentText;
                                                                         return displayTreatment ? (
                                                                             <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
                                                                                 {displayTreatment}
@@ -1155,7 +1161,7 @@ const Agenda: React.FC = () => {
                             </div>
 
                             {/* Treatment Selection - Only show if NO budget is selected */}
-                            {!bookingBudgetId && (
+                            {!bookingBudgetId && !selectedAppt && (
                                 <div>
                                     <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
                                     <select
@@ -1178,6 +1184,23 @@ const Agenda: React.FC = () => {
                                             ))
                                         }
                                     </select>
+                                </div>
+                            )}
+
+                            {/* Read-only simple treatment if viewing an appointment with NO budget */}
+                            {selectedAppt && !bookingBudgetId && (
+                                <div>
+                                    <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
+                                    <input
+                                        className="w-full bg-slate-100 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 opacity-80 cursor-not-allowed"
+                                        value={
+                                            typeof selectedAppt.treatment === 'object' && selectedAppt.treatment !== null
+                                                ? (selectedAppt.treatment as any).name
+                                                : ((selectedAppt as any).treatmentName || selectedAppt.treatment || 'No especificado')
+                                        }
+                                        readOnly
+                                        disabled
+                                    />
                                 </div>
                             )}
 
@@ -1239,7 +1262,7 @@ const Agenda: React.FC = () => {
                             <button onClick={() => { setIsAppointmentModalOpen(false); setIsEditingAppt(false); }} className="flex-1 py-3 font-bold text-slate-500">
                                 {selectedAppt ? 'Cerrar' : 'Cancelar'}
                             </button>
-                            {selectedAppt && !isEditingAppt && (
+                            {selectedAppt && !isEditingAppt && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
                                 <button
                                     onClick={() => setIsEditingAppt(true)}
                                     className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2"

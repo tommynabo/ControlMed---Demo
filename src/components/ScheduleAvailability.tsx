@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Plus, X, Trash2, Save, AlertCircle, Edit3, Search } from 'lucide-react';
 import { api } from '../services/api';
+import { useAppContext } from '../context/AppContext';
 
 interface SystemUser {
   id: string;
@@ -35,6 +36,7 @@ interface ServiceDuration {
 }
 
 const ScheduleAvailability: React.FC = () => {
+  const { currentUser, currentUserRole } = useAppContext();
   const [systemDoctors, setSystemDoctors] = useState<SystemUser[]>([]);
   const [doctors, setDoctors] = useState<DoctorSchedule[]>([]);
   const [serviceDurations, setServiceDurations] = useState<ServiceDuration[]>([]);
@@ -42,6 +44,11 @@ const ScheduleAvailability: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [activeTab, setActiveTab] = useState<'doctors' | 'durations'>('doctors');
+
+  // View filtering state
+  const [selectedViewDoctorId, setSelectedViewDoctorId] = useState<string>(
+    currentUserRole === 'ADMIN' ? 'all' : currentUser?.id || ''
+  );
 
   // Modal states
   const [showDoctorModal, setShowDoctorModal] = useState(false);
@@ -108,12 +115,21 @@ const ScheduleAvailability: React.FC = () => {
       setIsLoadingDoctors(false);
     }
   };
+  // Filter doctors based on search input (for the "Add Schedule" dropdown)
+  const filteredDoctors = systemDoctors.filter(doc => {
+    // If not ADMIN, only allow managing their own schedule
+    if (currentUserRole !== 'ADMIN' && doc.id !== currentUser?.id) return false;
 
-  // Filter doctors based on search input
-  const filteredDoctors = systemDoctors.filter(doc =>
-    (doc.full_name || '').toLowerCase().includes(doctorSearchInput.toLowerCase()) ||
-    (doc.email || '').toLowerCase().includes(doctorSearchInput.toLowerCase())
-  );
+    return (doc.full_name || '').toLowerCase().includes(doctorSearchInput.toLowerCase()) ||
+      (doc.email || '').toLowerCase().includes(doctorSearchInput.toLowerCase());
+  });
+
+  // Filter schedules for viewing based on selectedViewDoctorId and Role
+  const displayedSchedules = doctors.filter(doc => {
+    if (currentUserRole !== 'ADMIN') return doc.doctor_id === currentUser?.id;
+    if (selectedViewDoctorId === 'all') return true;
+    return doc.doctor_id === selectedViewDoctorId;
+  });
 
   const handleSelectDoctor = (doctor: SystemUser) => {
     // Check if this doctor already has a schedule
@@ -124,7 +140,7 @@ const ScheduleAvailability: React.FC = () => {
       // Make sure times are in HH:MM format
       const hasMorning = !!(existingSchedule.morning_start && existingSchedule.morning_start.trim());
       const hasAfternoon = !!(existingSchedule.afternoon_start && existingSchedule.afternoon_start.trim());
-      
+
       setDoctorForm({
         ...existingSchedule,
         morning_start: hasMorning ? (existingSchedule.morning_start?.slice(0, 5) || '09:00') : '09:00',
@@ -194,7 +210,7 @@ const ScheduleAvailability: React.FC = () => {
     setEditingDoctor(doctor);
     const hasMorning = !!(doctor.morning_start && doctor.morning_start.trim());
     const hasAfternoon = !!(doctor.afternoon_start && doctor.afternoon_start.trim());
-    
+
     setDoctorForm({
       ...doctor,
       morning_active: hasMorning,
@@ -383,14 +399,31 @@ const ScheduleAvailability: React.FC = () => {
       {/* DOCTORS SECTION */}
       {activeTab === 'doctors' && (
         <div>
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <h4 className="text-lg font-bold text-slate-900">Horarios Médicos</h4>
-            <button
-              onClick={handleAddDoctor}
-              className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase gap-2 flex items-center hover:scale-105 transition-transform"
-            >
-              <Plus size={16} /> Nuevo Horario
-            </button>
+
+            <div className="flex items-center gap-4">
+              {/* Doctor View Selector (ADMIN ONLY) */}
+              {currentUserRole === 'ADMIN' && (
+                <select
+                  value={selectedViewDoctorId}
+                  onChange={(e) => setSelectedViewDoctorId(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-xs font-bold uppercase text-slate-700 outline-none px-4 py-2 rounded-xl focus:ring-2 focus:ring-purple-200"
+                >
+                  <option value="all">Ver Todos los Doctores</option>
+                  {systemDoctors.map(doc => (
+                    <option key={doc.id} value={doc.id}>{doc.full_name}</option>
+                  ))}
+                </select>
+              )}
+
+              <button
+                onClick={handleAddDoctor}
+                className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase gap-2 flex items-center hover:scale-105 transition-transform whitespace-nowrap"
+              >
+                <Plus size={16} /> Nuevo Horario
+              </button>
+            </div>
           </div>
 
           {/* Doctor Search (Show when adding new) */}
@@ -435,15 +468,15 @@ const ScheduleAvailability: React.FC = () => {
             </div>
           )}
 
-          {doctors.length === 0 ? (
+          {displayedSchedules.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
               <Calendar className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-              <p className="text-slate-500 font-bold">No hay horarios configurados</p>
+              <p className="text-slate-500 font-bold">No hay horarios configurados para la selección actual</p>
             </div>
           ) : (
             <div className="space-y-6">
               {(Object.entries(
-                doctors.reduce((acc, doc) => {
+                displayedSchedules.reduce((acc, doc) => {
                   if (!acc[doc.doctor_name]) acc[doc.doctor_name] = [];
                   acc[doc.doctor_name].push(doc);
                   return acc;
