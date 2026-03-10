@@ -2178,6 +2178,25 @@ app.post('/api/payments/create', async (req, res) => {
             doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
         }
 
+        // --- IDEMPOTENCY CHECK ---
+        // If an appointmentId is provided, check if it already has an associated invoice/payment
+        if (appointmentId) {
+            const existingInvoice = await prisma.invoice.findUnique({
+                where: { appointmentId },
+                include: { relatedPayment: true }
+            });
+
+            if (existingInvoice) {
+                console.log(`ℹ️ [Idempotency] Appointment ${appointmentId} already paid. Returning existing invoice.`);
+                return res.json({
+                    success: true,
+                    payment: existingInvoice.relatedPayment,
+                    invoice: existingInvoice,
+                    pdfUrl: existingInvoice.url
+                });
+            }
+        }
+
         // --- DYNAMIC CONCEPT DERIVATION ---
         let solvedTreatmentName = '';
         if (appointment) {
@@ -2218,7 +2237,11 @@ app.post('/api/payments/create', async (req, res) => {
                 );
             }
         } catch (qErr) {
-            console.error('⚠️ Quipu Error (Continuing with local only):', qErr.message);
+            console.error('⚠️ Quipu Error (Continuing with local only):', qErr.response?.data || qErr.message);
+            // Log full error details for debugging if available
+            if (qErr.response?.data?.errors) {
+                console.error('Quipu Validation Errors:', JSON.stringify(qErr.response.data.errors, null, 2));
+            }
         }
 
         const result = await prisma.$transaction(async (tx) => {
@@ -2246,7 +2269,21 @@ app.post('/api/payments/create', async (req, res) => {
             }
 
             // 3. Generate Invoice
-            const invoiceNumber = quipuResult.success ? quipuResult.number : `F-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+            let invoiceNumber = quipuResult.success ? quipuResult.number : null;
+
+            if (!invoiceNumber || invoiceNumber === 'PENDING') {
+                // Generate a robust local format: F-YEAR-TIMESTAMP-RANDOM
+                const year = new Date().getFullYear();
+                const ts = Date.now();
+                const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+                invoiceNumber = `F-${year}-${ts}-${random}`;
+            }
+
+            // DOUBLE CHECK: Ensure this number doesn't exist locally (rare with the random suffix but good for safety)
+            const collision = await tx.invoice.findUnique({ where: { invoiceNumber } });
+            if (collision) {
+                invoiceNumber += `-${Math.random().toString(36).substring(2, 5)}`;
+            }
 
             const invoice = await tx.invoice.create({
                 data: {
