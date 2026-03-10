@@ -4,16 +4,15 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-// --- MODULE 3: RBAC ---
 enum Role {
-  ADMIN     // Full Access
-  RECEPTION // Agenda, Patients, Billing (No Global Stats, No Liquidations)
-  DOCTOR    // Own Agenda, Own Patients, Own Production (No Global Billing)
+  ADMIN
+  RECEPTION
+  DOCTOR
 }
 
 model User {
@@ -22,50 +21,49 @@ model User {
   password  String
   name      String
   role      Role     @default(DOCTOR)
-  doctorId  String?  // Link if user is a doctor
+  doctorId  String?
   doctor    Doctor?  @relation(fields: [doctorId], references: [id])
   createdAt DateTime @default(now())
 }
 
-// --- CORE ---
 model Patient {
-  id             String           @id @default(uuid())
-  historyNumber  String?          @unique // Auto-generated: HCL-0001, HCL-0002, etc.
-  name           String           // Se construye automáticamente: firstName + lastName1 + lastName2
-  firstName      String?          // Nombre
-  lastName1      String?          // Primer apellido
-  lastName2      String?          // Segundo apellido
-  dni            String           @unique
-  birthDate      DateTime
-  email          String
-  phone          String?
-  insurance      String?
+  id              String           @id @default(uuid())
+  historyNumber   String?          @unique
+  name            String
+  firstName       String?
+  lastName1       String?
+  lastName2       String?
+  dni             String           @unique
+  birthDate       DateTime
+  email           String
+  phone           String?
+  insurance       String?
   assignedDoctorId String?
-  doctor         Doctor?          @relation(fields: [assignedDoctorId], references: [id])
+  doctor          Doctor?          @relation(fields: [assignedDoctorId], references: [id])
   clinicalHistory ClinicalRecord[]
-  invoices       Invoice[]
-  appointments   Appointment[]
-  treatmentPlans TreatmentPlan[]
-  budgets        Budget[]
-  odontogram     Odontogram?
-  snapshots      DentalSnapshot[]
-  balance        Float            @default(0.0) // Saldo a favor/contra
-  wallet         Float            @default(0.0) // Pagos adelantados (Monedero Virtual)
-  allergies      String?          // Alergias importantes
-  smoker         Boolean          @default(false) // Fumador
-  diseases       String?          // Enfermedades (JSON array)
-  medications    String?          // Medicación crónica o relevante
-  criticalAlerts String?          // Alertas médicas críticas (JSON array)
-  prescriptions  String?          // Recetas guardadas (JSON array)
-  medicalHistory String?          // Historial médico general (JSON array)
-  createdAt      DateTime         @default(now())
-  payments       Payment[] // Historial de pagos
-  whatsAppLogs   WhatsAppLog[]
+  invoices        Invoice[]
+  appointments    Appointment[]
+  treatmentPlans  TreatmentPlan[]
+  budgets         Budget[]
+  odontogram      Odontogram?
+  snapshots       DentalSnapshot[]
+  balance         Float            @default(0.0)
+  wallet          Float            @default(0.0)
+  allergies       String?
+  smoker          Boolean          @default(false)
+  diseases        String?
+  medications     String?
+  criticalAlerts  String?
+  prescriptions   String?
+  medicalHistory  String?
+  createdAt       DateTime         @default(now())
+  payments        Payment[]
+  whatsAppLogs    WhatsAppLog[]
 }
 
 model Specialty {
   id          String      @id @default(uuid())
-  name        String      @unique // e.g. "General", "Ortodoncia", "Implantología"
+  name        String      @unique
   description String?
   doctors     Doctor[]
   treatments  Treatment[]
@@ -74,76 +72,66 @@ model Specialty {
 model Doctor {
   id                   String        @id @default(uuid())
   name                 String
-  // specialization       String    // DEPRECATED/LEGACY: Keeping for safety but prefer specialtyId
-  specialization       String?       // Made optional to phase out
+  specialization       String?
   specialtyId          String?
   specialty            Specialty?    @relation(fields: [specialtyId], references: [id])
-  commissionPercentage Float         @default(0.0) // Module 1: Base Commission (e.g., 0.30)
+  commissionPercentage Float         @default(0.0)
   users                User[]
   patients             Patient[]
   appointments         Appointment[]
   liquidations         Liquidation[]
 }
 
-// --- MODULE 1: FINANCIAL & LIQUIDATION ---
-
 model Treatment {
-  id             String   @id @default(uuid())
-  name           String
-  price          Float
-  labCost        Float    @default(0.0) // Coste de Laboratorio
-  insurancePrices String? // JSON String for caching insurance prices
-  specialtyId    String?
-  specialty      Specialty? @relation(fields: [specialtyId], references: [id])
-  appointments   Appointment[]
-  items          InvoiceItem[]
-  budgetItems    BudgetLineItem[]
-  consumables    String?  // JSON String: e.g. [{"itemId": "uuid", "qty": 1}]
-  // patientTreatments PatientTreatment[] // RELATION REMOVED to split tables
+  id              String           @id @default(uuid())
+  name            String
+  price           Float
+  labCost         Float            @default(0.0)
+  insurancePrices String?
+  specialtyId     String?
+  specialty       Specialty?       @relation(fields: [specialtyId], references: [id])
+  appointments    Appointment[]
+  items           InvoiceItem[]
+  budgetItems     BudgetLineItem[]
+  consumables     String?
 }
 
-// Patient-specific treatment instances (tratamientos asignados)
 model PatientTreatment {
   id          String   @id @default(uuid())
   patientId   String
-  serviceId   String?   // Referencia al catálogo (services table or Treatment)
-  serviceName String    // Nombre del tratamiento (Snapshot)
-  // service     Treatment?  @relation(fields: [serviceId], references: [id]) -- REMOVED to avoid FK issues with legacy 'services' table
-  toothId     Int?     // Número del diente (ej: 21, 36)
-  price       Float    @default(0.0) // Base Price
-  customPrice Float?   // Precio personalizado si difiere del base
-  status      String   @default("PENDIENTE") // PENDIENTE, EN_PROCESO, COMPLETADO
+  serviceId   String?
+  serviceName String
+  toothId     Int?
+  price       Float    @default(0.0)
+  customPrice Float?
+  status      String   @default("PENDIENTE")
   notes       String?
   createdAt   DateTime @default(now())
-  
+
   @@index([patientId])
   @@index([serviceId])
 }
 
-// Services Catalog (for Settings > Services and Odontogram)
 model Service {
   id              String    @id @default(uuid())
   name            String
-  specialty_name  String?   // Mapped to specialty_name column
+  specialty_name  String?
   specialty_color String?   @default("#888888")
-  final_price     Float?    @default(0) // Mapped to final_price column, Float for JS compatibility
+  final_price     Float?    @default(0)
   is_active       Boolean?  @default(true)
   created_at      DateTime? @default(now())
   updated_at      DateTime? @default(now()) @updatedAt
-
-  @@map("services") // Map to 'services' table to match legacy/supa-direct code
 }
-
 
 model Appointment {
   id           String    @id @default(uuid())
   date         DateTime
   time         String
-  duration     Int       @default(60)       // Duración en minutos (15, 30, 45, 60, 90, 120)
-  observations String?                      // Notas/Observaciones de la cita
-  visitDetails String?                      // Detalles de la visita (visible en agenda)
-  status       String    @default("Scheduled") // Scheduled, Canceled, Completed, NoShow
-  paid         Boolean   @default(false)    // Para diferenciación de colores (verde=pagada, naranja=no pagada)
+  duration     Int       @default(60)
+  observations String?
+  visitDetails String?
+  status       String    @default("Scheduled")
+  paid         Boolean   @default(false)
   patientId    String
   patient      Patient   @relation(fields: [patientId], references: [id])
   doctorId     String
@@ -151,151 +139,142 @@ model Appointment {
   treatmentId   String?
   treatment     Treatment? @relation(fields: [treatmentId], references: [id])
   treatmentName String?
-
-  // Link to Budget
   budgetId     String?
   budget       Budget?   @relation(fields: [budgetId], references: [id])
-  budgetItemId String?                      // Concepto específico del presupuesto
-  amount       Float?                       // Importe editable del tratamiento/concepto
-
-  // Liquidation trigger
+  budgetItemId String?
+  amount       Float?
   liquidation Liquidation?
+  invoice     Invoice?
 }
 
 model Liquidation {
   id              String      @id @default(uuid())
   doctorId        String
   doctor          Doctor      @relation(fields: [doctorId], references: [id])
-  appointmentId   String      @unique // One liquidation per completed appointment
+  appointmentId   String      @unique
   appointment     Appointment @relation(fields: [appointmentId], references: [id])
-  
-  grossAmount     Float       // Treatment Price
-  labCost         Float       // Lab Cost deducted
-  commissionRate  Float       // Applied %
-  finalAmount     Float       // (Gross - Lab) * Rate
-  
-  // Additional context for display in payroll
-  treatmentName   String?     // Name of treatment(s) for display
-  patientName     String?     // Patient name for display
-  paymentMethod   String?     // How it was paid (wallet, cash, card, etc)
-  
-  status          String      @default("PENDING") // PENDING, PAID
-  doctorInvoiceUrl String?    // URL of PDF invoice sent by doctor
+  grossAmount     Float
+  labCost         Float
+  commissionRate  Float
+  finalAmount     Float
+  treatmentName   String?
+  patientName     String?
+  paymentMethod   String?
+  status          String      @default("PENDING")
+  doctorInvoiceUrl String?
   paidDate        DateTime?
   createdAt       DateTime    @default(now())
 }
 
 model Payment {
-  id                String   @id @default(uuid())
-  patientId         String
-  patient           Patient  @relation(fields: [patientId], references: [id])
-  budgetId          String?  // Si es cobro de un presupuesto
-  amount            Float
-  method            String   // "cash", "card", "wallet", "transfer"
-  type              String   // "DIRECT_CHARGE", "ADVANCE_PAYMENT", "TRANSFER"
-  paymentBreakdown  String?  // JSON: [{method, amount}] for combined payments
-  doctorId          String?  // Doctor assigned (for commissions)
-  sourcePaymentId   String?  // Reference to original advance payment (for transfers)
-  treatmentId       String?  // Treatment linked to this payment
-  createdAt         DateTime @default(now())
-  invoiceId         String?  @unique // Factura generada al cobrar
-  invoice           Invoice? @relation(fields: [invoiceId], references: [id])
-  notes             String?  // Descripción del pago
-  
+  id               String   @id @default(uuid())
+  patientId        String
+  patient          Patient  @relation(fields: [patientId], references: [id])
+  budgetId         String?
+  amount           Float
+  method           String
+  type             String
+  paymentBreakdown String?
+  doctorId         String?
+  sourcePaymentId  String?
+  treatmentId      String?
+  createdAt        DateTime @default(now())
+  invoiceId        String?  @unique
+  invoice          Invoice? @relation(fields: [invoiceId], references: [id])
+  notes            String?
+
   @@index([patientId])
 }
 
 model Invoice {
-  id             String        @id @default(uuid())
-  invoiceNumber  String        @unique
-  patientId      String
-  patient        Patient       @relation(fields: [patientId], references: [id])
-  amount         Float
-  date           DateTime      @default(now())
-  status         String
-  paymentMethod  String?       // "Credit Card", "Cash", "Transfer", "Balance", "Wallet"
-  url            String?       // Direct PDF Link
-  externalId     String?       // External ID from Invoicing Provider (Quipu/FD)
-  items          InvoiceItem[]
-  concept        String?       // "Pago a Cuenta" | "Tratamiento: Endodoncia" etc
-  appointmentId  String?       // Link to Appointment
-  relatedPaymentId String?     @unique
-  relatedPayment Payment?
+  id               String        @id @default(uuid())
+  invoiceNumber    String        @unique
+  patientId        String
+  patient          Patient       @relation(fields: [patientId], references: [id])
+  amount           Float
+  date             DateTime      @default(now())
+  status           String
+  paymentMethod    String?
+  url              String?
+  externalId       String?
+  items            InvoiceItem[]
+  concept          String?
+  appointmentId    String?       @unique
+  appointment      Appointment?  @relation(fields: [appointmentId], references: [id])
+  relatedPaymentId String?       @unique
+  relatedPayment   Payment?
 }
 
 model InvoiceItem {
-  id        String    @id @default(uuid())
+  id        String     @id @default(uuid())
   invoiceId String
-  invoice   Invoice   @relation(fields: [invoiceId], references: [id])
+  invoice   Invoice    @relation(fields: [invoiceId], references: [id])
   serviceId String?
   service   Treatment? @relation(fields: [serviceId], references: [id])
   name      String
   price     Float
 }
 
-// --- MODULE 2: ORTHODONTICS & RECURRING PAYMENTS ---
 model TreatmentPlan {
   id          String        @id @default(uuid())
   patientId   String
   patient     Patient       @relation(fields: [patientId], references: [id])
-  name        String        // e.g. "Ortodoncia Invisaling"
+  name        String
   totalCost   Float
   startDate   DateTime
-  duration    Int           // Months
+  duration    Int
   installments Installment[]
-  status      String        @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  status      String        @default("ACTIVE")
 }
 
 model Installment {
-  id              String        @id @default(uuid())
-  planId          String
-  plan            TreatmentPlan @relation(fields: [planId], references: [id])
-  dueDate         DateTime
-  amount          Float
-  status          String        @default("PENDING") // PENDING, PAID, OVERDUE
-  paidDate        DateTime?
-  description     String        // e.g. "Cuota 1/18"
-  invoiceId       String?       // Link to generated Invoice
-  invoicedAt      DateTime?     // When invoice was generated
-  reminderSent    Boolean       @default(false)
+  id           String        @id @default(uuid())
+  planId       String
+  plan         TreatmentPlan @relation(fields: [planId], references: [id])
+  dueDate      DateTime
+  amount       Float
+  status       String        @default("PENDING")
+  paidDate     DateTime?
+  description  String
+  invoiceId    String?
+  invoicedAt   DateTime?
+  reminderSent Boolean       @default(false)
 }
 
-// --- MODULE 4: BUDGETS ---
 model Budget {
-  id             String           @id @default(uuid())
-  patientId      String
-  title          String?          // Description/Concept of the budget
-  patient        Patient          @relation(fields: [patientId], references: [id])
-  date           DateTime         @default(now())
-  status         String           @default("DRAFT") // DRAFT, ACCEPTED, REJECTED, CONVERTED
-  totalAmount    Float            @default(0.0)
-  items          BudgetLineItem[]
-  appointments   Appointment[]
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  id           String           @id @default(uuid())
+  patientId    String
+  title        String?
+  patient      Patient          @relation(fields: [patientId], references: [id])
+  date         DateTime         @default(now())
+  status       String           @default("DRAFT")
+  totalAmount  Float            @default(0.0)
+  items        BudgetLineItem[]
+  appointments Appointment[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }
 
 model BudgetLineItem {
-  id          String   @id @default(uuid())
+  id          String     @id @default(uuid())
   budgetId    String
-  budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  budget      Budget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   treatmentId String?
   treatment   Treatment? @relation(fields: [treatmentId], references: [id])
   name        String
   price       Float
-  quantity    Int      @default(1)
-  tooth       String?  // Tooth number e.g. "26"
-  face        String?  // e.g. "Oclusal"
+  quantity    Int        @default(1)
+  tooth       String?
+  face        String?
 }
 
-// --- CLINICAL ---
 model ClinicalRecord {
-  id          String   @id @default(uuid())
-  patientId   String
-  patient     Patient  @relation(fields: [patientId], references: [id])
-  date        DateTime @default(now())
-  text        String
-  authorId    String?  // Could link to Doctor/User
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id])
+  date      DateTime @default(now())
+  text      String
+  authorId  String?
 }
 
 model InventoryItem {
@@ -310,10 +289,10 @@ model InventoryItem {
 model DocumentTemplate {
   id        String   @id @default(uuid())
   title     String
-  category  String   @default("General") // "Consentimiento", "Información", "Recetas"
-  content   String   // For HTML/Text templates OR Base64 for small files. For large files, store path.
-  type      String   // "pdf", "docx", "html"
-  size      String   // e.g. "1.2 MB"
+  category  String   @default("General")
+  content   String
+  type      String
+  size      String
   createdAt DateTime @default(now())
 }
 
@@ -321,20 +300,18 @@ model Odontogram {
   id        String   @id @default(uuid())
   patientId String   @unique
   patient   Patient  @relation(fields: [patientId], references: [id])
-  teethState String  // JSON String: { "18": { status: "caries", faces: [] }, ... }
+  teethState String
   updatedAt  DateTime @updatedAt
 }
 
 model DentalSnapshot {
-  id        String   @id @default(uuid())
-  patientId String
-  patient   Patient  @relation(fields: [patientId], references: [id])
-  date      DateTime @default(now())
-  imageUrl  String   // Base64 or URL
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  date        DateTime @default(now())
+  imageUrl    String
   description String?
 }
-
-// --- WHATSAPP ---
 
 enum WhatsAppLogStatus {
   SENT
@@ -350,64 +327,59 @@ enum WhatsAppTriggerType {
 model WhatsAppTemplate {
   id            String              @id @default(uuid())
   name          String
-  content       String              // Base64 or Text
+  content       String
   triggerType   WhatsAppTriggerType
-  triggerOffset String              // e.g., "12h" or "6m"
+  triggerOffset String
   createdAt     DateTime            @default(now())
 }
 
 model WhatsAppLog {
-  id        String              @id @default(uuid())
-  patientId String
-  patient   Patient             @relation(fields: [patientId], references: [id])
-  type      WhatsAppTriggerType
-  status    WhatsAppLogStatus   @default(PENDING)
-  content   String
-  error     String?
-  sentAt    DateTime            @default(now())
-  scheduledFor DateTime?        // New: For scheduled messages
+  id           String              @id @default(uuid())
+  patientId    String
+  patient      Patient             @relation(fields: [patientId], references: [id])
+  type         WhatsAppTriggerType
+  status       WhatsAppLogStatus   @default(PENDING)
+  content      String
+  error        String?
+  sentAt       DateTime            @default(now())
+  scheduledFor DateTime?
 }
 
-// --- CLINICAL TREATMENT PLANS ---
 model ClinicalTreatmentPlan {
-  id        String                   @id @default(uuid())
-  patientId String
-  name      String                   @default("Plan de Tratamiento")
-  status    String                   @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  id        String                  @id @default(uuid())
+  patientId String?
+  name      String                  @default("Plan de Tratamiento")
+  status    String                  @default("ACTIVE")
   notes     String?
   steps     ClinicalTreatmentStep[]
-  createdAt DateTime                 @default(now())
-  updatedAt DateTime                 @updatedAt
+  createdAt DateTime                @default(now())
+  updatedAt DateTime?               @updatedAt
 
-  @@map("clinical_treatment_plans")
   @@index([patientId])
 }
 
 model ClinicalTreatmentStep {
   id            String                @id @default(uuid())
-  planId        String
-  plan          ClinicalTreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId        String?
+  plan          ClinicalTreatmentPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
   stepOrder     Int                   @default(0)
-  treatmentName String
+  treatmentName String?
   toothId       Int?
-  status        String                @default("PENDIENTE") // PENDIENTE, EN_PROCESO, COMPLETADO
+  status        String                @default("PENDIENTE")
   notes         String?
   completedAt   DateTime?
   createdAt     DateTime              @default(now())
 
-  @@map("clinical_treatment_steps")
   @@index([planId])
 }
 
-// --- AGENDA CLOSURES ---
 model AgendaClosure {
   id        String   @id @default(uuid())
   date      DateTime @db.Date
-  doctorId  String?  // NULL = all doctors closed
+  doctorId  String?
   reason    String?
   createdBy String?
   createdAt DateTime @default(now())
 
-  @@map("agenda_closures")
   @@index([date])
 }

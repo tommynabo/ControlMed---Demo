@@ -2260,6 +2260,7 @@ app.post('/api/payments/create', async (req, res) => {
                     status: 'issued',
                     paymentMethod: method,
                     concept: solvedTreatmentName,
+                    appointmentId: appointmentId || null,
                     relatedPaymentId: payment.id
                 }
             });
@@ -2334,19 +2335,16 @@ app.post('/api/payments/create', async (req, res) => {
 app.get('/api/finance/invoices/appointment/:appointmentId', async (req, res) => {
     try {
         const { appointmentId } = req.params;
-
-        // Use relationship: Payment -> Invoice because appointmentId is not on Invoice table
-        const payment = await prisma.payment.findFirst({
+        const invoice = await prisma.invoice.findFirst({
             where: { appointmentId },
-            include: { invoice: true },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { date: 'desc' }
         });
 
-        if (!payment?.invoice) {
+        if (!invoice) {
             return res.status(404).json({ error: 'Invoice not found for this appointment' });
         }
 
-        res.json(payment.invoice);
+        res.json(invoice);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
