@@ -364,39 +364,41 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                         )}
                     </div>
                 </div>
-                );
+            </div>
+        </div>
+    );
 };
 
-                // Tooth Component
-                const Tooth: React.FC<{
+// Tooth Component
+const Tooth: React.FC<{
     id: number;
-                treatments: PatientTreatment[];
-                isSelected: boolean;
+    treatments: PatientTreatment[];
+    isSelected: boolean;
     onClick: (e: React.MouseEvent) => void;
-                isChild?: boolean;
-}> = ({id, treatments, isSelected, onClick, isChild}) => {
+    isChild?: boolean;
+}> = ({ id, treatments, isSelected, onClick, isChild }) => {
     const shape = getToothShape(id);
     const hasTreatment = treatments.length > 0;
 
-                return (
-                <div className={`relative flex flex-col items-center group cursor-pointer ${isChild ? 'w-[36px] md:w-[48px]' : 'w-[40px] md:w-[52px]'}`} onClick={onClick}>
-                    <div className={`relative transition-all duration-200 ${isSelected ? 'scale-110 -translate-y-1' : 'hover:scale-105'}`}>
-                        <svg width={isChild ? "36" : "44"} height={isChild ? "50" : "60"} viewBox="0 0 30 50" className="overflow-visible drop-shadow-sm">
-                            <defs>
-                                <linearGradient id={`toothGrad-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                                    <stop offset="0%" stopColor={isSelected ? '#ede9fe' : '#ffffff'} />
-                                    <stop offset="100%" stopColor={isSelected ? '#ddd6fe' : '#f1f5f9'} />
-                                </linearGradient>
-                            </defs>
-                            <path d={shape} fill={`url(#toothGrad-${id})`} stroke={isSelected ? '#8b5cf6' : (hasTreatment ? '#f59e0b' : '#cbd5e1')} strokeWidth={isSelected ? 2.5 : 1.5} className="transition-all duration-200" />
-                        </svg>
-                        {hasTreatment && (
-                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white shadow-sm animate-pulse"></div>
-                        )}
-                    </div>
-                    <span className={`mt-1 text-[9px] font-black transition-colors ${isSelected ? 'text-violet-700' : 'text-slate-500'}`}>{id}</span>
-                </div>
-                );
+    return (
+        <div className={`relative flex flex-col items-center group cursor-pointer ${isChild ? 'w-[36px] md:w-[48px]' : 'w-[40px] md:w-[52px]'}`} onClick={onClick}>
+            <div className={`relative transition-all duration-200 ${isSelected ? 'scale-110 -translate-y-1' : 'hover:scale-105'}`}>
+                <svg width={isChild ? "36" : "44"} height={isChild ? "50" : "60"} viewBox="0 0 30 50" className="overflow-visible drop-shadow-sm">
+                    <defs>
+                        <linearGradient id={`toothGrad-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor={isSelected ? '#ede9fe' : '#ffffff'} />
+                            <stop offset="100%" stopColor={isSelected ? '#ddd6fe' : '#f1f5f9'} />
+                        </linearGradient>
+                    </defs>
+                    <path d={shape} fill={`url(#toothGrad-${id})`} stroke={isSelected ? '#8b5cf6' : (hasTreatment ? '#f59e0b' : '#cbd5e1')} strokeWidth={isSelected ? 2.5 : 1.5} className="transition-all duration-200" />
+                </svg>
+                {hasTreatment && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white shadow-sm animate-pulse"></div>
+                )}
+            </div>
+            <span className={`mt-1 text-[9px] font-black transition-colors ${isSelected ? 'text-violet-700' : 'text-slate-500'}`}>{id}</span>
+        </div>
+    );
 };
 
-                export default Odontogram;
+export default Odontogram;
