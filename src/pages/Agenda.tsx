@@ -83,6 +83,7 @@ const Agenda: React.FC = () => {
     const [resizeStartPos, setResizeStartPos] = useState<number>(0);
     const [initialDuration, setInitialDuration] = useState<number>(30);
     const [isDuplicating, setIsDuplicating] = useState(false);
+    const [dragOverSlot, setDragOverSlot] = useState<{ time: string, drId: string, dayIdx: number } | null>(null);
 
     // Load Doctor Schedules from Supabase
     useEffect(() => {
@@ -505,6 +506,16 @@ const Agenda: React.FC = () => {
             alert("Error al mover la cita: " + (err.message || err));
         } finally {
             setDraggingAppt(null);
+            setDragOverSlot(null);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent, time: string, drId: string, dayIdx: number) => {
+        e.preventDefault();
+        if (draggingAppt) {
+            if (dragOverSlot?.time !== time || dragOverSlot?.drId !== drId || dragOverSlot?.dayIdx !== dayIdx) {
+                setDragOverSlot({ time, drId, dayIdx });
+            }
         }
     };
 
@@ -885,9 +896,20 @@ const Agenda: React.FC = () => {
                                                 const hourStart = t.endsWith(':00');
                                                 return (
                                                     <div key={t} 
-                                                        onDragOver={(e) => e.preventDefault()}
+                                                        onDragOver={(e) => handleDragOver(e, t, selectedDoctorId, 0)}
+                                                        onDragLeave={() => setDragOverSlot(null)}
                                                         onDrop={(e) => handleDrop(e, t, selectedDoctorId, 0)}
                                                         className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
+                                                        
+                                                        {dragOverSlot?.time === t && draggingAppt && (
+                                                            <div 
+                                                                style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                className="absolute top-0 left-0 right-0 bg-purple-500/20 border-2 border-purple-500 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center"
+                                                            >
+                                                                <span className="text-[10px] font-bold text-purple-700 uppercase">Mover aquí</span>
+                                                            </div>
+                                                        )}
+
                                                         <div
                                                             className="flex-1 h-full hover:bg-purple-50/30 cursor-pointer transition-colors z-0"
                                                             onClick={() => {
@@ -924,14 +946,15 @@ const Agenda: React.FC = () => {
                                                             const closed = isDateClosedForDoctor(currentDate, doc.id);
                                                             return (
                                                                 <div key={`${doc.id}-${time}`}
-                                                                    onDragOver={(e) => e.preventDefault()}
+                                                                    onDragOver={(e) => handleDragOver(e, time, doc.id, 0)}
+                                                                    onDragLeave={() => setDragOverSlot(null)}
                                                                     onDrop={(e) => handleDrop(e, time, doc.id, 0)}
-                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                     onClick={() => {
                                                                         if (!ok || closed || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                         if (!isDuplicating) resetAppointmentForm();
                                                                         setIsDuplicating(false);
-
+                                                                        
                                                                         setBookingDate(currentDate.toISOString().split('T')[0]);
                                                                         setBookingTime(time);
 
@@ -941,7 +964,16 @@ const Agenda: React.FC = () => {
                                                                         setSelectedAppt(null);
                                                                         setIsAppointmentModalOpen(true);
                                                                     }}
-                                                                />
+                                                                >
+                                                                    {dragOverSlot?.time === time && dragOverSlot?.drId === doc.id && draggingAppt && (
+                                                                        <div 
+                                                                            style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                            className="absolute top-0 left-0 right-0 bg-blue-500/20 border-2 border-blue-500 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center"
+                                                                        >
+                                                                            <span className="text-[10px] font-black text-blue-700 uppercase">Soltar</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             );
                                                         })}
                                                     </div>
@@ -957,9 +989,10 @@ const Agenda: React.FC = () => {
                                                 return (
                                                     <div key={time} className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
                                                         <div 
-                                                            onDragOver={(e) => e.preventDefault()}
+                                                            onDragOver={(e) => handleDragOver(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, 0)}
+                                                            onDragLeave={() => setDragOverSlot(null)}
                                                             onDrop={(e) => handleDrop(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, 0)}
-                                                            className={`flex-1 h-full transition-colors z-0 ${currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : ''}`}
+                                                            className={`flex-1 h-full transition-colors relative z-0 ${currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : ''}`}
                                                             onClick={() => {
                                                                 if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                 if (!isDuplicating) resetAppointmentForm();
@@ -973,7 +1006,18 @@ const Agenda: React.FC = () => {
                                                                 setSelectedAppt(null);
                                                                 setIsAppointmentModalOpen(true);
                                                             }}
-                                                        />
+                                                        >
+                                                            {dragOverSlot?.time === time && draggingAppt && (
+                                                                <div 
+                                                                    style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                    className="absolute top-0 left-0 right-0 bg-slate-500/10 border-2 border-slate-400 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center"
+                                                                >
+                                                                    <div className="bg-white/80 px-2 py-0.5 rounded shadow-sm">
+                                                                        <span className="text-[10px] font-bold text-slate-600 uppercase">Cambiar a {time}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 );
                                             });
@@ -996,9 +1040,10 @@ const Agenda: React.FC = () => {
                                                             : true;
                                                         return (
                                                             <div key={`w-${dayIdx}-${time}`}
-                                                                onDragOver={(e) => e.preventDefault()}
+                                                                onDragOver={(e) => handleDragOver(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, dayIdx)}
+                                                                onDragLeave={() => setDragOverSlot(null)}
                                                                 onDrop={(e) => handleDrop(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, dayIdx)}
-                                                                className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                className={`flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-50/30'}`}
                                                                 onClick={() => {
                                                                     if (!ok || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                     if (!isDuplicating) resetAppointmentForm();
@@ -1016,7 +1061,16 @@ const Agenda: React.FC = () => {
                                                                     setSelectedAppt(null);
                                                                     setIsAppointmentModalOpen(true);
                                                                 }}
-                                                            />
+                                                            >
+                                                                {dragOverSlot?.time === time && dragOverSlot?.dayIdx === dayIdx && draggingAppt && (
+                                                                    <div 
+                                                                        style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                        className="absolute top-0 left-0 right-0 bg-emerald-500/20 border-2 border-emerald-500 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center shadow-lg"
+                                                                    >
+                                                                        <span className="text-[10px] font-black text-emerald-700 uppercase">Reprogramar</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         );
                                                     })}
                                                 </div>
@@ -1110,12 +1164,24 @@ const Agenda: React.FC = () => {
                                                                     key={appt.id}
                                                                     draggable={currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR'}
                                                                     onDragStart={(e) => handleDragStart(e, appt)}
+                                                                    onDragEnd={() => setDraggingAppt(null)}
                                                                     onClick={(e) => handleAppointmentClick(e, appt)}
                                                                     style={{ top: `${top}px`, height: `${height}px`, left, width, position: 'absolute' }}
-                                                                    className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.01] hover:z-20 z-10 overflow-hidden flex flex-col justify-start group ${getAppointmentColors(appt.status, appt.paid)}`}
+                                                                    className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all z-10 overflow-hidden flex flex-col justify-start group ${getAppointmentColors(appt.status, appt.paid)} ${draggingAppt?.id === appt.id ? 'opacity-40 scale-95 border-dashed grayscale shadow-none' : 'hover:scale-[1.01] hover:z-20 shadow-sm'}`}
                                                                 >
-                                                                    <div className="flex justify-between items-start">
-                                                                        <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
+                                                                    <div className="flex justify-between items-start mb-0.5">
+                                                                        <div className="flex items-center gap-1 min-w-0">
+                                                                            {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
+                                                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+                                                                                    <div className="w-1 h-3 flex flex-col gap-0.5">
+                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
+                                                                            <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
+                                                                        </div>
                                                                         {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
                                                                     </div>
                                                                     {(() => {
