@@ -75,6 +75,13 @@ const Agenda: React.FC = () => {
     // Feature 8: Editable duration for existing appointments
     const [isEditingAppt, setIsEditingAppt] = useState(false);
 
+    // Feature 9: Drag & Drop and Resizing
+    const [draggingAppt, setDraggingAppt] = useState<Appointment | null>(null);
+    const [resizingAppt, setResizingAppt] = useState<Appointment | null>(null);
+    const [resizeStartPos, setResizeStartPos] = useState<number>(0);
+    const [initialDuration, setInitialDuration] = useState<number>(30);
+    const [isDuplicating, setIsDuplicating] = useState(false);
+
     // Load Doctor Schedules from Supabase
     useEffect(() => {
         const loadSchedules = async () => {
@@ -436,6 +443,7 @@ const Agenda: React.FC = () => {
             setApptSearch('');
             setBookingPatientId('');
             setBookingTreatment('');
+            setBookingDoctorId('');
             setBookingBudgetId('');
             setBookingBudgetItemId('');
             setSelectedBudgetItems([]);
@@ -444,10 +452,122 @@ const Agenda: React.FC = () => {
             setBookingPrice(0);
             setBookingDuration(30);
             alert("✅ Cita guardada correctamente.");
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
             alert("Error al guardar la cita: " + (e.message || e));
         }
+    };
+
+    // DRAG & DROP HANDLERS
+
+    const handleDragStart = (e: React.DragEvent, appt: Appointment) => {
+        if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') {
+            e.preventDefault();
+            return;
+        }
+        setDraggingAppt(appt);
+        e.dataTransfer.setData('apptId', appt.id);
+        e.dataTransfer.effectAllowed = 'move';
+        
+        // Hide ghost image by setting a transparent one if desired, 
+        // or just let the default ghost happen.
+    };
+
+    const handleDrop = async (e: React.DragEvent, time: string, drId: string, dayIdx: number) => {
+        e.preventDefault();
+        if (!draggingAppt) return;
+
+        let targetDate = currentDate;
+        if (viewMode === 'weekly') {
+            const dow = currentDate.getDay();
+            const diff = currentDate.getDate() - dow + (dow === 0 ? -6 : 1) + dayIdx;
+            targetDate = new Date(currentDate);
+            targetDate.setDate(diff);
+        }
+
+        const dateStr = targetDate.toISOString().split('T')[0];
+
+        try {
+            const updated = await api.appointments.update(draggingAppt.id, {
+                date: dateStr,
+                time: time,
+                doctorId: drId || draggingAppt.doctorId
+            });
+
+            setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
+            // No alert for drag & drop for better UX, maybe a small toast later
+        } catch (err: any) {
+            alert("Error al mover la cita: " + (err.message || err));
+        } finally {
+            setDraggingAppt(null);
+        }
+    };
+
+    // RESIZE HANDLERS
+    const handleResizeStart = (e: React.MouseEvent, appt: Appointment) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
+
+        setResizingAppt(appt);
+        setResizeStartPos(e.pageY);
+        setInitialDuration(appt.duration || 30);
+
+        const onMouseMove = (moveEv: MouseEvent) => {
+            // Calculated in the render overlay for preview if needed, 
+            // but let's just do it on end for simplicity or update live.
+        };
+
+        const onMouseUp = async (upEv: MouseEvent) => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
+
+            const deltaY = upEv.pageY - e.pageY;
+            const SLOT_H = 16; // 5-minute slot height
+            const deltaMins = Math.round(deltaY / SLOT_H) * 5;
+            const newDuration = Math.max(5, (appt.duration || 30) + deltaMins);
+
+            if (newDuration !== appt.duration) {
+                try {
+                    const updated = await api.appointments.update(appt.id, {
+                        duration: newDuration
+                    });
+                    setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
+                } catch (err: any) {
+                    alert("Error al cambiar la duración: " + (err.message || err));
+                }
+            }
+            setResizingAppt(null);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    };
+
+    const handleDuplicate = () => {
+        if (!selectedAppt) return;
+        
+        // Mantener datos pero resetear fecha/hora y modo
+        const patientName = patients.find(p => p.id === selectedAppt.patientId)?.name || '';
+        const doctorId = selectedAppt.doctorId;
+        const treatment = typeof selectedAppt.treatment === 'string' ? selectedAppt.treatment : (selectedAppt.treatment as any)?.id || '';
+        const price = (selectedAppt as any).amount || 0;
+        const duration = selectedAppt.duration || 30;
+        const observations = selectedAppt.observations || '';
+
+        setSelectedAppt(null);
+        setActiveSlot(null); // Obligar a elegir nuevo slot
+        setApptSearch(patientName);
+        setBookingPatientId(selectedAppt.patientId);
+        setBookingDoctorId(doctorId);
+        setBookingTreatment(treatment);
+        setBookingPrice(price);
+        setBookingDuration(duration);
+        setBookingObservation(observations);
+        
+        setIsDuplicating(true);
+        setIsAppointmentModalOpen(false);
+        alert("Selecciona el nuevo horario en la agenda para completar la duplicación.");
     };
 
     return (
@@ -657,11 +777,11 @@ const Agenda: React.FC = () => {
                             <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
                             {TIME_SLOTS.map((time, idx) => {
                                 const hour = parseInt(time.split(':')[0], 10);
-                                // Only render on the start of each hour (every 4 slots)
-                                if (idx % 4 === 0) {
+                                // Render on the start of each hour (every 12 slots of 5 mins)
+                                if (idx % 12 === 0) {
                                     return (
-                                        <div key={`time-label-${time}`} className="h-48 flex items-center justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300">
-                                            {hour}
+                                        <div key={`time-label-${time}`} className="h-[192px] flex items-start justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300 pt-2">
+                                            {hour}:00
                                         </div>
                                     );
                                 }
@@ -701,7 +821,7 @@ const Agenda: React.FC = () => {
 
                                     {/* ═══════ GRID RENDERING ═══════ */}
                                     {(() => {
-                                        const SLOT_H = 48; // h-12 = 48px
+                                        const SLOT_H = 16; // h-4 = 16px
 
                                         // ── CASE A: Daily + specific doctor → merged blocks ──
                                         if (viewMode === 'daily' && selectedDoctorId && selectedDoctorId !== 'all') {
@@ -746,7 +866,7 @@ const Agenda: React.FC = () => {
                                                             style={{ height: `${item.count * SLOT_H}px` }}
                                                             className="flex relative border-t border-slate-100">
                                                             <div className="flex-1 bg-slate-50/80 flex items-center justify-center">
-                                                                <span className="text-xs text-slate-300 font-bold uppercase tracking-widest select-none">
+                                                                <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest select-none">
                                                                     Sin consulta
                                                                 </span>
                                                             </div>
@@ -754,14 +874,19 @@ const Agenda: React.FC = () => {
                                                     );
                                                 }
                                                 const t = item.time;
+                                                const isQuarter = t.endsWith(':00') || t.endsWith(':15') || t.endsWith(':30') || t.endsWith(':45');
                                                 const hourStart = t.endsWith(':00');
                                                 return (
-                                                    <div key={t} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                                    <div key={t} 
+                                                        onDragOver={(e) => e.preventDefault()}
+                                                        onDrop={(e) => handleDrop(e, t, selectedDoctorId, 0)}
+                                                        className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
                                                         <div
                                                             className="flex-1 h-full hover:bg-purple-50/30 cursor-pointer transition-colors z-0"
                                                             onClick={() => {
                                                                 if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
-                                                                resetAppointmentForm();
+                                                                if (!isDuplicating) resetAppointmentForm();
+                                                                setIsDuplicating(false);
                                                                 setActiveSlot({ time: t, dayIdx: 0 });
                                                                 setBookingDoctorId(selectedDoctorId);
                                                                 setSelectedAppt(null);
@@ -777,18 +902,22 @@ const Agenda: React.FC = () => {
                                         if (viewMode === 'daily' && selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION')) {
                                             const activeDoctors = doctorsOnDuty;
                                             return TIME_SLOTS.map(time => {
+                                                const isQuarter = time.endsWith(':00') || time.endsWith(':15') || time.endsWith(':30') || time.endsWith(':45');
                                                 const hourStart = time.endsWith(':00');
                                                 return (
-                                                    <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                                    <div key={time} className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
                                                         {activeDoctors.map(doc => {
                                                             const ok = getAvailableTimeSlots(currentDate, doc.id).includes(time);
                                                             const closed = isDateClosedForDoctor(currentDate, doc.id);
                                                             return (
                                                                 <div key={`${doc.id}-${time}`}
+                                                                    onDragOver={(e) => e.preventDefault()}
+                                                                    onDrop={(e) => handleDrop(e, time, doc.id, 0)}
                                                                     className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                     onClick={() => {
                                                                         if (!ok || closed || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
-                                                                        resetAppointmentForm();
+                                                                        if (!isDuplicating) resetAppointmentForm();
+                                                                        setIsDuplicating(false);
                                                                         setActiveSlot({ time, dayIdx: 0 });
                                                                         setSelectedDoctorId(doc.id);
                                                                         setBookingDoctorId(doc.id);
@@ -806,15 +935,20 @@ const Agenda: React.FC = () => {
                                         // ── CASE C: Daily + single column (no specific doctor / non-admin) ──
                                         if (viewMode === 'daily') {
                                             return TIME_SLOTS.map(time => {
+                                                const isQuarter = time.endsWith(':00') || time.endsWith(':15') || time.endsWith(':30') || time.endsWith(':45');
                                                 const hourStart = time.endsWith(':00');
                                                 return (
-                                                    <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
-                                                        <div className={`flex-1 h-full transition-colors z-0 ${currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : ''}`}
+                                                    <div key={time} className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
+                                                        <div 
+                                                            onDragOver={(e) => e.preventDefault()}
+                                                            onDrop={(e) => handleDrop(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, 0)}
+                                                            className={`flex-1 h-full transition-colors z-0 ${currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : ''}`}
                                                             onClick={() => {
                                                                 if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
-                                                                resetAppointmentForm();
+                                                                if (!isDuplicating) resetAppointmentForm();
+                                                                setIsDuplicating(false);
                                                                 setActiveSlot({ time, dayIdx: 0 });
-                                                                setBookingDoctorId('');
+                                                                setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
                                                                 setSelectedAppt(null);
                                                                 setIsAppointmentModalOpen(true);
                                                             }}
@@ -826,23 +960,28 @@ const Agenda: React.FC = () => {
 
                                         // ── CASE D: Weekly view ──
                                         return TIME_SLOTS.map(time => {
+                                            const isQuarter = time.endsWith(':00') || time.endsWith(':15') || time.endsWith(':30') || time.endsWith(':45');
                                             const hourStart = time.endsWith(':00');
                                             return (
-                                                <div key={time} className={`flex h-12 relative group ${hourStart ? 'border-t-2 border-slate-300' : 'border-t border-slate-200'}`}>
+                                                <div key={time} className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
                                                     {Array.from({ length: 7 }).map((_, dayIdx) => {
                                                         const d = new Date(currentDate);
                                                         const dow = d.getDay();
                                                         const diff = d.getDate() - dow + (dow === 0 ? -6 : 1) + dayIdx;
                                                         d.setDate(diff);
+                                                        const ds = d.toISOString().split('T')[0];
                                                         const ok = selectedDoctorId !== 'all'
                                                             ? getAvailableTimeSlots(d, selectedDoctorId).includes(time)
                                                             : true;
                                                         return (
                                                             <div key={`w-${dayIdx}-${time}`}
+                                                                onDragOver={(e) => e.preventDefault()}
+                                                                onDrop={(e) => handleDrop(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, dayIdx)}
                                                                 className={`flex-1 h-full border-r border-slate-50 transition-colors z-0 ${ok && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-purple-50/30 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                 onClick={() => {
                                                                     if (!ok || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
-                                                                    resetAppointmentForm();
+                                                                    if (!isDuplicating) resetAppointmentForm();
+                                                                    setIsDuplicating(false);
                                                                     setActiveSlot({ time, dayIdx });
                                                                     setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
                                                                     setSelectedAppt(null);
@@ -859,8 +998,8 @@ const Agenda: React.FC = () => {
                                     {/* ═══════ APPOINTMENTS OVERLAY ═══════ */}
                                     <div className="absolute inset-0 z-10 pointer-events-none flex ml-0">
                                         {(() => {
-                                            const SLOT_H = 48;
-                                            const PX_PER_MIN = SLOT_H / 15; // 3.2
+                                            const SLOT_H = 16; // h-4 = 16px
+                                            const PX_PER_MIN = SLOT_H / 5; // 3.2
 
                                             // Convert time → pixel top using slot index (handles the 13:45→16:00 gap correctly)
                                             const timeToTop = (t: string): number => {
@@ -873,7 +1012,7 @@ const Agenda: React.FC = () => {
                                                     const [sh, sm] = TIME_SLOTS[i].split(':').map(Number);
                                                     const [nh, nm] = TIME_SLOTS[i + 1].split(':').map(Number);
                                                     if (mins >= sh * 60 + sm && mins < nh * 60 + nm) {
-                                                        return (i + (mins - (sh * 60 + sm)) / 15) * SLOT_H;
+                                                        return (i + (mins - (sh * 60 + sm)) / 5) * SLOT_H;
                                                     }
                                                 }
                                                 return (TIME_SLOTS.length - 1) * SLOT_H;
@@ -940,13 +1079,15 @@ const Agenda: React.FC = () => {
                                                             return (
                                                                 <div
                                                                     key={appt.id}
+                                                                    draggable={currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR'}
+                                                                    onDragStart={(e) => handleDragStart(e, appt)}
                                                                     onClick={(e) => handleAppointmentClick(e, appt)}
                                                                     style={{ top: `${top}px`, height: `${height}px`, left, width, position: 'absolute' }}
-                                                                    className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.02] hover:z-20 z-10 overflow-hidden flex flex-col justify-start ${getAppointmentColors(appt.status, appt.paid)}`}
+                                                                    className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all hover:scale-[1.01] hover:z-20 z-10 overflow-hidden flex flex-col justify-start group ${getAppointmentColors(appt.status, appt.paid)}`}
                                                                 >
                                                                     <div className="flex justify-between items-start">
                                                                         <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
-                                                                        {appt.duration && appt.duration > 45 && <span className="text-[9px] opacity-70 ml-1">{appt.time}</span>}
+                                                                        {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
                                                                     </div>
                                                                     {(() => {
                                                                         const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
@@ -956,22 +1097,30 @@ const Agenda: React.FC = () => {
                                                                         const displayTreatment = (budgetItems && budgetItems.length > 0)
                                                                             ? budgetItems.map((item: any) => item.name).join(', ')
                                                                             : treatmentText;
-                                                                        return displayTreatment ? (
+                                                                        return appt.duration && appt.duration >= 15 && displayTreatment ? (
                                                                             <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
                                                                                 {displayTreatment}
                                                                             </span>
                                                                         ) : null;
                                                                     })()}
-                                                                    {appt.observations && (
+                                                                    {appt.duration && appt.duration >= 30 && appt.observations && (
                                                                         <p className="text-[9px] opacity-60 mt-0.5 line-clamp-2 leading-tight">
                                                                             {appt.observations}
                                                                         </p>
                                                                     )}
                                                                     {/* Feature 7: Visit Details visible on card */}
-                                                                    {(appt as any).visitDetails && (
+                                                                    {appt.duration && appt.duration >= 30 && (appt as any).visitDetails && (
                                                                         <p className="text-[9px] text-purple-500 opacity-80 mt-0.5 line-clamp-1 italic">
                                                                             📋 {(appt as any).visitDetails}
                                                                         </p>
+                                                                    )}
+
+                                                                    {/* RESIZE HANDLE */}
+                                                                    {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
+                                                                        <div 
+                                                                            onMouseDown={(e) => handleResizeStart(e, appt)}
+                                                                            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-black/10 transition-colors z-30"
+                                                                        />
                                                                     )}
                                                                 </div>
                                                             );
@@ -1000,6 +1149,16 @@ const Agenda: React.FC = () => {
                                     const patient = patients.find(p => p.id === selectedAppt.patientId);
                                     return (
                                         <div className="flex gap-2">
+                                            {/* DUPLICAR button */}
+                                            {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
+                                                <button
+                                                    onClick={handleDuplicate}
+                                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase flex items-center gap-2 shadow-lg transition-all"
+                                                >
+                                                    <Plus size={16} />
+                                                    <span>Duplicar</span>
+                                                </button>
+                                            )}
                                             {/* IR A FICHA button */}
                                             <button
                                                 onClick={() => {
@@ -1224,12 +1383,9 @@ const Agenda: React.FC = () => {
                                         onChange={e => setBookingDuration(Number(e.target.value))}
                                         disabled={!!selectedAppt && !isEditingAppt}
                                     >
-                                        <option value={15}>15 Min</option>
-                                        <option value={30}>30 Min</option>
-                                        <option value={45}>45 Min</option>
-                                        <option value={60}>1 Hora</option>
-                                        <option value={90}>1.5 Horas</option>
-                                        <option value={120}>2 Horas</option>
+                                        {DURATION_OPTIONS.map(opt => (
+                                            <option key={opt} value={opt}>{opt} min</option>
+                                        ))}
                                     </select>
                                 </div>
                             </div>
