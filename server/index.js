@@ -967,6 +967,10 @@ app.put('/api/appointments/:id', async (req, res) => {
         if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
         if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
 
+        if (updates.date) {
+            updates.date = new Date(updates.date).toISOString();
+        }
+
         // Remove relation objects from updates to avoid Prisma errors
         delete updates.treatment;
         delete updates.doctor;

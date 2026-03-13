@@ -55,6 +55,8 @@ const Agenda: React.FC = () => {
     const [bookingBudgetId, setBookingBudgetId] = useState<string>('');
     const [bookingBudgetItemId, setBookingBudgetItemId] = useState<string>('');
     const [selectedBudgetItems, setSelectedBudgetItems] = useState<any[]>([]);
+    const [bookingDate, setBookingDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [bookingTime, setBookingTime] = useState<string>('08:00');
 
     // Feature 4: Agenda Closures
     const [agendaClosures, setAgendaClosures] = useState<any[]>([]);
@@ -357,6 +359,9 @@ const Agenda: React.FC = () => {
             setSelectedBudgetItems([]);
         }
 
+        const dateObj = new Date(appt.date);
+        setBookingDate(dateObj.toISOString().split('T')[0]);
+        setBookingTime(appt.time);
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
     };
@@ -376,17 +381,24 @@ const Agenda: React.FC = () => {
         setBookingDuration(30);
         setPatientBudgets([]);
         setIsEditingAppt(false);
+        setIsDuplicating(false);
+        setBookingDate(currentDate.toISOString().split('T')[0]);
+        setBookingTime('08:00');
     };
 
     // Handle Booking
     const handleBooking = async () => {
         if (selectedAppt) {
-            // Update logic here if requested, currently user only asked for "Ver Cita" button
-            alert("Modo edición no implementado completamente. Solo visualización.");
+            // Update logic here if requested...
+            alert("Modo edición no implementado completamente.");
             return;
         }
-
-        if (!activeSlot || !bookingPatientId) return;
+        
+        // Use bookingDate/Time instead of activeSlot for flexibility (especially for duplication)
+        if (!bookingDate || !bookingTime || !bookingPatientId) {
+            alert("Faltan datos obligatorios (Paciente, Fecha u Horario).");
+            return;
+        }
 
         // Find Patient using stored bookingPatientId for reliability
         const patient = patients.find(p => p.id === bookingPatientId);
@@ -402,23 +414,17 @@ const Agenda: React.FC = () => {
         }
 
         // Validate that the slot is available according to doctor's schedule
-        let dateToSave = currentDate;
-        if (viewMode === 'weekly') {
-            const currentDay = currentDate.getDay(); // 0-6
-            const diff = currentDate.getDate() - currentDay + (currentDay === 0 ? -6 : 1) + activeSlot.dayIdx;
-            dateToSave = new Date(currentDate); // Copy
-            dateToSave.setDate(diff);
-        }
+        const dateToSave = new Date(`${bookingDate}T00:00:00`);
 
         const availableSlots = getAvailableTimeSlots(dateToSave, bookingDoctorId);
-        if (!availableSlots.includes(activeSlot.time)) {
+        if (!availableSlots.includes(bookingTime)) {
             alert("❌ Este horario no está disponible para este doctor.\n\nVerifica la configuración de horarios en Configuración → Horarios Médicos.");
             return;
         }
 
         const newAppt: any = {
-            date: dateToSave.toISOString().split('T')[0],
-            time: activeSlot.time,
+            date: dateToSave.toISOString(), // Send full ISO to satisfy Prisma on update (consistency)
+            time: bookingTime,
             patientId: patient.id,
             doctorId: bookingDoctorId,
             treatmentId: !bookingBudgetId && bookingTreatment ? bookingTreatment : null, // Solo guarda si no hay presupuesto
@@ -485,7 +491,7 @@ const Agenda: React.FC = () => {
             targetDate.setDate(diff);
         }
 
-        const dateStr = targetDate.toISOString().split('T')[0];
+        const dateStr = targetDate.toISOString(); // Full ISO for Prisma consistency
 
         try {
             const updated = await api.appointments.update(draggingAppt.id, {
@@ -495,7 +501,6 @@ const Agenda: React.FC = () => {
             });
 
             setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
-            // No alert for drag & drop for better UX, maybe a small toast later
         } catch (err: any) {
             alert("Error al mover la cita: " + (err.message || err));
         } finally {
@@ -547,16 +552,18 @@ const Agenda: React.FC = () => {
     const handleDuplicate = () => {
         if (!selectedAppt) return;
         
-        // Mantener datos pero resetear fecha/hora y modo
+        // Mantener datos pero permitir editar fecha/hora
         const patientName = patients.find(p => p.id === selectedAppt.patientId)?.name || '';
         const doctorId = selectedAppt.doctorId;
         const treatment = typeof selectedAppt.treatment === 'string' ? selectedAppt.treatment : (selectedAppt.treatment as any)?.id || '';
         const price = (selectedAppt as any).amount || 0;
         const duration = selectedAppt.duration || 30;
         const observations = selectedAppt.observations || '';
+        
+        const dateObj = new Date(selectedAppt.date);
+        setBookingDate(dateObj.toISOString().split('T')[0]);
+        setBookingTime(selectedAppt.time);
 
-        setSelectedAppt(null);
-        setActiveSlot(null); // Obligar a elegir nuevo slot
         setApptSearch(patientName);
         setBookingPatientId(selectedAppt.patientId);
         setBookingDoctorId(doctorId);
@@ -566,8 +573,8 @@ const Agenda: React.FC = () => {
         setBookingObservation(observations);
         
         setIsDuplicating(true);
-        setIsAppointmentModalOpen(false);
-        alert("Selecciona el nuevo horario en la agenda para completar la duplicación.");
+        setSelectedAppt(null); // Switch to "New" mode visually
+        setActiveSlot(null);
     };
 
     return (
@@ -887,6 +894,12 @@ const Agenda: React.FC = () => {
                                                                 if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                 if (!isDuplicating) resetAppointmentForm();
                                                                 setIsDuplicating(false);
+                                                                
+                                                                const dayOffset = 0;
+                                                                const d = new Date(currentDate);
+                                                                setBookingDate(d.toISOString().split('T')[0]);
+                                                                setBookingTime(t);
+
                                                                 setActiveSlot({ time: t, dayIdx: 0 });
                                                                 setBookingDoctorId(selectedDoctorId);
                                                                 setSelectedAppt(null);
@@ -918,6 +931,10 @@ const Agenda: React.FC = () => {
                                                                         if (!ok || closed || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                         if (!isDuplicating) resetAppointmentForm();
                                                                         setIsDuplicating(false);
+
+                                                                        setBookingDate(currentDate.toISOString().split('T')[0]);
+                                                                        setBookingTime(time);
+
                                                                         setActiveSlot({ time, dayIdx: 0 });
                                                                         setSelectedDoctorId(doc.id);
                                                                         setBookingDoctorId(doc.id);
@@ -947,6 +964,10 @@ const Agenda: React.FC = () => {
                                                                 if (currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                 if (!isDuplicating) resetAppointmentForm();
                                                                 setIsDuplicating(false);
+
+                                                                setBookingDate(currentDate.toISOString().split('T')[0]);
+                                                                setBookingTime(time);
+
                                                                 setActiveSlot({ time, dayIdx: 0 });
                                                                 setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
                                                                 setSelectedAppt(null);
@@ -982,6 +1003,14 @@ const Agenda: React.FC = () => {
                                                                     if (!ok || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                     if (!isDuplicating) resetAppointmentForm();
                                                                     setIsDuplicating(false);
+
+                                                                    const d = new Date(currentDate);
+                                                                    const dow = d.getDay();
+                                                                    const diff = d.getDate() - dow + (dow === 0 ? -6 : 1) + dayIdx;
+                                                                    d.setDate(diff);
+                                                                    setBookingDate(d.toISOString().split('T')[0]);
+                                                                    setBookingTime(time);
+
                                                                     setActiveSlot({ time, dayIdx });
                                                                     setBookingDoctorId(selectedDoctorId === 'all' ? '' : selectedDoctorId);
                                                                     setSelectedAppt(null);
@@ -1189,9 +1218,35 @@ const Agenda: React.FC = () => {
                                 })()}
                             </div>
 
-                            <p className="text-sm text-slate-500">
-                                {activeSlot?.time} - {viewMode === 'daily' ? currentDate.toLocaleDateString() : 'Día ' + activeSlot?.dayIdx}
-                            </p>
+                            {(!selectedAppt || isDuplicating) ? (
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-400">Fecha</label>
+                                        <input
+                                            type="date"
+                                            className="w-full bg-slate-50 p-2 rounded-xl border border-slate-200 mt-1 outline-none font-bold text-xs"
+                                            value={bookingDate}
+                                            onChange={(e) => setBookingDate(e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-400">Hora</label>
+                                        <select
+                                            className="w-full bg-slate-50 p-2 rounded-xl border border-slate-200 mt-1 outline-none font-bold text-xs"
+                                            value={bookingTime}
+                                            onChange={(e) => setBookingTime(e.target.value)}
+                                        >
+                                            {TIME_SLOTS.map(t => (
+                                                <option key={t} value={t}>{t}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                             ) : (
+                                <p className="text-sm text-slate-500">
+                                    {activeSlot?.time} - {viewMode === 'daily' ? currentDate.toLocaleDateString() : 'Día ' + activeSlot?.dayIdx}
+                                </p>
+                             )}
 
                             {/* Patient Search in Modal */}
                             <div>
