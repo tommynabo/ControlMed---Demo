@@ -32,6 +32,11 @@ const Agenda: React.FC = () => {
     const navigate = useNavigate();
 
     const [currentDate, setCurrentDate] = useState(new Date());
+
+    const formatDateLocal = (date: Date) => {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
+
     const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('daily');
     const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
     const [doctorSchedules, setDoctorSchedules] = useState<DoctorSchedule[]>([]);
@@ -55,7 +60,7 @@ const Agenda: React.FC = () => {
     const [bookingBudgetId, setBookingBudgetId] = useState<string>('');
     const [bookingBudgetItemId, setBookingBudgetItemId] = useState<string>('');
     const [selectedBudgetItems, setSelectedBudgetItems] = useState<any[]>([]);
-    const [bookingDate, setBookingDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [bookingDate, setBookingDate] = useState<string>(formatDateLocal(new Date()));
     const [bookingTime, setBookingTime] = useState<string>('08:00');
 
     // Feature 4: Agenda Closures
@@ -135,7 +140,8 @@ const Agenda: React.FC = () => {
     }, [api]);
 
     const isDateClosedForDoctor = (date: Date, doctorId?: string): boolean => {
-        const dateStr = date.toISOString().split('T')[0];
+        // Safe local date string format YYYY-MM-DD
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         return agendaClosures.some(c => {
             const cDate = typeof c.date === 'string' ? c.date.split('T')[0] : '';
             if (cDate !== dateStr) return false;
@@ -145,7 +151,7 @@ const Agenda: React.FC = () => {
     };
 
     const getClosureForDate = (date: Date, doctorId?: string) => {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         return agendaClosures.find(c => {
             const cDate = typeof c.date === 'string' ? c.date.split('T')[0] : '';
             if (cDate !== dateStr) return false;
@@ -155,7 +161,7 @@ const Agenda: React.FC = () => {
     };
 
     const handleCloseAgenda = async () => {
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
         try {
             await api.agendaClosures.create({
                 date: dateStr,
@@ -361,7 +367,7 @@ const Agenda: React.FC = () => {
         }
 
         const dateObj = new Date(appt.date);
-        setBookingDate(dateObj.toISOString().split('T')[0]);
+        setBookingDate(formatDateLocal(dateObj));
         setBookingTime(appt.time);
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
@@ -383,7 +389,7 @@ const Agenda: React.FC = () => {
         setPatientBudgets([]);
         setIsEditingAppt(false);
         setIsDuplicating(false);
-        setBookingDate(currentDate.toISOString().split('T')[0]);
+        setBookingDate(formatDateLocal(currentDate));
         setBookingTime('08:00');
     };
 
@@ -423,8 +429,11 @@ const Agenda: React.FC = () => {
             return;
         }
 
+        // Force date to be treated as UTC midnight of the selected day to avoid timezone shifts
+        const isoDate = `${bookingDate}T00:00:00.000Z`;
+
         const newAppt: any = {
-            date: dateToSave.toISOString(), // Send full ISO to satisfy Prisma on update (consistency)
+            date: isoDate, // Send full ISO at UTC midnight
             time: bookingTime,
             patientId: patient.id,
             doctorId: bookingDoctorId,
@@ -494,7 +503,7 @@ const Agenda: React.FC = () => {
             targetDate.setDate(diff);
         }
 
-        const dateStr = targetDate.toISOString(); // Full ISO for Prisma consistency
+        const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}T00:00:00.000Z`;
 
         try {
             const updated = await api.appointments.update(draggingAppt.id, {
@@ -574,7 +583,7 @@ const Agenda: React.FC = () => {
         const observations = selectedAppt.observations || '';
         
         const dateObj = new Date(selectedAppt.date);
-        setBookingDate(dateObj.toISOString().split('T')[0]);
+        setBookingDate(formatDateLocal(dateObj));
         setBookingTime(selectedAppt.time);
 
         setApptSearch(patientName);
@@ -921,7 +930,7 @@ const Agenda: React.FC = () => {
                                                                 
                                                                 const dayOffset = 0;
                                                                 const d = new Date(currentDate);
-                                                                setBookingDate(d.toISOString().split('T')[0]);
+                                                                setBookingDate(formatDateLocal(d));
                                                                 setBookingTime(t);
 
                                                                 setActiveSlot({ time: t, dayIdx: 0 });
@@ -957,7 +966,7 @@ const Agenda: React.FC = () => {
                                                                         if (!isDuplicating) resetAppointmentForm();
                                                                         setIsDuplicating(false);
                                                                         
-                                                                        setBookingDate(currentDate.toISOString().split('T')[0]);
+                                                                        setBookingDate(formatDateLocal(currentDate));
                                                                         setBookingTime(time);
 
                                                                         setActiveSlot({ time, dayIdx: 0 });
@@ -1000,7 +1009,7 @@ const Agenda: React.FC = () => {
                                                                 if (!isDuplicating) resetAppointmentForm();
                                                                 setIsDuplicating(false);
 
-                                                                setBookingDate(currentDate.toISOString().split('T')[0]);
+                                                                setBookingDate(formatDateLocal(currentDate));
                                                                 setBookingTime(time);
 
                                                                 setActiveSlot({ time, dayIdx: 0 });
@@ -1036,7 +1045,7 @@ const Agenda: React.FC = () => {
                                                         const dow = d.getDay();
                                                         const diff = d.getDate() - dow + (dow === 0 ? -6 : 1) + dayIdx;
                                                         d.setDate(diff);
-                                                        const ds = d.toISOString().split('T')[0];
+                                                        const ds = formatDateLocal(d);
                                                         const ok = selectedDoctorId !== 'all'
                                                             ? getAvailableTimeSlots(d, selectedDoctorId).includes(time)
                                                             : true;
@@ -1055,7 +1064,7 @@ const Agenda: React.FC = () => {
                                                                     const dow = d.getDay();
                                                                     const diff = d.getDate() - dow + (dow === 0 ? -6 : 1) + dayIdx;
                                                                     d.setDate(diff);
-                                                                    setBookingDate(d.toISOString().split('T')[0]);
+                                                                    setBookingDate(formatDateLocal(d));
                                                                     setBookingTime(time);
 
                                                                     setActiveSlot({ time, dayIdx });
@@ -1107,7 +1116,7 @@ const Agenda: React.FC = () => {
                                             const columns: Appointment[][] = [];
 
                                             if (viewMode === 'daily') {
-                                                const dateStr = currentDate.toISOString().split('T')[0];
+                                                const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
                                                 if (selectedDoctorId === 'all') {
                                                     doctorsOnDuty.forEach(doc => {
                                                         columns.push(appointments.filter(a =>
@@ -1126,7 +1135,7 @@ const Agenda: React.FC = () => {
                                                     const dow = d.getDay();
                                                     const diff = d.getDate() - dow + (dow === 0 ? -6 : 1) + i;
                                                     d.setDate(diff);
-                                                    const ds = d.toISOString().split('T')[0];
+                                                    const ds = formatDateLocal(d);
                                                     columns.push(appointments.filter(a =>
                                                         (a.date === ds || a.date.startsWith(ds)) &&
                                                         (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)
