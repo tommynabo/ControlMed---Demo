@@ -444,7 +444,9 @@ const Agenda: React.FC = () => {
 
         try {
             const createdAppt = await api.appointments.create(newAppt);
-            addAppointment(createdAppt);
+            // Refrescar datos globales
+            await refreshAppointments();
+            
             setIsAppointmentModalOpen(false);
             setActiveSlot(null);
             setApptSearch('');

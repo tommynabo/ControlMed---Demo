@@ -16,13 +16,24 @@ enum Role {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String      @id @default(uuid())
+  email     String      @unique
   password  String
   name      String
-  role      Role     @default(DOCTOR)
+  role      Role        @default(DOCTOR)
   doctorId  String?
-  doctor    Doctor?  @relation(fields: [doctorId], references: [id])
+  doctor    Doctor?     @relation(fields: [doctorId], references: [id])
+  createdAt DateTime    @default(now())
+  workShifts WorkShift[]
+}
+
+model WorkShift {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  clockIn   DateTime @default(now())
+  clockOut  DateTime?
+  date      String   // Storing as YYYY-MM-DD for easier daily filtering
   createdAt DateTime @default(now())
 }
 

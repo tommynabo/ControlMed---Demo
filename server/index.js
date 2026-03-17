@@ -3215,6 +3215,85 @@ app.delete('/api/clinical-plan-steps/:id', async (req, res) => {
     }
 });
 
+// --- CONTROL DE JORNADA (Fichaje) ---
+
+app.post('/api/jornada/clock-in', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const today = new Date().toISOString().split('T')[0];
+
+        // Check for open shift
+        const openShift = await prisma.workShift.findFirst({
+            where: { userId, clockOut: null }
+        });
+
+        if (openShift) {
+            return res.status(400).json({ error: 'Ya tienes una jornada abierta.' });
+        }
+
+        const newShift = await prisma.workShift.create({
+            data: {
+                id: crypto.randomUUID(),
+                userId,
+                clockIn: new Date(),
+                date: today
+            }
+        });
+
+        res.status(201).json(newShift);
+    } catch (e) {
+        console.error('Error in clock-in:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/jornada/clock-out', async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const openShift = await prisma.workShift.findFirst({
+            where: { userId, clockOut: null }
+        });
+
+        if (!openShift) {
+            return res.status(400).json({ error: 'No tienes ninguna jornada abierta para cerrar.' });
+        }
+
+        const updatedShift = await prisma.workShift.update({
+            where: { id: openShift.id },
+            data: { clockOut: new Date() }
+        });
+
+        res.json(updatedShift);
+    } catch (e) {
+        console.error('Error in clock-out:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/jornada/history', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const role = req.user.role;
+
+        let whereClause = { userId };
+        if (role === 'ADMIN') {
+            whereClause = {}; // Admin sees all
+        }
+
+        const history = await prisma.workShift.findMany({
+            where: whereClause,
+            include: { user: { select: { name: true } } },
+            orderBy: { clockIn: 'desc' }
+        });
+
+        res.json(history);
+    } catch (e) {
+        console.error('Error fetching history:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- AGENDA CLOSURES (Feature 4) ---
 
 app.get('/api/agenda-closures', async (req, res) => {

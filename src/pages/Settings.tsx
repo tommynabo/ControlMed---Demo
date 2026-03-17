@@ -524,7 +524,7 @@ const Settings: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-8 pb-20">
-                                    {Object.entries(groupedServices).sort().map(([specialty, items]) => (
+                                    {(Object.entries(groupedServices) as [string, Service[]][]).sort().map(([specialty, items]) => (
                                         <div key={specialty}>
                                             <div className="flex items-center gap-3 mb-4 sticky top-0 bg-slate-50/95 backdrop-blur z-10 py-2">
                                                 <div

@@ -12,6 +12,7 @@ import Payroll from './src/pages/Payroll';
 import CashRegister from './src/pages/CashRegister';
 import Settings from './src/pages/Settings';
 import Login from './src/pages/Login';
+import Attendance from './src/pages/Attendance';
 import UserManagement from './src/pages/UserManagement';
 import ProtectedRoute from './src/components/ProtectedRoute';
 
@@ -36,6 +37,7 @@ const App: React.FC = () => {
             <Route path="payroll" element={<ProtectedRoute pageId="payroll"><Payroll /></ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute pageId="settings"><Settings /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute pageId="users"><UserManagement /></ProtectedRoute>} />
+            <Route path="jornada" element={<ProtectedRoute pageId="attendance"><Attendance /></ProtectedRoute>} />
           </Route>
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

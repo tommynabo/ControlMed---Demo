@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-route
 import {
     Users, Activity, Calendar, Settings,
     PieChart, Brain, Package, LogOut, Search, Bell, Menu, ChevronRight,
-    Stethoscope, DollarSign, UserCog, KeyRound
+    Stethoscope, DollarSign, UserCog, KeyRound, Clock
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ROLE_LABELS } from '../config/roles';
@@ -36,6 +36,7 @@ const Layout: React.FC = () => {
         { id: 'ai', label: 'Asistente IA', icon: Brain, path: '/ai' },
         { id: 'payroll', label: 'Nóminas', icon: Users, path: '/payroll' },
         { id: 'users', label: 'Usuarios', icon: UserCog, path: '/users' },
+        { id: 'attendance', label: 'Control de Jornada', icon: Clock, path: '/jornada' },
         { id: 'settings', label: 'Configuración', icon: Settings, path: '/settings' },
     ];
 
