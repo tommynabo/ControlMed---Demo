@@ -3219,10 +3219,18 @@ app.delete('/api/clinical-plan-steps/:id', async (req, res) => {
 
 app.post('/api/jornada/clock-in', async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.headers['x-user-id'] || req.user?.id;
+        const role = req.headers['x-user-role'] || req.user?.role;
+        
+        if (!userId) {
+            console.error('❌ Clock-in error: No user ID found in headers or session');
+            return res.status(401).json({ error: 'Usuario no identificado.' });
+        }
+
         const today = new Date().toISOString().split('T')[0];
 
         // Check for open shift
+        console.log(`🕒 Checking open shift for User: ${userId}`);
         const openShift = await prisma.workShift.findFirst({
             where: { userId, clockOut: null }
         });
@@ -3231,6 +3239,7 @@ app.post('/api/jornada/clock-in', async (req, res) => {
             return res.status(400).json({ error: 'Ya tienes una jornada abierta.' });
         }
 
+        console.log(`📝 Creating new shift for User: ${userId} on Date: ${today}`);
         const newShift = await prisma.workShift.create({
             data: {
                 id: crypto.randomUUID(),
@@ -3240,17 +3249,27 @@ app.post('/api/jornada/clock-in', async (req, res) => {
             }
         });
 
+        console.log(`✅ Shift created: ${newShift.id}`);
         res.status(201).json(newShift);
     } catch (e) {
-        console.error('Error in clock-in:', e);
-        res.status(500).json({ error: e.message });
+        console.error('🔥 CRITICAL ERROR in clock-in:', e);
+        res.status(500).json({ 
+            error: 'Error interno al registrar entrada.', 
+            details: e.message,
+            stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+        });
     }
 });
 
 app.put('/api/jornada/clock-out', async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.headers['x-user-id'] || req.user?.id;
+        
+        if (!userId) {
+            return res.status(401).json({ error: 'Usuario no identificado.' });
+        }
 
+        console.log(`🕒 Clocking out for User: ${userId}`);
         const openShift = await prisma.workShift.findFirst({
             where: { userId, clockOut: null }
         });
@@ -3264,21 +3283,31 @@ app.put('/api/jornada/clock-out', async (req, res) => {
             data: { clockOut: new Date() }
         });
 
+        console.log(`✅ Shift closed: ${updatedShift.id}`);
         res.json(updatedShift);
     } catch (e) {
-        console.error('Error in clock-out:', e);
-        res.status(500).json({ error: e.message });
+        console.error('🔥 CRITICAL ERROR in clock-out:', e);
+        res.status(500).json({ 
+            error: 'Error interno al registrar salida.', 
+            details: e.message 
+        });
     }
 });
 
 app.get('/api/jornada/history', async (req, res) => {
     try {
-        const userId = req.user.id;
-        const role = req.user.role;
+        const userId = req.headers['x-user-id'] || req.user?.id;
+        const role = req.headers['x-user-role'] || req.user?.role;
 
+        if (!userId) {
+            return res.status(401).json({ error: 'Usuario no identificado.' });
+        }
+
+        console.log(`📋 Fetching attendance history for User: ${userId}, Role: ${role}`);
         let whereClause = { userId };
         if (role === 'ADMIN') {
             whereClause = {}; // Admin sees all
+            console.log('👑 Admin access: showing all shifts');
         }
 
         const history = await prisma.workShift.findMany({
@@ -3287,10 +3316,14 @@ app.get('/api/jornada/history', async (req, res) => {
             orderBy: { clockIn: 'desc' }
         });
 
+        console.log(`✅ Returned ${history.length} shifts`);
         res.json(history);
     } catch (e) {
-        console.error('Error fetching history:', e);
-        res.status(500).json({ error: e.message });
+        console.error('🔥 CRITICAL ERROR fetching history:', e);
+        res.status(500).json({ 
+            error: 'Error interno al obtener el historial.', 
+            details: e.message 
+        });
     }
 });
 

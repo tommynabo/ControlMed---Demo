@@ -227,25 +227,29 @@ const Agenda: React.FC = () => {
     const getAvailableTimeSlots = (date: Date, doctorId?: string): string[] => {
         if (!doctorId || doctorId === 'all') return TIME_SLOTS;
 
-        // IMPORTANT: Doctor.id (from Doctor table) ≠ doctor_schedules.doctor_id (from system_users table)
-        // We match by doctor NAME as the reliable bridge between both tables
         const doctor = doctors.find(d => d.id === doctorId);
         if (!doctor) return TIME_SLOTS;
+
+        // 1. Diccionario exacto sugerido para mapeo local
+        const dayMap: Record<number, string> = { 
+            0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 
+            4: 'thursday', 5: 'friday', 6: 'saturday' 
+        };
+
+        // 2. Extracción segura del día usando la fecha en formato LOCAL del navegador
+        const dayIndex = date.getDay(); 
+        const dayKey = dayMap[dayIndex] as keyof DoctorSchedule;
 
         const doctorNameNorm = doctor.name?.toLowerCase().trim();
         const schedules = doctorSchedules.filter(s =>
             s.doctor_name?.toLowerCase().trim() === doctorNameNorm
         );
-        if (schedules.length === 0) return TIME_SLOTS; // If no schedule found, show all slots
+        
+        if (schedules.length === 0) return TIME_SLOTS; // Por defecto abierto si no hay horario configurado
 
-        // Get day of week (0 = Sunday, 1 = Monday, etc.)
-        const dayOfWeek = date.getDay();
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const dayName = dayNames[dayOfWeek] as keyof DoctorSchedule;
-
-        // Filter schedules that apply to this specific day
-        const activeSchedulesForDay = schedules.filter(s => s[dayName]);
-        if (activeSchedulesForDay.length === 0) return []; // Completely blocked out day
+        // 3. Filtrado de fragmentos de horario que aplican a hoy
+        const activeSchedulesForDay = schedules.filter(s => !!s[dayKey]);
+        if (activeSchedulesForDay.length === 0) return []; // Día completamente cerrado para este doctor
 
         // Filter TIME_SLOTS that fall within available hours of ANY active schedule fragment
         return TIME_SLOTS.filter(slot => {
