@@ -34,21 +34,23 @@ const Attendance: React.FC = () => {
     }, []);
 
     const fetchHistory = async () => {
+        if (!currentUser?.id) return;
         try {
-            const response = await fetch('/api/jornada/history', {
-                headers: {
-                    'x-user-id': currentUser?.id || '',
-                    'x-user-role': currentUserRole
-                }
-            });
-            const data = await response.json();
-            setHistory(data);
+            const { api } = await import('../services/api');
+            const data = await api.attendance.getHistory(currentUser.id, currentUserRole);
             
-            // Find active shift (clockOut is null)
-            const open = data.find((s: WorkShift) => s.userId === currentUser?.id && !s.clockOut);
-            setActiveShift(open || null);
+            if (Array.isArray(data)) {
+                setHistory(data);
+                // Find active shift (clockOut is null)
+                const open = data.find((s: WorkShift) => s.userId === currentUser.id && !s.clockOut);
+                setActiveShift(open || null);
+            } else {
+                console.error('Invalid history data format:', data);
+                setHistory([]);
+            }
         } catch (error) {
             console.error('Error fetching attendance history:', error);
+            setHistory([]);
         } finally {
             setIsLoading(false);
         }
@@ -61,36 +63,24 @@ const Attendance: React.FC = () => {
     }, [currentUser]);
 
     const handleClockIn = async () => {
+        if (!currentUser?.id) return;
         try {
-            const response = await fetch('/api/jornada/clock-in', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-user-id': currentUser?.id || '',
-                    'x-user-role': currentUserRole
-                }
-            });
-            if (!response.ok) throw new Error('Error al iniciar jornada');
+            const { api } = await import('../services/api');
+            await api.attendance.clockIn(currentUser.id, currentUserRole);
             await fetchHistory();
-        } catch (error) {
-            alert('Error al iniciar jornada');
+        } catch (error: any) {
+            alert(error.message || 'Error al iniciar jornada');
         }
     };
 
     const handleClockOut = async () => {
+        if (!currentUser?.id) return;
         try {
-            const response = await fetch('/api/jornada/clock-out', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-user-id': currentUser?.id || '',
-                    'x-user-role': currentUserRole
-                }
-            });
-            if (!response.ok) throw new Error('Error al finalizar jornada');
+            const { api } = await import('../services/api');
+            await api.attendance.clockOut(currentUser.id, currentUserRole);
             await fetchHistory();
-        } catch (error) {
-            alert('Error al finalizar jornada');
+        } catch (error: any) {
+            alert(error.message || 'Error al finalizar jornada');
         }
     };
 

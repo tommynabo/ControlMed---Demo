@@ -126,19 +126,33 @@ export const api = {
 
     // Attendance (Control de Jornada)
     attendance: {
-        getHistory: async () => {
-            const res = await fetch(`${API_URL}/jornada/history`, { headers });
+        getHistory: async (userId: string, role: string) => {
+            const res = await fetch(`${API_URL}/jornada/history`, { 
+                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role } 
+            });
             if (!res.ok) throw new Error('Failed to fetch attendance history');
             return res.json();
         },
-        clockIn: async () => {
-            const res = await fetch(`${API_URL}/jornada/clock-in`, { method: 'POST', headers });
-            if (!res.ok) throw new Error('Failed to clock in');
+        clockIn: async (userId: string, role: string) => {
+            const res = await fetch(`${API_URL}/jornada/clock-in`, { 
+                method: 'POST', 
+                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role } 
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to clock in');
+            }
             return res.json();
         },
-        clockOut: async () => {
-            const res = await fetch(`${API_URL}/jornada/clock-out`, { method: 'PUT', headers });
-            if (!res.ok) throw new Error('Failed to clock out');
+        clockOut: async (userId: string, role: string) => {
+            const res = await fetch(`${API_URL}/jornada/clock-out`, { 
+                method: 'PUT', 
+                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role } 
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to clock out');
+            }
             return res.json();
         }
     },
