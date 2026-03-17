@@ -19,6 +19,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 // Pages each role can access
 export const ROLE_ALLOWED_PAGES: Record<UserRole, string[]> = {
+    ADMIN: [
+        'dashboard', 'patients', 'agenda', 'caja', 'billing',
         'stock', 'ai', 'payroll', 'settings', 'users', 'attendance',
     ],
     RECEPTION: [
