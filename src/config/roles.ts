@@ -19,18 +19,16 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 // Pages each role can access
 export const ROLE_ALLOWED_PAGES: Record<UserRole, string[]> = {
-    ADMIN: [
-        'dashboard', 'patients', 'agenda', 'caja', 'billing',
-        'stock', 'ai', 'payroll', 'settings', 'users',
+        'stock', 'ai', 'payroll', 'settings', 'users', 'attendance',
     ],
     RECEPTION: [
-        'dashboard', 'patients', 'agenda', 'caja', 'billing', 'stock',
+        'dashboard', 'patients', 'agenda', 'caja', 'billing', 'stock', 'attendance',
     ],
     AUXILIAR: [
-        'dashboard', 'patients', 'agenda',
+        'dashboard', 'patients', 'agenda', 'attendance',
     ],
     DOCTOR: [
-        'dashboard', 'patients', 'agenda',
+        'dashboard', 'patients', 'agenda', 'attendance',
     ],
 };
 
@@ -46,6 +44,7 @@ export const ROUTE_TO_PAGE: Record<string, string> = {
     '/payroll': 'payroll',
     '/settings': 'settings',
     '/users': 'users',
+    '/jornada': 'attendance',
 };
 
 export function canAccessPage(role: UserRole, pageId: string): boolean {
