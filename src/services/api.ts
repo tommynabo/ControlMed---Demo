@@ -244,10 +244,8 @@ export const api = {
         }
     },
     createPatient: async (patient: Partial<Patient>): Promise<Patient> => {
-        // Client-side ID generation fallback (Robust)
-        if (!patient.id) {
-            patient.id = self.crypto?.randomUUID ? self.crypto.randomUUID() : `pat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        }
+        // Let the server generate the UUID — don't send a client-side ID
+        delete patient.id;
         const res = await fetch(`${API_URL}/patients`, {
             method: 'POST',
             headers,

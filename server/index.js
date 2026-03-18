@@ -57,7 +57,7 @@ const authMiddleware = (req, res, next) => {
     // In a real app, verify JWT. Here we assume a header 'x-user-role' for demo purposes.
     // Defaults to DOCTOR if not specified.
     const role = req.headers['x-user-role'] || 'DOCTOR';
-    const userId = req.headers['x-user-id'] || 'mock-user-id';
+    const userId = req.headers['x-user-id'] || '00000000-0000-0000-0000-000000000000';
     req.user = { id: userId, role };
     next();
 };
@@ -223,23 +223,59 @@ app.get('/api/system-users', async (req, res) => {
 app.post('/api/system-users', async (req, res) => {
     try {
         const { email, full_name, role, is_active, password, doctorId } = req.body;
-        
-        const user = await prisma.user.create({
-            data: {
-                id: crypto.randomUUID(),
-                email,
-                name: full_name,
-                role: role || 'DOCTOR',
-                isActive: is_active !== undefined ? is_active : true,
-                password: password || '123',
-                doctorId: doctorId || null
+
+        // Map frontend roles to Prisma enum values
+        const ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
+        const prismaRole = ROLE_MAP[role] || 'DOCTOR';
+
+        const result = await prisma.$transaction(async (tx) => {
+            const sharedId = crypto.randomUUID();
+
+            const user = await tx.user.create({
+                data: {
+                    id: sharedId,
+                    email,
+                    name: full_name,
+                    role: prismaRole,
+                    isActive: is_active !== undefined ? is_active : true,
+                    password: password || '123',
+                    doctorId: doctorId || null
+                }
+            });
+
+            // If DOCTOR, create Doctor profile + default schedule atomically
+            if (prismaRole === 'DOCTOR') {
+                await tx.doctor.create({
+                    data: {
+                        id: sharedId,
+                        name: full_name,
+                        specialization: 'Odontólogo',
+                        commissionPercentage: 0
+                    }
+                });
+                await tx.user.update({
+                    where: { id: sharedId },
+                    data: { doctorId: sharedId }
+                });
+                await tx.doctorSchedule.create({
+                    data: {
+                        doctorId: sharedId,
+                        doctorName: full_name,
+                        monday: true, tuesday: true, wednesday: true,
+                        thursday: true, friday: true, saturday: false, sunday: false,
+                        morningStart: '09:00:00', morningEnd: '13:00:00',
+                        afternoonStart: '16:00:00', afternoonEnd: '20:00:00'
+                    }
+                });
             }
+
+            return user;
         });
 
         res.status(201).json({
-            ...user,
-            full_name: user.name,
-            is_active: user.isActive
+            ...result,
+            full_name: result.name,
+            is_active: result.isActive
         });
     } catch (e) {
         console.error('Error creating system user:', e);
@@ -252,12 +288,16 @@ app.put('/api/system-users/:id', async (req, res) => {
         const { id } = req.params;
         const { email, full_name, role, is_active, doctorId } = req.body;
 
+        // Map frontend roles to Prisma enum values
+        const SU_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
+        const prismaRole = role ? (SU_ROLE_MAP[role] || role) : undefined;
+
         const user = await prisma.user.update({
             where: { id },
             data: {
                 email,
                 name: full_name,
-                role,
+                role: prismaRole,
                 isActive: is_active,
                 doctorId
             }
@@ -805,12 +845,10 @@ app.post('/api/patients', async (req, res) => {
         // Clone body to avoid mutating req.body directly if needed, though req.body is usually fine
         const data = { ...req.body };
 
-        // --- CRITICAL FIX: Ensure ID exists ---
-        if (!data.id) {
-            console.log("⚠️ ID missing in payload (Server), generating UUID...");
+        // --- CRITICAL FIX: Always generate a proper UUID, ignore any client-side ID ---
+        const isValidUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+        if (!data.id || !isValidUuid(data.id)) {
             data.id = crypto.randomUUID();
-        } else {
-            console.log("✅ ID present in payload:", data.id);
         }
 
         // --- VALIDATION & TRANSFORMATION ---
@@ -1005,8 +1043,7 @@ app.post('/api/appointments', async (req, res) => {
                 treatmentId: safeTreatmentId,
                 treatmentName: treatmentName || null,
                 budgetId: safeBudgetId,
-                budget_item_id: safeBudgetItemId || null,
-                budget_item_ids: safeBudgetItemIds ? JSON.stringify(safeBudgetItemIds) : null,
+                budgetItemId: safeBudgetItemId || null,
                 amount: amount || null,
                 status: 'Scheduled',
                 paid: false
@@ -1361,7 +1398,6 @@ app.get('/api/auth/users', async (req, res) => {
             select: {
                 id: true,
                 email: true,
-                gmail: true,
                 name: true,
                 role: true,
                 doctorId: true,
@@ -1378,11 +1414,15 @@ app.get('/api/auth/users', async (req, res) => {
 // POST create user (Atomic with Doctor/Schedule if role is DOCTOR)
 app.post('/api/auth/users', async (req, res) => {
     try {
-        const { email, gmail, name, password, role } = req.body;
+        const { email, name, password, role } = req.body;
         if (!email || !name || !password || !role) {
             return res.status(400).json({ error: 'Email, nombre, contraseña y rol son obligatorios' });
         }
-        if (!VALID_ROLES.includes(role)) {
+
+        // Map frontend roles to Prisma enum values
+        const AUTH_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTION': 'RECEPTION', 'RECEPTIONIST': 'RECEPTION', 'AUXILIAR': 'RECEPTION', 'ASSISTANT': 'RECEPTION' };
+        const prismaRole = AUTH_ROLE_MAP[role] || role;
+        if (!VALID_ROLES.includes(prismaRole)) {
             return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
         }
 
@@ -1401,10 +1441,9 @@ app.post('/api/auth/users', async (req, res) => {
                 data: {
                     id: sharedId,
                     email,
-                    gmail: gmail || null,
                     name,
-                    password, // Note: In a real app, hash this!
-                    role
+                    password,
+                    role: prismaRole
                 }
             });
 
@@ -1461,9 +1500,12 @@ app.post('/api/auth/users', async (req, res) => {
 app.put('/api/auth/users/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, gmail, name, password, role, doctorId } = req.body;
+        const { email, name, password, role, doctorId } = req.body;
 
-        if (role && !VALID_ROLES.includes(role)) {
+        // Map frontend roles to Prisma enum values
+        const UPDATE_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTION': 'RECEPTION', 'RECEPTIONIST': 'RECEPTION', 'AUXILIAR': 'RECEPTION', 'ASSISTANT': 'RECEPTION' };
+        const prismaRole = role ? (UPDATE_ROLE_MAP[role] || role) : undefined;
+        if (prismaRole && !VALID_ROLES.includes(prismaRole)) {
             return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
         }
 
@@ -1471,16 +1513,14 @@ app.put('/api/auth/users/:id', async (req, res) => {
             where: { id },
             data: {
                 email,
-                gmail,
                 name,
                 password,
-                role,
+                role: prismaRole,
                 doctorId
             },
             select: {
                 id: true,
                 email: true,
-                gmail: true,
                 name: true,
                 role: true,
                 doctorId: true,
