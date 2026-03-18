@@ -806,15 +806,17 @@ const Agenda: React.FC = () => {
                 <div className="overflow-x-auto pb-4">
                     <div className="flex">
                         {/* TIME COLUMN - Always visible */}
-                        <div className="w-14 flex-shrink-0 pr-4">
-                            <div className="h-12 mb-4 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
+                        <div className="w-16 flex-shrink-0 pr-4 sticky left-0 bg-white z-[5] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                            <div className="h-[48px] mb-4 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
                             {TIME_SLOTS.map((time, idx) => {
                                 const hour = parseInt(time.split(':')[0], 10);
                                 // Render on the start of each hour (every 12 slots of 5 mins)
                                 if (idx % 12 === 0) {
                                     return (
-                                        <div key={`time-label-${time}`} className="h-[192px] flex items-start justify-center text-center pr-2 text-sm font-bold text-slate-400 border-t-2 border-slate-300 pt-2">
-                                            {hour}:00
+                                        <div key={`time-label-${time}`} className="h-[192px] relative border-t-2 border-slate-300">
+                                            <span className="absolute -top-[10px] left-0 w-full text-center pr-2 text-[11px] font-black text-slate-500 bg-white">
+                                                {hour}:00
+                                            </span>
                                         </div>
                                     );
                                 }
@@ -823,10 +825,10 @@ const Agenda: React.FC = () => {
                         </div>
 
                         {/* SCHEDULER GRID */}
-                        <div className="flex-1 min-w-[600px] relative">
-                            <div className="min-w-[1000px] relative">
+                        <div className="flex-1 relative overflow-visible">
+                            <div className="w-max min-w-full relative">
                                 {/* HEADERS */}
-                                <div className="flex min-h-[48px] h-auto mb-4">
+                                <div className="flex h-[48px] mb-4 min-w-max">
                                     {viewMode === 'daily' ? (
                                         selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
                                             doctorsOnDuty.map(doc => (
@@ -842,7 +844,7 @@ const Agenda: React.FC = () => {
                                         )
                                     ) : (
                                         Array.from({ length: 7 }).map((_, i) => (
-                                            <div key={i} className="flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
+                                            <div key={i} className="min-w-[140px] flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
                                                 {getDayName(currentDate, i)}
                                             </div>
                                         ))
@@ -1058,7 +1060,7 @@ const Agenda: React.FC = () => {
                                                                 onDragOver={(e) => handleDragOver(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, dayIdx)}
                                                                 onDragLeave={() => setDragOverSlot(null)}
                                                                 onDrop={(e) => handleDrop(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, dayIdx)}
-                                                                className={`flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-50/30'}`}
+                                                                className={`min-w-[140px] flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-50/30'}`}
                                                                 onClick={() => {
                                                                     if (!ok || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                     if (!isDuplicating) resetAppointmentForm();
