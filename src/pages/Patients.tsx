@@ -484,7 +484,7 @@ const Patients: React.FC = () => {
     // Visits / Visitas State
     const [patientAppointments, setPatientAppointments] = useState<Appointment[]>([]);
     const [isNewVisitModalOpen, setIsNewVisitModalOpen] = useState(false);
-    const [newVisitForm, setNewVisitForm] = useState({ date: new Date().toISOString().split('T')[0], time: '09:00', treatment: '', doctorId: '', observations: '', duration: 60 });
+    const [newVisitForm, setNewVisitForm] = useState({ date: new Date().toISOString().split('T')[0], time: '09:00', treatmentId: '', treatmentName: '', doctorId: '', observations: '', duration: 60 });
     const [isCreatingVisit, setIsCreatingVisit] = useState(false);
 
     // Doctors State (for transfer modal)
@@ -1124,14 +1124,24 @@ const Patients: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Motivo / Tratamiento</label>
-                                                <input
-                                                    type="text"
-                                                    value={newVisitForm.treatment}
-                                                    onChange={(e) => setNewVisitForm(prev => ({ ...prev, treatment: e.target.value }))}
-                                                    placeholder="Revisión, Empaste, Limpieza..."
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Tratamiento</label>
+                                                <select
+                                                    value={newVisitForm.treatmentId}
+                                                    onChange={(e) => {
+                                                        const svc = DENTAL_SERVICES.find(s => s.id === e.target.value);
+                                                        setNewVisitForm(prev => ({
+                                                            ...prev,
+                                                            treatmentId: e.target.value,
+                                                            treatmentName: svc?.name || ''
+                                                        }));
+                                                    }}
                                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
-                                                />
+                                                >
+                                                    <option value="">Seleccionar tratamiento...</option>
+                                                    {DENTAL_SERVICES.map(svc => (
+                                                        <option key={svc.id} value={svc.id}>{svc.name} ({svc.price}€)</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                             <div>
                                                 <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Doctor</label>
@@ -1166,8 +1176,8 @@ const Patients: React.FC = () => {
                                             </button>
                                             <button
                                                 onClick={async () => {
-                                                    if (!newVisitForm.treatment.trim()) {
-                                                        alert('Introduce el motivo o tratamiento de la visita');
+                                                    if (!newVisitForm.treatmentId) {
+                                                        alert('Selecciona un tratamiento de la lista');
                                                         return;
                                                     }
                                                     setIsCreatingVisit(true);
@@ -1177,14 +1187,17 @@ const Patients: React.FC = () => {
                                                             doctorId: newVisitForm.doctorId || undefined,
                                                             date: newVisitForm.date,
                                                             time: newVisitForm.time,
-                                                            treatment: newVisitForm.treatment,
+                                                            treatmentId: newVisitForm.treatmentId,
+                                                            treatmentName: newVisitForm.treatmentName,
                                                             observations: newVisitForm.observations,
                                                             duration: newVisitForm.duration,
                                                             status: 'Scheduled',
-                                                        });
-                                                        setPatientAppointments(prev => [created, ...prev]);
+                                                        } as any);
+                                                        // Enrich the returned object with treatmentName so the list renders immediately
+                                                        const enriched = { ...created, treatmentName: newVisitForm.treatmentName };
+                                                        setPatientAppointments(prev => [enriched, ...prev]);
                                                         setIsNewVisitModalOpen(false);
-                                                        setNewVisitForm({ date: new Date().toISOString().split('T')[0], time: '09:00', treatment: '', doctorId: '', observations: '', duration: 60 });
+                                                        setNewVisitForm({ date: new Date().toISOString().split('T')[0], time: '09:00', treatmentId: '', treatmentName: '', doctorId: '', observations: '', duration: 60 });
                                                         alert('✅ Visita creada correctamente');
                                                     } catch (e: any) {
                                                         alert('❌ Error al crear visita: ' + e.message);
@@ -1231,7 +1244,7 @@ const Patients: React.FC = () => {
                                                                             {new Date(visit.date).getDate()}
                                                                         </div>
                                                                         <div>
-                                                                            <p className="text-sm font-black text-slate-900">{visit.treatment || visit.observations || 'Visita'}</p>
+                                                                            <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
                                                                             <p className="text-xs text-slate-500 font-medium">
                                                                                 {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
                                                                             </p>
@@ -1268,7 +1281,7 @@ const Patients: React.FC = () => {
                                                                             {new Date(visit.date).getDate()}
                                                                         </div>
                                                                         <div>
-                                                                            <p className="text-sm font-black text-slate-900">{visit.treatment || visit.observations || 'Visita'}</p>
+                                                                            <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
                                                                             <p className="text-xs text-slate-500 font-medium">
                                                                                 {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
                                                                             </p>
@@ -1305,7 +1318,7 @@ const Patients: React.FC = () => {
                                                                             {new Date(visit.date).getDate()}
                                                                         </div>
                                                                         <div>
-                                                                            <p className="text-sm font-black text-slate-900">{visit.treatment || visit.observations || 'Visita'}</p>
+                                                                            <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
                                                                             <p className="text-xs text-slate-500 font-medium">
                                                                                 {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
                                                                             </p>
