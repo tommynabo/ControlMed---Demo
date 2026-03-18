@@ -1342,17 +1342,10 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(500).json({ error: configError.message });
         }
 
-        const { data: user, error } = await supabase
-            .from('User')
-            .select('*')
-            .eq('email', email)
-            .single();
-
-        if (error) {
-            console.error("❌ DB Query Error:", error);
-            // DEBUG: Return full error to UI for diagnosis
-            return res.status(500).json({ error: `DB Error: ${error.message} (${error.code || 'NoCode'})` });
-        }
+        // Use Prisma with case-insensitive email match to handle mixed-case stored emails
+        const user = await prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' } }
+        });
 
         if (!user) {
             return res.status(401).json({ error: 'Usuario no encontrado en base de datos' });
