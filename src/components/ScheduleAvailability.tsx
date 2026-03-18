@@ -12,8 +12,10 @@ interface SystemUser {
 
 interface DoctorSchedule {
   id?: string;
-  doctor_id: string;
-  doctor_name: string;
+  doctor_id?: string;
+  doctorId?: string;
+  doctor_name?: string;
+  doctorName?: string;
   monday: boolean;
   tuesday: boolean;
   wednesday: boolean;
@@ -95,13 +97,33 @@ const ScheduleAvailability: React.FC = () => {
       // Load configured doctor schedules
       const doctorsData = await api.doctorSchedules.getAll();
 
-      // Transform time format: "HH:MM:SS" -> "HH:MM" (preserve nulls for disabled shifts)
+      // Transform API keys and time format: "HH:MM:SS" -> "HH:MM" (preserve nulls for disabled shifts)
       const transformedDoctors = (doctorsData || []).map((doc: any) => ({
         ...doc,
-        morning_start: doc.morning_start ? doc.morning_start.slice(0, 5) : null,
-        morning_end: doc.morning_end ? doc.morning_end.slice(0, 5) : null,
-        afternoon_start: doc.afternoon_start ? doc.afternoon_start.slice(0, 5) : null,
-        afternoon_end: doc.afternoon_end ? doc.afternoon_end.slice(0, 5) : null
+        doctor_id: doc.doctor_id || doc.doctorId,
+        doctorId: doc.doctorId || doc.doctor_id,
+        doctor_name: doc.doctor_name || doc.doctorName,
+        doctorName: doc.doctorName || doc.doctor_name,
+        morning_start: doc.morning_start
+          ? doc.morning_start.slice(0, 5)
+          : doc.morningStart
+            ? doc.morningStart.slice(0, 5)
+            : null,
+        morning_end: doc.morning_end
+          ? doc.morning_end.slice(0, 5)
+          : doc.morningEnd
+            ? doc.morningEnd.slice(0, 5)
+            : null,
+        afternoon_start: doc.afternoon_start
+          ? doc.afternoon_start.slice(0, 5)
+          : doc.afternoonStart
+            ? doc.afternoonStart.slice(0, 5)
+            : null,
+        afternoon_end: doc.afternoon_end
+          ? doc.afternoon_end.slice(0, 5)
+          : doc.afternoonEnd
+            ? doc.afternoonEnd.slice(0, 5)
+            : null
       }));
 
       setDoctors(transformedDoctors);
@@ -126,27 +148,32 @@ const ScheduleAvailability: React.FC = () => {
 
   // Filter schedules for viewing based on selectedViewDoctorId and Role
   const displayedSchedules = doctors.filter(doc => {
-    if (currentUserRole !== 'ADMIN') return doc.doctor_id === currentUser?.id;
+    const scheduleDoctorId = doc.doctorId || doc.doctor_id;
+    if (currentUserRole !== 'ADMIN') return scheduleDoctorId === currentUser?.id;
     if (selectedViewDoctorId === 'all') return true;
-    return doc.doctor_id === selectedViewDoctorId;
+    return scheduleDoctorId === selectedViewDoctorId;
   });
 
   const handleSelectDoctor = (doctor: SystemUser) => {
     // Check if this doctor already has a schedule
-    const existingSchedule = doctors.find(d => d.doctor_id === doctor.id);
+    const existingSchedule = doctors.find(d => (d.doctorId || d.doctor_id) === doctor.id);
 
     if (existingSchedule) {
       setEditingDoctor(existingSchedule);
       // Make sure times are in HH:MM format
-      const hasMorning = !!(existingSchedule.morning_start && existingSchedule.morning_start.trim());
-      const hasAfternoon = !!(existingSchedule.afternoon_start && existingSchedule.afternoon_start.trim());
+      const hasMorning = !!((existingSchedule.morning_start || existingSchedule.morningStart) && (existingSchedule.morning_start || existingSchedule.morningStart).trim());
+      const hasAfternoon = !!((existingSchedule.afternoon_start || existingSchedule.afternoonStart) && (existingSchedule.afternoon_start || existingSchedule.afternoonStart).trim());
 
       setDoctorForm({
         ...existingSchedule,
-        morning_start: hasMorning ? (existingSchedule.morning_start?.slice(0, 5) || '09:00') : '09:00',
-        morning_end: hasMorning ? (existingSchedule.morning_end?.slice(0, 5) || '13:00') : '13:00',
-        afternoon_start: hasAfternoon ? (existingSchedule.afternoon_start?.slice(0, 5) || '16:00') : '16:00',
-        afternoon_end: hasAfternoon ? (existingSchedule.afternoon_end?.slice(0, 5) || '20:00') : '20:00',
+        doctor_id: existingSchedule.doctor_id || existingSchedule.doctorId,
+        doctorId: existingSchedule.doctorId || existingSchedule.doctor_id,
+        doctor_name: existingSchedule.doctor_name || existingSchedule.doctorName,
+        doctorName: existingSchedule.doctorName || existingSchedule.doctor_name,
+        morning_start: hasMorning ? ((existingSchedule.morning_start || existingSchedule.morningStart)?.slice(0, 5) || '09:00') : '09:00',
+        morning_end: hasMorning ? ((existingSchedule.morning_end || existingSchedule.morningEnd)?.slice(0, 5) || '13:00') : '13:00',
+        afternoon_start: hasAfternoon ? ((existingSchedule.afternoon_start || existingSchedule.afternoonStart)?.slice(0, 5) || '16:00') : '16:00',
+        afternoon_end: hasAfternoon ? ((existingSchedule.afternoon_end || existingSchedule.afternoonEnd)?.slice(0, 5) || '20:00') : '20:00',
         morning_active: hasMorning,
         afternoon_active: hasAfternoon,
         is_active: existingSchedule.is_active !== false
@@ -237,8 +264,10 @@ const ScheduleAvailability: React.FC = () => {
     setIsSaving(true);
     try {
       const scheduleData = {
-        doctor_id: doctorForm.doctor_id,
-        doctor_name: doctorForm.doctor_name,
+        doctor_id: doctorForm.doctorId || doctorForm.doctor_id,
+        doctorId: doctorForm.doctorId || doctorForm.doctor_id,
+        doctor_name: doctorForm.doctor_name || doctorForm.doctorName,
+        doctorName: doctorForm.doctorName || doctorForm.doctor_name,
         monday: doctorForm.monday,
         tuesday: doctorForm.tuesday,
         wednesday: doctorForm.wednesday,
@@ -488,7 +517,8 @@ const ScheduleAvailability: React.FC = () => {
                     <button
                       onClick={() => {
                         handleResetDoctorForm();
-                        setDoctorForm(prev => ({ ...prev, doctor_name: doctorName, doctor_id: schedules[0].doctor_id }));
+                        const scheduleDoctorId = schedules[0].doctorId || schedules[0].doctor_id;
+                        setDoctorForm(prev => ({ ...prev, doctor_name: doctorName, doctor_id: scheduleDoctorId, doctorId: scheduleDoctorId }));
                         setShowDoctorModal(true);
                       }}
                       className="bg-purple-100 text-purple-700 hover:bg-purple-200 px-3 py-1.5 rounded-lg text-xs font-bold uppercase gap-2 flex items-center transition-colors"

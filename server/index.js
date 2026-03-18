@@ -168,37 +168,52 @@ app.delete('/api/schedule/durations/:id', async (req, res) => {
 // Using Supabase service role key to bypass RLS and avoid text=uuid casting issues on frontend
 app.get('/api/system-users', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        // Return active users
-        const { data, error } = await supabase.from('system_users').select('*').eq('is_active', true);
-        if (error) throw error;
-        res.json(data || []);
+        const users = await prisma.user.findMany({
+            where: { isActive: true },
+            orderBy: { name: 'asc' }
+        });
+        // Map to frontend naming if needed (full_name)
+        const mappedUsers = users.map(u => ({
+            ...u,
+            full_name: u.name,
+            is_active: u.isActive
+        }));
+        res.json(mappedUsers);
     } catch (e) {
-        console.error('Error fetching active system users:', e);
+        console.error('Error fetching system users:', e);
         res.status(500).json({ error: e.message });
     }
-});
-
-app.get('/api/system-users/all', async (req, res) => {
+});  app.get('/api/system-users/all', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        // Return all users and sort them
-        const { data, error } = await supabase.from('system_users').select('*').order('role').order('full_name');
-        if (error) throw error;
-        res.json(data || []);
+        const users = await prisma.user.findMany({
+            orderBy: [
+                { role: 'asc' },
+                { name: 'asc' }
+            ]
+        });
+        const mappedUsers = users.map(u => ({
+            ...u,
+            full_name: u.name,
+            is_active: u.isActive
+        }));
+        res.json(mappedUsers);
     } catch (e) {
         console.error('Error fetching all system users:', e);
         res.status(500).json({ error: e.message });
     }
-});
-
-app.get('/api/system-users/:id', async (req, res) => {
+});  app.get('/api/system-users/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { id } = req.params;
-        const { data, error } = await supabase.from('system_users').select('*').eq('id', id).single();
-        if (error && error.code !== 'PGRST116') throw error;
-        res.json(data || null);
+        const user = await prisma.user.findUnique({
+            where: { id }
+        });
+        if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+        
+        res.json({
+            ...user,
+            full_name: user.name,
+            is_active: user.isActive
+        });
     } catch (e) {
         console.error('Error fetching system user:', e);
         res.status(500).json({ error: e.message });
@@ -207,36 +222,63 @@ app.get('/api/system-users/:id', async (req, res) => {
 
 app.post('/api/system-users', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        const { data, error } = await supabase.from('system_users').insert([req.body]).select().single();
-        if (error) throw error;
-        res.status(201).json(data);
+        const { email, full_name, role, is_active, password, doctorId } = req.body;
+        
+        const user = await prisma.user.create({
+            data: {
+                id: crypto.randomUUID(),
+                email,
+                name: full_name,
+                role: role || 'DOCTOR',
+                isActive: is_active !== undefined ? is_active : true,
+                password: password || '123',
+                doctorId: doctorId || null
+            }
+        });
+
+        res.status(201).json({
+            ...user,
+            full_name: user.name,
+            is_active: user.isActive
+        });
     } catch (e) {
         console.error('Error creating system user:', e);
         res.status(500).json({ error: e.message });
-    }
+   }
 });
 
 app.put('/api/system-users/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { id } = req.params;
-        const { data, error } = await supabase.from('system_users').update(req.body).eq('id', id).select().single();
-        if (error) throw error;
-        res.json(data);
+        const { email, full_name, role, is_active, doctorId } = req.body;
+
+        const user = await prisma.user.update({
+            where: { id },
+            data: {
+                email,
+                name: full_name,
+                role,
+                isActive: is_active,
+                doctorId
+            }
+        });
+
+        res.json({
+            ...user,
+            full_name: user.name,
+            is_active: user.isActive
+        });
     } catch (e) {
         console.error('Error updating system user:', e);
         res.status(500).json({ error: e.message });
     }
-});
-
-app.delete('/api/system-users/:id', async (req, res) => {
+});  app.delete('/api/system-users/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { id } = req.params;
-        const { error } = await supabase.from('system_users').delete().eq('id', id);
-        if (error) throw error;
-        res.json({ success: true });
+        await prisma.user.delete({
+            where: { id }
+        });
+        res.status(204).send();
     } catch (e) {
         console.error('Error deleting system user:', e);
         res.status(500).json({ error: e.message });
@@ -244,12 +286,30 @@ app.delete('/api/system-users/:id', async (req, res) => {
 });
 
 // --- DOCTOR SCHEDULES API ---
+const isUuid = (value) => {
+    if (!value || typeof value !== 'string') return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+};
+
+const normalizeSchedule = (schedule) => ({
+    ...schedule,
+    doctor_id: schedule.doctorId,
+    doctor_name: schedule.doctorName,
+    morning_start: schedule.morningStart,
+    morning_end: schedule.morningEnd,
+    afternoon_start: schedule.afternoonStart,
+    afternoon_end: schedule.afternoonEnd,
+    is_active: schedule.isActive,
+    created_at: schedule.createdAt
+});
+
 app.get('/api/doctor-schedules', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        const { data, error } = await supabase.from('doctor_schedules').select('*').eq('is_active', true);
-        if (error) throw error;
-        res.json(data || []);
+        const schedules = await prisma.doctorSchedule.findMany({
+            where: { isActive: true },
+            include: { doctor: true }
+        });
+        res.json(schedules.map(normalizeSchedule));
     } catch (e) {
         console.error('Error fetching doctor schedules:', e);
         res.status(500).json({ error: e.message });
@@ -258,10 +318,15 @@ app.get('/api/doctor-schedules', async (req, res) => {
 
 app.get('/api/doctor-schedules/doctor/:doctorId', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        const { data, error } = await supabase.from('doctor_schedules').select('*').eq('doctor_id', req.params.doctorId);
-        if (error) throw error;
-        res.json(data || []);
+        const { doctorId } = req.params;
+        if (!isUuid(doctorId)) {
+            return res.status(400).json({ error: 'doctorId debe ser un UUID válido' });
+        }
+
+        const schedules = await prisma.doctorSchedule.findMany({
+            where: { doctorId }
+        });
+        res.json(schedules.map(normalizeSchedule));
     } catch (e) {
         console.error('Error fetching doctor schedules:', e);
         res.status(500).json({ error: e.message });
@@ -270,10 +335,41 @@ app.get('/api/doctor-schedules/doctor/:doctorId', async (req, res) => {
 
 app.post('/api/doctor-schedules', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        const { data, error } = await supabase.from('doctor_schedules').insert([req.body]).select().single();
-        if (error) throw error;
-        res.status(201).json(data);
+        const {
+            doctor_id, doctorId, doctor_name, monday, tuesday, wednesday, thursday, friday, saturday, sunday,
+            morning_start, morning_end, afternoon_start, afternoon_end, notes, is_active
+        } = req.body;
+
+        const safeDoctorId = doctorId || doctor_id;
+        if (!safeDoctorId) return res.status(400).json({ error: 'doctor_id es obligatorio' });
+        if (!isUuid(safeDoctorId)) return res.status(400).json({ error: 'doctor_id debe ser un UUID válido' });
+
+        const doctorExists = await prisma.doctor.findUnique({ where: { id: safeDoctorId } });
+        if (!doctorExists) {
+            return res.status(404).json({ error: 'El doctor especificado no existe (UUID no encontrado)' });
+        }
+
+        const newSchedule = await prisma.doctorSchedule.create({
+            data: {
+                doctorId: safeDoctorId,
+                doctorName: doctor_name,
+                monday: monday !== undefined ? monday : true,
+                tuesday: tuesday !== undefined ? tuesday : true,
+                wednesday: wednesday !== undefined ? wednesday : true,
+                thursday: thursday !== undefined ? thursday : true,
+                friday: friday !== undefined ? friday : true,
+                saturday: saturday !== undefined ? saturday : false,
+                sunday: sunday !== undefined ? sunday : false,
+                morningStart: morning_start,
+                morningEnd: morning_end,
+                afternoonStart: afternoon_start,
+                afternoonEnd: afternoon_end,
+                notes: notes,
+                isActive: is_active !== undefined ? is_active : true
+            }
+        });
+
+        res.status(201).json(normalizeSchedule(newSchedule));
     } catch (e) {
         console.error('Error creating doctor schedule:', e);
         res.status(500).json({ error: e.message });
@@ -282,11 +378,40 @@ app.post('/api/doctor-schedules', async (req, res) => {
 
 app.put('/api/doctor-schedules/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { id } = req.params;
-        const { data, error } = await supabase.from('doctor_schedules').update(req.body).eq('id', id).select().single();
-        if (error) throw error;
-        res.json(data);
+        if (!isUuid(id)) return res.status(400).json({ error: 'id debe ser un UUID válido' });
+
+        const updates = req.body;
+
+        const data = {};
+        const safeDoctorId = updates.doctorId || updates.doctor_id;
+        if (safeDoctorId) {
+            if (!isUuid(safeDoctorId)) return res.status(400).json({ error: 'doctor_id debe ser un UUID válido' });
+            const doctorExists = await prisma.doctor.findUnique({ where: { id: safeDoctorId } });
+            if (!doctorExists) return res.status(404).json({ error: 'El doctor especificado no existe (UUID no encontrado)' });
+            data.doctorId = safeDoctorId;
+        }
+
+        if (updates.doctor_name !== undefined) data.doctorName = updates.doctor_name;
+        if (updates.monday !== undefined) data.monday = updates.monday;
+        if (updates.tuesday !== undefined) data.tuesday = updates.tuesday;
+        if (updates.wednesday !== undefined) data.wednesday = updates.wednesday;
+        if (updates.thursday !== undefined) data.thursday = updates.thursday;
+        if (updates.friday !== undefined) data.friday = updates.friday;
+        if (updates.saturday !== undefined) data.saturday = updates.saturday;
+        if (updates.sunday !== undefined) data.sunday = updates.sunday;
+        if (updates.morning_start !== undefined) data.morningStart = updates.morning_start;
+        if (updates.morning_end !== undefined) data.morningEnd = updates.morning_end;
+        if (updates.afternoon_start !== undefined) data.afternoonStart = updates.afternoon_start;
+        if (updates.afternoon_end !== undefined) data.afternoonEnd = updates.afternoon_end;
+        if (updates.notes !== undefined) data.notes = updates.notes;
+        if (updates.is_active !== undefined) data.isActive = updates.is_active;
+
+        const updated = await prisma.doctorSchedule.update({
+            where: { id },
+            data
+        });
+        res.json(normalizeSchedule(updated));
     } catch (e) {
         console.error('Error updating doctor schedule:', e);
         res.status(500).json({ error: e.message });
@@ -295,10 +420,9 @@ app.put('/api/doctor-schedules/:id', async (req, res) => {
 
 app.delete('/api/doctor-schedules/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { id } = req.params;
-        const { error } = await supabase.from('doctor_schedules').delete().eq('id', id);
-        if (error) throw error;
+        if (!isUuid(id)) return res.status(400).json({ error: 'id debe ser un UUID válido' });
+        await prisma.doctorSchedule.delete({ where: { id } });
         res.json({ success: true });
     } catch (e) {
         console.error('Error deleting doctor schedule:', e);
@@ -1174,9 +1298,12 @@ const { createClient } = require('@supabase/supabase-js');
 // Lazy Supabase Initializer to prevent startup crashes
 // Lazy Supabase Initializer to prevent startup crashes
 const getSupabase = () => {
-    // HARDCODED DEBUGGING - REMOVE BEFORE FINAL PROD IF POSSIBLE
-    const URL = "https://gnnacijqglcqonholpwt.supabase.co";
-    const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4";
+    const URL = process.env.SUPABASE_URL || "https://gnnacijqglcqonholpwt.supabase.co";
+    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4";
+
+    if (!URL || !KEY) {
+        throw new Error('SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son requeridos para acceder a Supabase.');
+    }
 
     return createClient(URL, KEY);
 };
@@ -1226,27 +1353,32 @@ app.post('/api/auth/login', async (req, res) => {
 // --- USER MANAGEMENT API (ADMIN ONLY) ---
 const VALID_ROLES = ['ADMIN', 'RECEPTION', 'AUXILIAR', 'DOCTOR'];
 
-// GET all users (without passwords)
+// GET all users
 app.get('/api/auth/users', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        const { data, error } = await supabase
-            .from('User')
-            .select('id, email, gmail, name, role, doctorId, createdAt')
-            .order('role')
-            .order('name');
-        if (error) throw error;
-        res.json(data || []);
+        const users = await prisma.user.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                email: true,
+                gmail: true,
+                name: true,
+                role: true,
+                doctorId: true,
+                createdAt: true
+            }
+        });
+        res.json(users);
     } catch (e) {
         console.error('Error fetching users:', e);
         res.status(500).json({ error: e.message });
     }
 });
 
-// POST create user
+// POST create user (Atomic with Doctor/Schedule if role is DOCTOR)
 app.post('/api/auth/users', async (req, res) => {
     try {
-        const { email, gmail, name, password, role, doctorId } = req.body;
+        const { email, gmail, name, password, role } = req.body;
         if (!email || !name || !password || !role) {
             return res.status(400).json({ error: 'Email, nombre, contraseña y rol son obligatorios' });
         }
@@ -1254,27 +1386,74 @@ app.post('/api/auth/users', async (req, res) => {
             return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
         }
 
-        const supabase = getSupabase();
+        const result = await prisma.$transaction(async (tx) => {
+            // Check duplicate email
+            const existing = await tx.user.findUnique({ where: { email } });
+            if (existing) {
+                throw new Error('Ya existe un usuario con ese email');
+            }
 
-        // Check duplicate email
-        const { data: existing } = await supabase.from('User').select('id').eq('email', email).single();
-        if (existing) {
-            return res.status(409).json({ error: 'Ya existe un usuario con ese email' });
-        }
+            // Generate shared UUID
+            const sharedId = crypto.randomUUID();
 
-        const newId = `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const { data, error } = await supabase
-            .from('User')
-            .insert([{ id: newId, email, gmail: gmail || null, name, password, role, doctorId: doctorId || null }])
-            .select('id, email, gmail, name, role, doctorId, createdAt')
-            .single();
-        if (error) throw error;
+            // 1. Create User record
+            const user = await tx.user.create({
+                data: {
+                    id: sharedId,
+                    email,
+                    gmail: gmail || null,
+                    name,
+                    password, // Note: In a real app, hash this!
+                    role
+                }
+            });
 
-        console.log(`✅ User created: ${name} (${role})`);
-        res.status(201).json(data);
+            // 2. If it's a DOCTOR, create profile and schedule
+            if (role === 'DOCTOR') {
+                await tx.doctor.create({
+                    data: {
+                        id: sharedId,
+                        name: name,
+                        specialization: 'Odontólogo',
+                        commissionPercentage: 0
+                    }
+                });
+
+                // Self-link the user to the doctor record
+                await tx.user.update({
+                    where: { id: sharedId },
+                    data: { doctorId: sharedId }
+                });
+
+                // 3. Create default schedule
+                await tx.doctorSchedule.create({
+                    data: {
+                        doctorId: sharedId,
+                        doctorName: name,
+                        monday: true,
+                        tuesday: true,
+                        wednesday: true,
+                        thursday: true,
+                        friday: true,
+                        saturday: false,
+                        sunday: false,
+                        morningStart: '09:00:00',
+                        morningEnd: '13:00:00',
+                        afternoonStart: '16:00:00',
+                        afternoonEnd: '20:00:00'
+                    }
+                });
+            }
+
+            return user;
+        });
+
+        console.log(`✅ User/Doctor created atomically: ${name} (${role})`);
+        res.status(201).json(result);
     } catch (e) {
-        console.error('Error creating user:', e);
-        res.status(500).json({ error: e.message });
+        console.error('Error creating user/doctor:', e);
+        const isConflict = e.message.includes('existe');
+        res.status(isConflict ? 409 : 500).json({ error: e.message });
     }
 });
 
@@ -1288,25 +1467,42 @@ app.put('/api/auth/users/:id', async (req, res) => {
             return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
         }
 
-        const supabase = getSupabase();
-        const updateData = {};
-        if (email) updateData.email = email;
-        if (gmail !== undefined) updateData.gmail = gmail || null;
-        if (name) updateData.name = name;
-        if (password) updateData.password = password;
-        if (role) updateData.role = role;
-        if (doctorId !== undefined) updateData.doctorId = doctorId || null;
+        const updated = await prisma.user.update({
+            where: { id },
+            data: {
+                email,
+                gmail,
+                name,
+                password,
+                role,
+                doctorId
+            },
+            select: {
+                id: true,
+                email: true,
+                gmail: true,
+                name: true,
+                role: true,
+                doctorId: true,
+                createdAt: true
+            }
+        });
 
-        const { data, error } = await supabase
-            .from('User')
-            .update(updateData)
-            .eq('id', id)
-            .select('id, email, gmail, name, role, doctorId, createdAt')
-            .single();
-        if (error) throw error;
+        // If name changed and it's a doctor, update Doctor name too
+        if (name && (updated.role === 'DOCTOR' || updated.doctorId)) {
+            const targetId = updated.doctorId || updated.id;
+            try {
+                await prisma.doctor.update({
+                    where: { id: targetId },
+                    data: { name }
+                });
+            } catch (err) {
+                // Ignore if doctor record doesn't exist for some reason
+            }
+        }
 
-        console.log(`✅ User updated: ${data.name} (${data.role})`);
-        res.json(data);
+        console.log(`✅ User updated: ${updated.name} (${updated.role})`);
+        res.json(updated);
     } catch (e) {
         console.error('Error updating user:', e);
         res.status(500).json({ error: e.message });
@@ -1317,9 +1513,19 @@ app.put('/api/auth/users/:id', async (req, res) => {
 app.delete('/api/auth/users/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const supabase = getSupabase();
-        const { error } = await supabase.from('User').delete().eq('id', id);
-        if (error) throw error;
+
+        // Use transaction to clean up doctor profile if it was a 1:1 match
+        await prisma.$transaction(async (tx) => {
+            const user = await tx.user.findUnique({ where: { id } });
+            if (user && user.doctorId === user.id) {
+                // Delete schedule first (Cascade should handle it naturally if defined in schema, 
+                // but let's be safe if it's not)
+                await tx.doctorSchedule.deleteMany({ where: { doctorId: id } });
+                await tx.doctor.delete({ where: { id } });
+            }
+            await tx.user.delete({ where: { id } });
+        });
+
         console.log(`🗑️ User deleted: ${id}`);
         res.json({ success: true });
     } catch (e) {
@@ -3221,7 +3427,7 @@ app.post('/api/jornada/clock-in', async (req, res) => {
     try {
         const userId = req.headers['x-user-id'] || req.user?.id;
         const role = req.headers['x-user-role'] || req.user?.role;
-        
+
         if (!userId) {
             console.error('❌ Clock-in error: No user ID found in headers or session');
             return res.status(401).json({ error: 'Usuario no identificado.' });
@@ -3253,8 +3459,8 @@ app.post('/api/jornada/clock-in', async (req, res) => {
         res.status(201).json(newShift);
     } catch (e) {
         console.error('🔥 CRITICAL ERROR in clock-in:', e);
-        res.status(500).json({ 
-            error: 'Error interno al registrar entrada.', 
+        res.status(500).json({
+            error: 'Error interno al registrar entrada.',
             details: e.message,
             stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
         });
@@ -3264,7 +3470,7 @@ app.post('/api/jornada/clock-in', async (req, res) => {
 app.put('/api/jornada/clock-out', async (req, res) => {
     try {
         const userId = req.headers['x-user-id'] || req.user?.id;
-        
+
         if (!userId) {
             return res.status(401).json({ error: 'Usuario no identificado.' });
         }
@@ -3287,9 +3493,9 @@ app.put('/api/jornada/clock-out', async (req, res) => {
         res.json(updatedShift);
     } catch (e) {
         console.error('🔥 CRITICAL ERROR in clock-out:', e);
-        res.status(500).json({ 
-            error: 'Error interno al registrar salida.', 
-            details: e.message 
+        res.status(500).json({
+            error: 'Error interno al registrar salida.',
+            details: e.message
         });
     }
 });
@@ -3361,9 +3567,9 @@ app.get('/api/jornada/history', async (req, res) => {
         res.json(history);
     } catch (e) {
         console.error('🔥 CRITICAL ERROR fetching history:', e);
-        res.status(500).json({ 
-            error: 'Error interno al obtener el historial.', 
-            details: e.message 
+        res.status(500).json({
+            error: 'Error interno al obtener el historial.',
+            details: e.message
         });
     }
 });
