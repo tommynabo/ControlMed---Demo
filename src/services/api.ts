@@ -154,6 +154,18 @@ export const api = {
                 throw new Error(errData.error || 'Failed to clock out');
             }
             return res.json();
+        },
+        manual: async (userId: string, role: string, data: { date: string, startTime: string, endTime: string, breakMinutes: number, notes: string }) => {
+            const res = await fetch(`${API_URL}/jornada/manual`, { 
+                method: 'POST', 
+                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to register manual shift');
+            }
+            return res.json();
         }
     },
 

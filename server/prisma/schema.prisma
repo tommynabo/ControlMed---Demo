@@ -28,13 +28,16 @@ model User {
 }
 
 model WorkShift {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  clockIn   DateTime @default(now())
-  clockOut  DateTime?
-  date      String   // Storing as YYYY-MM-DD for easier daily filtering
-  createdAt DateTime @default(now())
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  clockIn      DateTime @default(now())
+  clockOut     DateTime?
+  breakMinutes Int      @default(0)
+  notes        String?
+  isManual     Boolean  @default(false)
+  date         String   // Storing as YYYY-MM-DD for easier daily filtering
+  createdAt    DateTime @default(now())
 }
 
 model Patient {

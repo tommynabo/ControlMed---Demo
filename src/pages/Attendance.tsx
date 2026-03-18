@@ -7,9 +7,12 @@ import {
     Calendar as CalendarIcon,
     User,
     ArrowRight,
-    ArrowLeft
+    ArrowLeft,
+    Plus,
+    Info
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import ManualClockInModal from '../components/ManualClockInModal';
 
 interface WorkShift {
     id: string;
@@ -17,6 +20,9 @@ interface WorkShift {
     clockIn: string;
     clockOut: string | null;
     date: string;
+    breakMinutes?: number;
+    notes?: string;
+    isManual?: boolean;
     user?: { name: string };
 }
 
@@ -26,6 +32,7 @@ const Attendance: React.FC = () => {
     const [history, setHistory] = useState<WorkShift[]>([]);
     const [activeShift, setActiveShift] = useState<WorkShift | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
     // Update digital clock every second
     useEffect(() => {
@@ -84,11 +91,14 @@ const Attendance: React.FC = () => {
         }
     };
 
-    const calculateDuration = (start: string, end: string | null) => {
+    const calculateDuration = (start: string, end: string | null, breakMins: number = 0) => {
         if (!end) return '-';
         const startTime = new Date(start).getTime();
         const endTime = new Date(end).getTime();
-        const diffMs = endTime - startTime;
+        const diffMs = (endTime - startTime) - (breakMins * 60 * 1000);
+        
+        if (diffMs < 0) return '0h 0m';
+
         const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
         const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
         return `${diffHrs}h ${diffMins}m`;
@@ -118,29 +128,39 @@ const Attendance: React.FC = () => {
                 </div>
             </div>
 
-            {/* Principal Action Button */}
-            <div className="flex justify-center py-6">
-                {!activeShift ? (
-                    <button
-                        onClick={handleClockIn}
-                        className="group relative flex flex-col items-center gap-4 transition-all hover:scale-105"
-                    >
-                        <div className="w-32 h-32 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-xl shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-all border-8 border-emerald-100 flex-shrink-0">
-                            <Play size={40} fill="currentColor" />
-                        </div>
-                        <span className="text-sm font-black uppercase tracking-widest text-emerald-600">Empezar Jornada</span>
-                    </button>
-                ) : (
-                    <button
-                        onClick={handleClockOut}
-                        className="group relative flex flex-col items-center gap-4 transition-all hover:scale-105"
-                    >
-                        <div className="w-32 h-32 bg-rose-500 rounded-full flex items-center justify-center text-white shadow-xl shadow-rose-500/20 group-hover:shadow-rose-500/40 transition-all border-8 border-rose-100 flex-shrink-0">
-                            <Square size={40} fill="currentColor" />
-                        </div>
-                        <span className="text-sm font-black uppercase tracking-widest text-rose-600">Finalizar Jornada</span>
-                    </button>
-                )}
+            {/* Principal Action Buttons */}
+            <div className="flex flex-col items-center gap-6 py-6">
+                <div className="flex justify-center">
+                    {!activeShift ? (
+                        <button
+                            onClick={handleClockIn}
+                            className="group relative flex flex-col items-center gap-4 transition-all hover:scale-105"
+                        >
+                            <div className="w-32 h-32 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-xl shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-all border-8 border-emerald-100 flex-shrink-0">
+                                <Play size={40} fill="currentColor" />
+                            </div>
+                            <span className="text-sm font-black uppercase tracking-widest text-emerald-600">Empezar Jornada</span>
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleClockOut}
+                            className="group relative flex flex-col items-center gap-4 transition-all hover:scale-105"
+                        >
+                            <div className="w-32 h-32 bg-rose-500 rounded-full flex items-center justify-center text-white shadow-xl shadow-rose-500/20 group-hover:shadow-rose-500/40 transition-all border-8 border-rose-100 flex-shrink-0">
+                                <Square size={40} fill="currentColor" />
+                            </div>
+                            <span className="text-sm font-black uppercase tracking-widest text-rose-600">Finalizar Jornada</span>
+                        </button>
+                    )}
+                </div>
+
+                <button
+                    onClick={() => setIsManualModalOpen(true)}
+                    className="flex items-center gap-2 px-6 py-3 border-2 border-slate-200 rounded-2xl text-slate-500 font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 hover:border-slate-300 transition-all"
+                >
+                    <Plus size={16} strokeWidth={3} />
+                    Fichaje Manual
+                </button>
             </div>
 
             {/* History Table */}
@@ -229,9 +249,19 @@ const Attendance: React.FC = () => {
                                             )}
                                         </td>
                                         <td className="px-8 py-4 text-right">
-                                            <span className="text-xs font-black text-slate-900 tabular-nums">
-                                                {calculateDuration(shift.clockIn, shift.clockOut)}
-                                            </span>
+                                            <div className="flex flex-col items-end gap-1">
+                                                <span className="text-xs font-black text-slate-900 tabular-nums">
+                                                    {calculateDuration(shift.clockIn, shift.clockOut, shift.breakMinutes)}
+                                                </span>
+                                                {shift.isManual && (
+                                                    <span className="text-[8px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded uppercase tracking-tighter">Manual</span>
+                                                )}
+                                                {shift.breakMinutes ? (
+                                                    <div className="flex items-center gap-1 text-[8px] font-bold text-slate-400">
+                                                        <Info size={8} />  -{shift.breakMinutes}m desc.
+                                                    </div>
+                                                ) : null}
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
@@ -240,6 +270,15 @@ const Attendance: React.FC = () => {
                     </table>
                 </div>
             </div>
+
+            <ManualClockInModal 
+                isOpen={isManualModalOpen} 
+                onClose={() => setIsManualModalOpen(false)}
+                onSuccess={() => {
+                    fetchHistory();
+                    // Optional: Show toast or feedback
+                }}
+            />
         </div>
     );
 };

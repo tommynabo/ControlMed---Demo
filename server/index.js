@@ -3294,6 +3294,47 @@ app.put('/api/jornada/clock-out', async (req, res) => {
     }
 });
 
+app.post('/api/jornada/manual', async (req, res) => {
+    try {
+        const userId = req.headers['x-user-id'] || req.user?.id;
+        const { date, startTime, endTime, breakMinutes, notes } = req.body;
+
+        if (!userId) {
+            return res.status(401).json({ error: 'Usuario no identificado.' });
+        }
+
+        if (!date || !startTime || !endTime) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios (fecha, inicio, fin).' });
+        }
+
+        // Combine date and time
+        const clockIn = new Date(`${date}T${startTime}:00`);
+        const clockOut = new Date(`${date}T${endTime}:00`);
+
+        if (clockOut <= clockIn) {
+            return res.status(400).json({ error: 'La hora de fin debe ser posterior a la de inicio.' });
+        }
+
+        const newShift = await prisma.workShift.create({
+            data: {
+                id: crypto.randomUUID(),
+                userId,
+                clockIn,
+                clockOut,
+                breakMinutes: parseInt(breakMinutes) || 0,
+                notes,
+                isManual: true,
+                date
+            }
+        });
+
+        res.status(201).json(newShift);
+    } catch (e) {
+        console.error('🔥 Error in manual clock-in:', e);
+        res.status(500).json({ error: 'Error al registrar jornada manual.', details: e.message });
+    }
+});
+
 app.get('/api/jornada/history', async (req, res) => {
     try {
         const userId = req.headers['x-user-id'] || req.user?.id;
