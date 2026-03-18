@@ -615,32 +615,19 @@ const Agenda: React.FC = () => {
                 </div>
 
                 <div className="flex gap-4 items-center flex-wrap justify-end">
-                    {/* DOCTOR SELECTOR (ADMIN / RECEPTION) — scrollable pills */}
+                    {/* DOCTOR SELECTOR (ADMIN / RECEPTION) */}
                     {(currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') && (
-                        <div className="flex items-center gap-1.5 overflow-x-auto max-w-[420px] pb-1 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
-                            <button
-                                onClick={() => setSelectedDoctorId('all')}
-                                className={`flex-shrink-0 px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all whitespace-nowrap ${
-                                    selectedDoctorId === 'all'
-                                        ? 'bg-slate-900 text-white shadow-md'
-                                        : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-400 hover:text-slate-800'
-                                }`}
+                        <div className="bg-slate-50 p-1 rounded-xl border border-slate-200">
+                            <select
+                                value={selectedDoctorId}
+                                onChange={(e) => setSelectedDoctorId(e.target.value)}
+                                className="bg-transparent text-xs font-bold uppercase text-slate-600 outline-none px-2 py-2 cursor-pointer"
                             >
-                                Todos
-                            </button>
-                            {doctors.map(doc => (
-                                <button
-                                    key={doc.id}
-                                    onClick={() => setSelectedDoctorId(doc.id)}
-                                    className={`flex-shrink-0 px-3 py-2 rounded-xl text-[11px] font-black uppercase tracking-wide transition-all whitespace-nowrap ${
-                                        selectedDoctorId === doc.id
-                                            ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                                            : 'bg-white text-slate-500 border border-slate-200 hover:border-blue-300 hover:text-blue-600'
-                                    }`}
-                                >
-                                    {doc.name}
-                                </button>
-                            ))}
+                                <option value="all">Vista General (Todos)</option>
+                                {doctors.map(doc => (
+                                    <option key={doc.id} value={doc.id}>{doc.name}</option>
+                                ))}
+                            </select>
                         </div>
                     )}
 
@@ -843,7 +830,7 @@ const Agenda: React.FC = () => {
                                     {viewMode === 'daily' ? (
                                         selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
                                             doctorsOnDuty.map(doc => (
-                                                <div key={doc.id} className={`flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide flex items-center justify-center ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
+                                                <div key={doc.id} className={`min-w-[160px] flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide text-xs flex items-center justify-center px-2 ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
                                                     }`}>
                                                     {doc.name}
                                                 </div>
@@ -977,7 +964,7 @@ const Agenda: React.FC = () => {
                                                                     onDragOver={(e) => handleDragOver(e, time, doc.id, 0)}
                                                                     onDragLeave={() => setDragOverSlot(null)}
                                                                     onDrop={(e) => handleDrop(e, time, doc.id, 0)}
-                                                                    className={`flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                    className={`min-w-[160px] flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                     onClick={() => {
                                                                         if (!ok || closed || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                         if (!isDuplicating) resetAppointmentForm();
