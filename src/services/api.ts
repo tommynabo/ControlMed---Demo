@@ -278,6 +278,15 @@ export const api = {
             if (!res.ok) throw new Error('Failed to fetch appointments');
             return res.json();
         },
+        getByPatient: async (patientId: string): Promise<Appointment[]> => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/appointments`, { headers });
+            if (!res.ok) {
+                // Fallback to filtering from getAll
+                const all = await fetch(`${API_URL}/appointments`, { headers }).then(r => r.json());
+                return all.filter((a: Appointment) => a.patientId === patientId);
+            }
+            return res.json();
+        },
         getById: async (id: string): Promise<Appointment> => {
             console.log(`fetching appointment: ${API_URL}/appointments/${id}`);
             const res = await fetch(`${API_URL}/appointments/${id}`, { headers });

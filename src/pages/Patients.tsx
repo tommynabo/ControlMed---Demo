@@ -154,6 +154,15 @@ const Patients: React.FC = () => {
         }
     }, [selectedPatient, patientTab]);
 
+    // Fetch patient visits when visitas tab is active
+    React.useEffect(() => {
+        if (selectedPatient && patientTab === 'visitas') {
+            api.appointments.getByPatient(selectedPatient.id)
+                .then(setPatientAppointments)
+                .catch(err => console.error("Failed to load visits", err));
+        }
+    }, [selectedPatient, patientTab]);
+
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
@@ -471,6 +480,12 @@ const Patients: React.FC = () => {
     // Wallet / Payment Modal
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+
+    // Visits / Visitas State
+    const [patientAppointments, setPatientAppointments] = useState<Appointment[]>([]);
+    const [isNewVisitModalOpen, setIsNewVisitModalOpen] = useState(false);
+    const [newVisitForm, setNewVisitForm] = useState({ date: new Date().toISOString().split('T')[0], time: '09:00', treatment: '', doctorId: '', observations: '', duration: 60 });
+    const [isCreatingVisit, setIsCreatingVisit] = useState(false);
 
     // Doctors State (for transfer modal)
     const [doctors, setDoctors] = useState<any[]>([]);
@@ -795,7 +810,7 @@ const Patients: React.FC = () => {
                     {/* HEADER SIDEBAR (Mobile/Desktop split logic from App.tsx simplified here) */}
                     <div className="px-8 pt-8 pb-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-xl sticky top-0 z-10">
                         <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                            {['ficha', 'history', 'plan', 'whatsapp', 'odontogram', 'treatments', 'prescriptions', 'billing', 'docs', 'budget'].map(tab => (
+                            {['ficha', 'history', 'visitas', 'plan', 'whatsapp', 'odontogram', 'treatments', 'prescriptions', 'billing', 'docs', 'budget'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setPatientTab(tab)}
@@ -806,7 +821,7 @@ const Patients: React.FC = () => {
                                         }
 `}
                                 >
-                                    {tab === 'history' ? 'Historial' : tab === 'plan' ? 'Plan Tto' : tab === 'treatments' ? 'Tratamientos' : tab === 'prescriptions' ? 'Recetas' : tab === 'billing' ? 'Pagos' : tab === 'docs' ? 'Docs' : tab === 'budget' ? 'Pptos' : tab}
+                                    {tab === 'history' ? 'Historial' : tab === 'visitas' ? 'Visitas' : tab === 'plan' ? 'Plan Tto' : tab === 'treatments' ? 'Tratamientos' : tab === 'prescriptions' ? 'Recetas' : tab === 'billing' ? 'Pagos' : tab === 'docs' ? 'Docs' : tab === 'budget' ? 'Pptos' : tab}
                                 </button>
                             ))}
                         </div>
@@ -1017,6 +1032,300 @@ const Patients: React.FC = () => {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* WALLET QUICK ACTION - Feature 3 */}
+                                <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-[2rem] border border-emerald-100 shadow-sm flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center shadow-lg">
+                                            <Wallet size={24} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase text-emerald-600 tracking-wide">Saldo Monedero</p>
+                                            <p className="text-2xl font-black text-slate-900">{(selectedPatient.wallet || 0).toFixed(2)}€</p>
+                                            <p className="text-xs text-slate-400 font-medium mt-0.5">Disponible para futuros tratamientos</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setIsPaymentModalOpen(true)}
+                                            className="bg-emerald-500 text-white px-5 py-3 rounded-xl font-black uppercase shadow-lg hover:bg-emerald-600 transition-all flex items-center gap-2 text-sm"
+                                        >
+                                            <Plus size={16} /> Ingresar Anticipo
+                                        </button>
+                                        {(selectedPatient.wallet || 0) > 0 && (
+                                            <button
+                                                onClick={() => setIsTransferModalOpen(true)}
+                                                className="bg-white text-emerald-600 border border-emerald-200 px-5 py-3 rounded-xl font-black uppercase shadow-sm hover:bg-emerald-50 transition-all flex items-center gap-2 text-sm"
+                                            >
+                                                <ArrowUp className="rotate-90" size={16} /> Aplicar a Tratamiento
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* VISITAS TAB - Feature 1 */}
+                        {patientTab === 'visitas' && (
+                            <div className="space-y-6 animate-in fade-in max-w-4xl mx-auto">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-3xl font-black text-slate-900 tracking-tight">Visitas</h3>
+                                    <button
+                                        onClick={() => setIsNewVisitModalOpen(true)}
+                                        className="text-xs font-bold text-white flex items-center gap-2 bg-slate-900 px-5 py-3 rounded-xl hover:bg-slate-800 transition-colors shadow-lg"
+                                    >
+                                        <Plus size={16} /> Nueva Visita
+                                    </button>
+                                </div>
+
+                                {/* Stats Row */}
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                        <p className="text-3xl font-black text-slate-900">{patientAppointments.length}</p>
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 mt-1">Total Visitas</p>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                        <p className="text-3xl font-black text-emerald-600">
+                                            {patientAppointments.filter(a => a.status === 'COMPLETADO' || a.status === 'Completed').length}
+                                        </p>
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 mt-1">Realizadas</p>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center">
+                                        <p className="text-3xl font-black text-blue-600">
+                                            {patientAppointments.filter(a => a.status === 'Scheduled' || a.status === 'PENDIENTE').length}
+                                        </p>
+                                        <p className="text-[10px] font-bold uppercase text-slate-400 mt-1">Programadas</p>
+                                    </div>
+                                </div>
+
+                                {/* New Visit Inline Form */}
+                                {isNewVisitModalOpen && (
+                                    <div className="bg-white p-8 rounded-[2rem] border-2 border-blue-100 shadow-lg animate-in slide-in-from-top-4">
+                                        <h4 className="text-lg font-black text-slate-900 mb-6 flex items-center gap-2">
+                                            <Plus size={20} className="text-blue-500" /> Generar Nueva Visita
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Fecha</label>
+                                                <input
+                                                    type="date"
+                                                    value={newVisitForm.date}
+                                                    onChange={(e) => setNewVisitForm(prev => ({ ...prev, date: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Hora</label>
+                                                <input
+                                                    type="time"
+                                                    value={newVisitForm.time}
+                                                    onChange={(e) => setNewVisitForm(prev => ({ ...prev, time: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Motivo / Tratamiento</label>
+                                                <input
+                                                    type="text"
+                                                    value={newVisitForm.treatment}
+                                                    onChange={(e) => setNewVisitForm(prev => ({ ...prev, treatment: e.target.value }))}
+                                                    placeholder="Revisión, Empaste, Limpieza..."
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Doctor</label>
+                                                <select
+                                                    value={newVisitForm.doctorId}
+                                                    onChange={(e) => setNewVisitForm(prev => ({ ...prev, doctorId: e.target.value }))}
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                                                >
+                                                    <option value="">Sin asignar</option>
+                                                    {doctors.map(d => (
+                                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Observaciones</label>
+                                                <input
+                                                    type="text"
+                                                    value={newVisitForm.observations}
+                                                    onChange={(e) => setNewVisitForm(prev => ({ ...prev, observations: e.target.value }))}
+                                                    placeholder="Notas adicionales..."
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3 mt-6">
+                                            <button
+                                                onClick={() => setIsNewVisitModalOpen(false)}
+                                                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl border border-slate-200 transition-colors"
+                                            >
+                                                Cancelar
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    if (!newVisitForm.treatment.trim()) {
+                                                        alert('Introduce el motivo o tratamiento de la visita');
+                                                        return;
+                                                    }
+                                                    setIsCreatingVisit(true);
+                                                    try {
+                                                        const created = await api.appointments.create({
+                                                            patientId: selectedPatient.id,
+                                                            doctorId: newVisitForm.doctorId || undefined,
+                                                            date: newVisitForm.date,
+                                                            time: newVisitForm.time,
+                                                            treatment: newVisitForm.treatment,
+                                                            observations: newVisitForm.observations,
+                                                            duration: newVisitForm.duration,
+                                                            status: 'Scheduled',
+                                                        });
+                                                        setPatientAppointments(prev => [created, ...prev]);
+                                                        setIsNewVisitModalOpen(false);
+                                                        setNewVisitForm({ date: new Date().toISOString().split('T')[0], time: '09:00', treatment: '', doctorId: '', observations: '', duration: 60 });
+                                                        alert('✅ Visita creada correctamente');
+                                                    } catch (e: any) {
+                                                        alert('❌ Error al crear visita: ' + e.message);
+                                                    } finally {
+                                                        setIsCreatingVisit(false);
+                                                    }
+                                                }}
+                                                disabled={isCreatingVisit}
+                                                className="flex-1 bg-slate-900 text-white py-3 rounded-xl text-sm font-black uppercase shadow-lg hover:bg-slate-800 transition-colors disabled:opacity-50"
+                                            >
+                                                {isCreatingVisit ? '⏳ Creando...' : 'Crear Visita'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Visits List */}
+                                {patientAppointments.length === 0 ? (
+                                    <div className="bg-white p-12 rounded-[2rem] border border-slate-100 text-center">
+                                        <div className="w-16 h-16 bg-blue-50 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Clock size={32} />
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-500">No hay visitas registradas</p>
+                                        <p className="text-xs text-slate-400 mt-1">Haz clic en "Nueva Visita" para programar la primera cita</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        {/* Upcoming visits */}
+                                        {patientAppointments.filter(a => a.status === 'Scheduled' || a.status === 'PENDIENTE').length > 0 && (
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase text-blue-500 tracking-wider mb-3 flex items-center gap-2">
+                                                    <Clock size={12} /> Próximas Visitas
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {patientAppointments
+                                                        .filter(a => a.status === 'Scheduled' || a.status === 'PENDIENTE')
+                                                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                                                        .map(visit => {
+                                                            const visitDoctor = doctors.find(d => d.id === visit.doctorId);
+                                                            return (
+                                                                <div key={visit.id} className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex items-center justify-between">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className="w-12 h-12 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black text-sm">
+                                                                            {new Date(visit.date).getDate()}
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm font-black text-slate-900">{visit.treatment || visit.observations || 'Visita'}</p>
+                                                                            <p className="text-xs text-slate-500 font-medium">
+                                                                                {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
+                                                                            </p>
+                                                                            {visitDoctor && <p className="text-[10px] text-blue-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
+                                                                        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-black uppercase rounded-lg">Programada</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Partial / In-process visits */}
+                                        {patientAppointments.filter(a => a.status === 'EN_PROCESO' || a.status === 'PRESUPUESTADO').length > 0 && (
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase text-amber-500 tracking-wider mb-3 flex items-center gap-2">
+                                                    <Activity size={12} /> En Proceso
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {patientAppointments
+                                                        .filter(a => a.status === 'EN_PROCESO' || a.status === 'PRESUPUESTADO')
+                                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                                        .map(visit => {
+                                                            const visitDoctor = doctors.find(d => d.id === visit.doctorId);
+                                                            return (
+                                                                <div key={visit.id} className="bg-amber-50 border border-amber-100 p-5 rounded-2xl flex items-center justify-between">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className="w-12 h-12 bg-amber-500 text-white rounded-xl flex items-center justify-center font-black text-sm">
+                                                                            {new Date(visit.date).getDate()}
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm font-black text-slate-900">{visit.treatment || visit.observations || 'Visita'}</p>
+                                                                            <p className="text-xs text-slate-500 font-medium">
+                                                                                {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
+                                                                            </p>
+                                                                            {visitDoctor && <p className="text-[10px] text-amber-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
+                                                                        <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase rounded-lg">Pago Parcial</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Past / Completed visits */}
+                                        {patientAppointments.filter(a => a.status === 'COMPLETADO' || a.status === 'Completed').length > 0 && (
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider mb-3 flex items-center gap-2">
+                                                    <CheckCircle2 size={12} /> Historial de Visitas
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {patientAppointments
+                                                        .filter(a => a.status === 'COMPLETADO' || a.status === 'Completed')
+                                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                                        .map(visit => {
+                                                            const visitDoctor = doctors.find(d => d.id === visit.doctorId);
+                                                            return (
+                                                                <div key={visit.id} className="bg-white border border-slate-100 p-5 rounded-2xl flex items-center justify-between shadow-sm">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className="w-12 h-12 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center font-black text-sm">
+                                                                            {new Date(visit.date).getDate()}
+                                                                        </div>
+                                                                        <div>
+                                                                            <p className="text-sm font-black text-slate-900">{visit.treatment || visit.observations || 'Visita'}</p>
+                                                                            <p className="text-xs text-slate-500 font-medium">
+                                                                                {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
+                                                                            </p>
+                                                                            {visitDoctor && <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
+                                                                        <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg ${visit.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                                            {visit.paid ? 'Pagado' : 'Completado'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
 

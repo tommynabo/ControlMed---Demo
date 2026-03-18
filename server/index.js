@@ -1071,6 +1071,28 @@ app.get('/api/appointments', async (req, res) => {
     }
 });
 
+// Patient appointments - filtered by patientId
+app.get('/api/patients/:patientId/appointments', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { data, error } = await supabase
+            .from('Appointment')
+            .select('*')
+            .eq('patientId', req.params.patientId)
+            .order('date', { ascending: false });
+
+        if (error) {
+            console.error("❌ Supabase Fetch Error (Patient Appointments):", error);
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data || []);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/appointments/:id', async (req, res) => {
     try {
         let supabase;
@@ -2376,7 +2398,7 @@ app.get('/api/patients/:id/payments', async (req, res) => {
 
 app.post('/api/payments/create', async (req, res) => {
     try {
-        const { patientId, budgetId, appointmentId, amount, method, type, notes, doctorId } = req.body;
+        const { patientId, budgetId, appointmentId, amount, method, type, notes, doctorId, isPartial, originalAmount } = req.body;
 
         if (!patientId || !amount || !method || !type) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -2405,8 +2427,8 @@ app.post('/api/payments/create', async (req, res) => {
         }
 
         // --- IDEMPOTENCY CHECK ---
-        // If an appointmentId is provided, check if it already has an associated invoice/payment
-        if (appointmentId) {
+        // Skip for partial payments — multiple payments are allowed for the same appointment
+        if (appointmentId && !isPartial) {
             const existingInvoice = await prisma.invoice.findUnique({
                 where: { appointmentId },
                 include: { relatedPayment: true }
@@ -2486,11 +2508,14 @@ app.post('/api/payments/create', async (req, res) => {
                 }
             });
 
-            // 2. Mark Appointment as Paid
+            // 2. Mark Appointment as Paid (or Partially Paid)
             if (appointmentId) {
+                const isPartialPayment = isPartial === true;
                 await tx.appointment.update({
                     where: { id: appointmentId },
-                    data: { paid: true, status: 'Completed' }
+                    data: isPartialPayment
+                        ? { paid: false, status: 'EN_PROCESO' }
+                        : { paid: true, status: 'Completed' }
                 });
             }
 
@@ -2522,8 +2547,9 @@ app.post('/api/payments/create', async (req, res) => {
                     date: new Date(),
                     status: 'issued',
                     paymentMethod: method,
-                    concept: solvedTreatmentName,
-                    appointmentId: appointmentId || null,
+                    concept: isPartial ? `${solvedTreatmentName} (Pago Parcial)` : solvedTreatmentName,
+                    // For partial payments, don't link to appointmentId to allow multiple invoices per appointment
+                    appointmentId: (appointmentId && !isPartial) ? appointmentId : null,
                     relatedPaymentId: payment.id
                 }
             });
@@ -2584,7 +2610,9 @@ app.post('/api/payments/create', async (req, res) => {
                 invoice,
                 payroll: liquidation,
                 pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
-                previewUrl: quipuResult.success ? quipuResult.preview_url : null
+                previewUrl: quipuResult.success ? quipuResult.preview_url : null,
+                isPartial: isPartial === true,
+                remainingBalance: (isPartial && originalAmount) ? parseFloat(originalAmount) - numericAmount : 0
             };
         });
 

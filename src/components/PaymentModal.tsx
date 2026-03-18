@@ -42,6 +42,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const [concept, setConcept] = useState('');
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [originalAmount, setOriginalAmount] = useState(0); // Locked original treatment cost
 
     // Combined payment state
     const [useCombinedPayment, setUseCombinedPayment] = useState(false);
@@ -55,6 +56,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         if (isOpen) {
             const amt = defaultAmount ? defaultAmount.toString() : '';
             setTotalAmount(amt);
+            setOriginalAmount(defaultAmount || 0);
             setConcept(defaultConcept || (appointment ? `Pago Cita ${appointment.date}` : 'Anticipo / Saldo de Cuenta'));
             setPrimaryMethod('card');
             setNotes('');
@@ -119,6 +121,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             const mainMethod = breakdown.length === 1 ? breakdown[0].method :
                 breakdown.sort((a, b) => b.amount - a.amount)[0].method;
 
+            const isPartialPayment = isDirectPayment && originalAmount > 0 && numericAmount < originalAmount;
+
             const paymentData = {
                 patientId: patient.id,
                 amount: numericAmount,
@@ -128,6 +132,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 doctorId: appointment?.doctorId,
                 treatmentName: concept,
                 notes: notes || undefined,
+                isPartial: isPartialPayment,
+                originalAmount: isPartialPayment ? originalAmount : undefined,
             };
 
             const response = await api.payments.create(paymentData) as any;
@@ -151,7 +157,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             };
 
             if (appointment) {
-                await api.appointments.update(appointment.id, { paid: true, status: 'COMPLETADO' });
+                await api.appointments.update(appointment.id, {
+                    paid: !isPartialPayment,
+                    status: isPartialPayment ? 'EN_PROCESO' : 'COMPLETADO'
+                });
             }
 
             onPaymentComplete(payment, response);
@@ -232,7 +241,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     <div className="grid grid-cols-2 gap-6">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
-                                Importe Total (€)
+                                Importe a Cobrar (€)
                             </label>
                             <input
                                 type="number"
@@ -241,6 +250,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 placeholder="0.00"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xl font-bold outline-none focus:ring-2 focus:ring-blue-100"
                             />
+                            {/* Partial payment indicator */}
+                            {isDirectPayment && originalAmount > 0 && parseFloat(totalAmount) > 0 && parseFloat(totalAmount) < originalAmount && (
+                                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                                    <p className="text-[10px] font-black text-amber-700 uppercase">Importe Original: {originalAmount.toFixed(2)}€</p>
+                                    <p className="text-xs font-black text-red-600 mt-0.5">
+                                        Pendiente tras este cobro: {(originalAmount - (parseFloat(totalAmount) || 0)).toFixed(2)}€
+                                    </p>
+                                    <p className="text-[10px] text-amber-600 mt-0.5 font-medium">La visita quedará en estado "Pago Parcial"</p>
+                                </div>
+                            )}
+                            {isDirectPayment && originalAmount > 0 && parseFloat(totalAmount) >= originalAmount && originalAmount > 0 && (
+                                <p className="text-[10px] text-emerald-600 font-black uppercase mt-1">✓ Cobro total del tratamiento</p>
+                            )}
                         </div>
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
@@ -394,7 +416,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             isDirectPayment ? (
                                 <>
                                     <Check size={20} />
-                                    Cobrar {totalAmount}€
+                                    {originalAmount > 0 && parseFloat(totalAmount) < originalAmount
+                                        ? `Cobro Parcial ${totalAmount}€`
+                                        : `Cobrar ${totalAmount}€`}
                                 </>
                             ) : (
                                 <>
