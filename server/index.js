@@ -634,39 +634,22 @@ app.get('/api/patients/:patientId/clinical-records', async (req, res) => {
 // --- DOCTORS ---
 app.get('/api/doctors', async (req, res) => {
     try {
-        const supabase = getSupabase();
+        // Get doctorIds of active DOCTOR-role users only
+        const activeUsers = await prisma.user.findMany({
+            where: { role: 'DOCTOR', isActive: true },
+            select: { doctorId: true }
+        });
+        const activeDoctorIds = activeUsers.map(u => u.doctorId).filter(Boolean);
 
-        // Fetch ALL doctors from Doctor table
-        const { data: doctors, error } = await supabase
-            .from('Doctor')
-            .select('id, name, specialization')
-            .order('name', { ascending: true });
+        // Fetch only those doctors from Doctor table
+        const doctors = await prisma.doctor.findMany({
+            where: activeDoctorIds.length > 0 ? { id: { in: activeDoctorIds } } : { id: 'no-match' },
+            orderBy: { name: 'asc' },
+            select: { id: true, name: true, specialization: true }
+        });
 
-        if (error) {
-            console.error('Error fetching doctors from Doctor table:', error.message);
-            return res.status(500).json({ error: error.message });
-        }
-
-        if (!doctors || doctors.length === 0) {
-            console.warn('⚠️ No doctors found in Doctor table. Have you run the sync?');
-            return res.json([]);
-        }
-
-        // Filter out doctors whose corresponding system_user is inactive or deleted
-        const { data: activeSystemUsers } = await supabase
-            .from('system_users')
-            .select('full_name')
-            .eq('is_active', true)
-            .in('role', ['DOCTOR', 'ADMIN']);
-
-        let filteredDoctors = doctors;
-        if (activeSystemUsers && activeSystemUsers.length > 0) {
-            const activeNames = new Set(activeSystemUsers.map(u => u.full_name?.toLowerCase()));
-            filteredDoctors = doctors.filter(d => activeNames.has(d.name?.toLowerCase()));
-        }
-
-        console.log(`✅ Loaded ${filteredDoctors.length} active doctors (${doctors.length} total)`);
-        res.json(filteredDoctors);
+        console.log(`✅ Loaded ${doctors.length} active doctors`);
+        res.json(doctors);
     } catch (e) {
         console.error('Error fetching doctors:', e.message);
         res.status(500).json({ error: e.message });

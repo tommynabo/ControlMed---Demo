@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users as UsersIcon, Plus, X, Trash2, Save, AlertCircle, Edit3, Shield, Eye, EyeOff } from 'lucide-react';
 import { api } from '../services/api';
 import { isSupabaseConfigured_ } from '../services/supabase';
+import { useAppContext } from '../context/AppContext';
 
 interface User {
   id?: string;
@@ -13,6 +14,7 @@ interface User {
 }
 
 const Users: React.FC = () => {
+  const { refreshDoctors } = useAppContext();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -118,6 +120,8 @@ const Users: React.FC = () => {
       }
       setShowModal(false);
       loadUsers();
+      // Refresh the doctors list in context so Agenda/Schedules update immediately
+      await refreshDoctors();
       setSuccessMessage(editingUser ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente');
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {

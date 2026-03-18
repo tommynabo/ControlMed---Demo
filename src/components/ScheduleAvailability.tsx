@@ -139,8 +139,9 @@ const ScheduleAvailability: React.FC = () => {
   };
   // Filter doctors based on search input (for the "Add Schedule" dropdown)
   const filteredDoctors = systemDoctors.filter(doc => {
-    // Only show users with DOCTOR role
+    // Only show active users with DOCTOR role
     if (doc.role !== 'DOCTOR') return false;
+    if (doc.is_active === false) return false;
     // If not ADMIN, only allow managing their own schedule
     if (currentUserRole !== 'ADMIN' && doc.id !== currentUser?.id) return false;
 

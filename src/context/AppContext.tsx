@@ -81,6 +81,7 @@ interface AppContextProps {
     refreshPatients: () => Promise<void>;
     refreshAppointments: () => Promise<void>;
     refreshInvoices: () => Promise<void>;
+    refreshDoctors: () => Promise<void>;
     addPatient: (p: Patient) => void;
     addAppointment: (a: Appointment) => void;
     addInvoice: (i: Invoice) => void;
@@ -210,6 +211,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const addAppointment = (a: Appointment) => setAppointments(prev => [...prev, a]);
     const addInvoice = (i: Invoice) => setInvoices(prev => [i, ...prev]);
 
+    const refreshDoctors = async () => {
+        try {
+            const docs = await api.getDoctors();
+            setDoctors(docs);
+        } catch (e) {
+            console.error("Error refreshing doctors", e);
+        }
+    };
+
     // RBAC helpers bound to current role
     const canAccessPageFn = (pageId: string) => canAccessPage(role, pageId);
     const canAccessRouteFn = (path: string) => canAccessRoute(role, path);
@@ -222,7 +232,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             patients, setPatients, appointments, setAppointments, invoices, setInvoices,
             stock, setStock, clinicalRecords, setClinicalRecords, expenses, setExpenses,
             doctors, setDoctors,
-            refreshPatients, refreshAppointments, refreshInvoices, addPatient, addAppointment, addInvoice, api,
+            refreshPatients, refreshAppointments, refreshInvoices, refreshDoctors, addPatient, addAppointment, addInvoice, api,
             searchQuery, setSearchQuery, selectedPatient, setSelectedPatient
         }}>
             {children}
