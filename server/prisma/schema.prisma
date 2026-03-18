@@ -394,6 +394,7 @@ model ClinicalTreatmentPlan {
   createdAt DateTime                @default(now())
   updatedAt DateTime?               @updatedAt
 
+  @@map("clinical_treatment_plans")
   @@index([patientId])
 }
 
@@ -409,6 +410,7 @@ model ClinicalTreatmentStep {
   completedAt   DateTime?
   createdAt     DateTime              @default(now())
 
+  @@map("clinical_treatment_steps")
   @@index([planId])
 }
 
