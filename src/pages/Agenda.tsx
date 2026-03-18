@@ -807,7 +807,7 @@ const Agenda: React.FC = () => {
                     <div className="flex">
                         {/* TIME COLUMN - Always visible */}
                         <div className="w-14 flex-shrink-0 pr-4">
-                            <div className="h-12 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
+                            <div className="h-12 mb-4 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
                             {TIME_SLOTS.map((time, idx) => {
                                 const hour = parseInt(time.split(':')[0], 10);
                                 // Render on the start of each hour (every 12 slots of 5 mins)
@@ -826,11 +826,11 @@ const Agenda: React.FC = () => {
                         <div className="flex-1 min-w-[600px] relative">
                             <div className="min-w-[1000px] relative">
                                 {/* HEADERS */}
-                                <div className="flex h-12 mb-4">
+                                <div className="flex min-h-[48px] h-auto mb-4">
                                     {viewMode === 'daily' ? (
                                         selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
                                             doctorsOnDuty.map(doc => (
-                                                <div key={doc.id} className={`min-w-[160px] flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide text-xs flex items-center justify-center px-2 ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
+                                                <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide text-xs flex items-center justify-center px-3 whitespace-nowrap ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
                                                     }`}>
                                                     {doc.name}
                                                 </div>
@@ -964,7 +964,7 @@ const Agenda: React.FC = () => {
                                                                     onDragOver={(e) => handleDragOver(e, time, doc.id, 0)}
                                                                     onDragLeave={() => setDragOverSlot(null)}
                                                                     onDrop={(e) => handleDrop(e, time, doc.id, 0)}
-                                                                    className={`min-w-[160px] flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
+                                                                    className={`min-w-[180px] flex-1 h-full border-r border-slate-50 transition-colors relative z-0 ${ok && !closed && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' ? 'hover:bg-slate-50/50 cursor-pointer' : 'bg-slate-100/60'}`}
                                                                     onClick={() => {
                                                                         if (!ok || closed || currentUserRole === 'DOCTOR' || currentUserRole === 'AUXILIAR') return;
                                                                         if (!isDuplicating) resetAppointmentForm();
