@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Check, Clock, ChevronDown, ChevronUp, ClipboardList, AlertCircle } from 'lucide-react';
 import { Patient, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
-import { DENTAL_SERVICES } from '../constants';
 
 interface PlanTratamientoTabProps {
     patient: Patient;
@@ -29,6 +28,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     const [newStepName, setNewStepName] = useState('');
     const [newStepTooth, setNewStepTooth] = useState('');
     const [addingStepToPlan, setAddingStepToPlan] = useState<string | null>(null);
+    const [dbServices, setDbServices] = useState<{ id: string; name: string; specialty_name: string }[]>([]);
 
     const fetchPlans = async () => {
         try {
@@ -67,6 +67,10 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     };
 
     useEffect(() => { fetchPlans(); }, [patient.id]);
+
+    useEffect(() => {
+        api.services.getAll().then((data: any[]) => setDbServices(data || [])).catch(() => {});
+    }, []);
 
     const handleCreatePlan = async () => {
         if (!newPlanName.trim()) return;
@@ -306,8 +310,19 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                                                     className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium outline-none"
                                                 >
                                                     <option value="">Seleccionar tratamiento...</option>
-                                                    {DENTAL_SERVICES.map(s => (
-                                                        <option key={s.id} value={s.name}>{s.name}</option>
+                                                    {(Object.entries(
+                                                        dbServices.reduce((acc: Record<string, Array<{ id: string; name: string; specialty_name: string }>>, s) => {
+                                                            const spec = s.specialty_name || 'Otros';
+                                                            if (!acc[spec]) acc[spec] = [];
+                                                            acc[spec].push(s);
+                                                            return acc;
+                                                        }, {})
+                                                    ) as [string, Array<{ id: string; name: string; specialty_name: string }>][]).sort().map(([spec, items]) => (
+                                                        <optgroup key={spec} label={spec}>
+                                                            {items.map(s => (
+                                                                <option key={s.id} value={s.name}>{s.name}</option>
+                                                            ))}
+                                                        </optgroup>
                                                     ))}
                                                     <option value="__custom">✏️ Escribir manualmente...</option>
                                                 </select>
