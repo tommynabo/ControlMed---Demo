@@ -1572,6 +1572,38 @@ app.delete('/api/auth/users/:id', async (req, res) => {
     }
 });
 
+// PATCH display name (user self-service)
+app.patch('/api/auth/users/:id/display-name', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+
+        if (!name || typeof name !== 'string' || !name.trim()) {
+            return res.status(400).json({ error: 'El nombre no puede estar vacío' });
+        }
+        const trimmedName = name.trim().slice(0, 100);
+
+        const updated = await prisma.user.update({
+            where: { id },
+            data: { name: trimmedName },
+            select: { id: true, email: true, name: true, role: true, doctorId: true, createdAt: true }
+        });
+
+        // Keep doctor name in sync if applicable
+        if (updated.doctorId) {
+            try {
+                await prisma.doctor.update({ where: { id: updated.doctorId }, data: { name: trimmedName } });
+            } catch (_) { /* ignore if no doctor record */ }
+        }
+
+        console.log(`✅ Display name updated: ${updated.name} (${updated.id})`);
+        res.json(updated);
+    } catch (e) {
+        console.error('Error updating display name:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // CHANGE PASSWORD (user self-service)
 app.post('/api/auth/change-password', async (req, res) => {
     try {

@@ -51,6 +51,17 @@ export const api = {
         return data;
     },
 
+    updateDisplayName: async (userId: string, name: string): Promise<{ name: string }> => {
+        const res = await fetch(`${API_URL}/auth/users/${userId}/display-name`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al actualizar el nombre');
+        return data;
+    },
+
     // Invoices (Moved to top for visibility/debugging)
     invoices: {
         getAll: async (): Promise<Invoice[]> => {

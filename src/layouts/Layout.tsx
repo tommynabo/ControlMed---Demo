@@ -8,6 +8,7 @@ import {
 import { useAppContext } from '../context/AppContext';
 import { ROLE_LABELS } from '../config/roles';
 import ChangePasswordModal from '../components/ChangePasswordModal';
+import EditDisplayNameModal from '../components/EditDisplayNameModal';
 
 const Layout: React.FC = () => {
     const { currentUser, isAuthenticated, currentUserRole: role, logout, canAccessPage } = useAppContext();
@@ -15,6 +16,7 @@ const Layout: React.FC = () => {
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [showChangePassword, setShowChangePassword] = useState(false);
+    const [showEditName, setShowEditName] = useState(false);
 
     // === TabGuard: Route protection — redirect to login if session not found ===
     if (!isAuthenticated) {
@@ -112,6 +114,13 @@ const Layout: React.FC = () => {
 
                 <div className="p-4 border-t border-slate-800 space-y-1">
                     <button
+                        onClick={() => setShowEditName(true)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-slate-700 hover:text-white transition-all w-full ${!isSidebarOpen && 'justify-center'}`}
+                    >
+                        <span className="w-5 h-5 flex items-center justify-center text-base leading-none">👤</span>
+                        {isSidebarOpen && <span className="text-xs font-bold uppercase tracking-wide">Mi Nombre</span>}
+                    </button>
+                    <button
                         onClick={() => setShowChangePassword(true)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-500/10 hover:text-blue-400 transition-all w-full ${!isSidebarOpen && 'justify-center'}`}
                     >
@@ -157,6 +166,9 @@ const Layout: React.FC = () => {
 
             {/* Change Password Modal */}
             <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} />
+
+            {/* Edit Display Name Modal */}
+            <EditDisplayNameModal isOpen={showEditName} onClose={() => setShowEditName(false)} />
         </div>
     );
 };

@@ -55,6 +55,7 @@ interface AppContextProps {
     isAuthenticated: boolean;
     login: (user: any) => void;
     logout: () => void;
+    updateDisplayName: (name: string) => Promise<void>;
 
     // RBAC helpers
     canAccessPage: (pageId: string) => boolean;
@@ -180,6 +181,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         clearSession();
     };
 
+    const updateDisplayName = async (name: string) => {
+        if (!currentUser?.id) throw new Error('No hay sesión activa');
+        const updated = await api.updateDisplayName(currentUser.id, name);
+        const newUser = { ...currentUser, name: updated.name };
+        setCurrentUser(newUser);
+        persistSession(newUser);
+    };
+
     const refreshPatients = async () => {
         try {
             const pts = await api.getPatients();
@@ -227,7 +236,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     return (
         <AppContext.Provider value={{
-            currentUser, currentUserRole: role, isAuthenticated, login, logout,
+            currentUser, currentUserRole: role, isAuthenticated, login, logout, updateDisplayName,
             canAccessPage: canAccessPageFn, canAccessRoute: canAccessRouteFn, hasPermission: hasPermissionFn,
             patients, setPatients, appointments, setAppointments, invoices, setInvoices,
             stock, setStock, clinicalRecords, setClinicalRecords, expenses, setExpenses,
