@@ -49,8 +49,10 @@ const CashRegister: React.FC = () => {
         const cashIncome = todayInvoices.filter(i => i.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
         const cardIncome = todayInvoices.filter(i => i.paymentMethod === 'card').reduce((acc, curr) => acc + curr.amount, 0);
         const transferIncome = todayInvoices.filter(i => i.paymentMethod === 'transfer').reduce((acc, curr) => acc + curr.amount, 0);
+        const cashExpenses = todayExpenses.filter(e => e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
+        const netCash = cashIncome - cashExpenses;
 
-        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, balance: totalIncome - totalExpense };
+        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, netCash, balance: totalIncome - totalExpense };
     }, [todayInvoices, todayExpenses]);
 
 
@@ -93,7 +95,7 @@ const CashRegister: React.FC = () => {
 
         const completedCount = todayAppointments.filter(a => ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')).length;
 
-        const cashDiff = physicalCashTotal - stats.cashIncome;
+        const cashDiff = physicalCashTotal - stats.netCash;
         const diffLabel = cashDiff === 0
             ? '✅ Cuadra exactamente'
             : cashDiff > 0
@@ -107,7 +109,9 @@ const CashRegister: React.FC = () => {
             `  Gastos:              ${stats.totalExpense.toFixed(2)}€\n` +
             `  Neto:                ${stats.balance.toFixed(2)}€\n\n` +
             `💵 Desglose por método:\n` +
-            `  Efectivo (sistema):  ${stats.cashIncome.toFixed(2)}€\n` +
+            `  Efectivo ingresos:   ${stats.cashIncome.toFixed(2)}€\n` +
+            (stats.cashExpenses > 0 ? `  Gastos en efectivo:  -${stats.cashExpenses.toFixed(2)}€\n` : '') +
+            `  Efectivo (neto):     ${stats.netCash.toFixed(2)}€\n` +
             `  Efectivo (físico):   ${physicalCashTotal.toFixed(2)}€\n` +
             `  Diferencia:          ${diffLabel}\n` +
             `  Tarjeta:             ${stats.cardIncome.toFixed(2)}€\n` +
@@ -151,8 +155,11 @@ const CashRegister: React.FC = () => {
 
                         <div className="mt-8 pt-8 border-t border-slate-100 grid grid-cols-4 gap-4">
                             <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Efectivo</p>
-                                <p className="text-lg font-bold text-slate-700">{stats.cashIncome.toFixed(2)}€</p>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase">Efectivo Neto</p>
+                                <p className="text-lg font-bold text-slate-700">{stats.netCash.toFixed(2)}€</p>
+                                {stats.cashExpenses > 0 && (
+                                    <p className="text-[9px] text-rose-400 mt-0.5">Gastos: -{stats.cashExpenses.toFixed(2)}€</p>
+                                )}
                                 {arqueoCompleted && (
                                     <p className="text-[9px] text-slate-400 mt-0.5">Físico: {physicalCashTotal.toFixed(2)}€</p>
                                 )}
@@ -360,10 +367,13 @@ const CashRegister: React.FC = () => {
                                         <p className="text-3xl font-black mt-1">{calculatedPhysicalCash.toFixed(2)}€</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sistema (Efectivo)</p>
-                                        <p className="text-xl font-black text-slate-300 mt-1">{stats.cashIncome.toFixed(2)}€</p>
-                                        <p className={`text-xs font-bold mt-1 ${Math.abs(calculatedPhysicalCash - stats.cashIncome) < 0.01 ? 'text-emerald-400' : calculatedPhysicalCash > stats.cashIncome ? 'text-amber-400' : 'text-rose-400'}`}>
-                                            {calculatedPhysicalCash >= stats.cashIncome ? '+' : ''}{(calculatedPhysicalCash - stats.cashIncome).toFixed(2)}€ diferencia
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sistema (Efectivo Neto)</p>
+                                        <p className="text-xl font-black text-slate-300 mt-1">{stats.netCash.toFixed(2)}€</p>
+                                        {stats.cashExpenses > 0 && (
+                                            <p className="text-[10px] text-rose-300 mt-0.5">Gastos: -{stats.cashExpenses.toFixed(2)}€</p>
+                                        )}
+                                        <p className={`text-xs font-bold mt-1 ${Math.abs(calculatedPhysicalCash - stats.netCash) < 0.01 ? 'text-emerald-400' : calculatedPhysicalCash > stats.netCash ? 'text-amber-400' : 'text-rose-400'}`}>
+                                            {calculatedPhysicalCash >= stats.netCash ? '+' : ''}{(calculatedPhysicalCash - stats.netCash).toFixed(2)}€ diferencia
                                         </p>
                                     </div>
                                 </div>

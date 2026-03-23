@@ -26,6 +26,7 @@ interface Service {
 
 const Settings: React.FC = () => {
     const { stock, setStock, currentUserRole } = useAppContext();
+    const isReception = currentUserRole === 'RECEPTION';
     const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users'>('templates');
     const [templateSearch, setTemplateSearch] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,7 +207,8 @@ const Settings: React.FC = () => {
             <div className="w-64 bg-white border-r border-slate-200 p-6 flex flex-col gap-2 shrink-0">
                 <h3 className="text-xl font-bold text-slate-900 mb-6 px-2">Configuración</h3>
                 
-                {/* GRUPO 1: GENERAL */}
+                {/* GRUPO 1: GENERAL — hidden for RECEPTION */}
+                {!isReception && (
                 <div className="mb-4">
                     <p className="text-[9px] font-black uppercase text-slate-400 px-2 mb-2">General</p>
                     <button onClick={() => setSettingsTab('clinic')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'clinic' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
@@ -222,13 +224,16 @@ const Settings: React.FC = () => {
                         <UsersIcon size={14} /> Usuarios
                     </button>
                 </div>
+                )}
 
                 {/* GRUPO 2: OPERACIÓN */}
-                <div className="border-t border-slate-200 pt-4 mb-4">
+                <div className={`${!isReception ? 'border-t border-slate-200 pt-4 ' : ''}mb-4`}>
                     <p className="text-[9px] font-black uppercase text-slate-400 px-2 mb-2">Operación</p>
                     <button onClick={() => setSettingsTab('templates')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'templates' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         Plantillas
                     </button>
+                    {!isReception && (
+                    <>
                     <button onClick={() => setSettingsTab('stock')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'stock' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         Inventario
                     </button>
@@ -238,6 +243,8 @@ const Settings: React.FC = () => {
                     <button onClick={() => setSettingsTab('whatsapp')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'whatsapp' ? 'bg-green-50 text-green-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         WhatsApp & CRM
                     </button>
+                    </>
+                    )}
                 </div>
             </div>
 
@@ -785,16 +792,16 @@ const Settings: React.FC = () => {
                 )}
 
                 {/* CLINIC INFO SECTION */}
-                {settingsTab === 'clinic' && <ClinicInfo />}
+                {settingsTab === 'clinic' && !isReception && <ClinicInfo />}
 
                 {/* SCHEDULE AVAILABILITY SECTION */}
-                {settingsTab === 'schedule' && <ScheduleAvailability />}
+                {settingsTab === 'schedule' && !isReception && <ScheduleAvailability />}
 
                 {/* VACATIONS SECTION */}
-                {settingsTab === 'vacations' && <Vacations />}
+                {settingsTab === 'vacations' && !isReception && <Vacations />}
 
                 {/* USERS SECTION */}
-                {settingsTab === 'users' && <Users />}
+                {settingsTab === 'users' && !isReception && <Users />}
             </div>
         </div >
     );

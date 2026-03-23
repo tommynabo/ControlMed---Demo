@@ -47,7 +47,8 @@ export interface Expense {
   description: string;
   amount: number;
   date: string;
-  category: 'Comision' | 'Material' | 'General';
+  category: 'Material Medico' | 'Oficina' | 'Mantenimiento' | 'Varios' | 'Comision' | 'Material' | 'General';
+  paymentMethod: 'cash' | 'card' | 'transfer' | 'domiciliacion';
   receiver?: string;
   url?: string;
 }

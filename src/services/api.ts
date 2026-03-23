@@ -1054,11 +1054,42 @@ export const api = {
         }
     },
 
+    // Expenses (Gastos de la Clínica)
+    expenses: {
+        getAll: async () => {
+            try {
+                const res = await fetch(`${API_URL}/expenses`, { headers });
+                if (!res.ok) return [];
+                return res.json();
+            } catch { return []; }
+        },
+        create: async (data: any) => {
+            const res = await fetch(`${API_URL}/expenses`, {
+                method: 'POST', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Error al crear gasto');
+            }
+            return res.json();
+        },
+        update: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/expenses/${id}`, {
+                method: 'PUT', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Error al actualizar gasto');
+            return res.json();
+        },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/expenses/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Error al eliminar gasto');
+        }
+    },
+
     // Agenda Closures (Feature 4)
     agendaClosures: {
         getAll: async (date?: string) => {
             const url = date ? `${API_URL}/agenda-closures?date=${date}` : `${API_URL}/agenda-closures`;
-            const res = await fetch(url, { headers });
             if (!res.ok) return [];
             return res.json();
         },

@@ -147,16 +147,18 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         if (isAuthenticated) {
             const fetchData = async () => {
                 try {
-                    const [pts, appts, docs, invs] = await Promise.all([
+                    const [pts, appts, docs, invs, exps] = await Promise.all([
                         api.getPatients().catch(err => { console.error("Failed to fetch patients", err); return []; }),
                         api.appointments.getAll().catch(err => { console.error("Failed to fetch appointments", err); return []; }),
                         api.getDoctors().catch(err => { console.error("Failed to fetch doctors", err); return []; }),
-                        api.invoices.getAll().catch(err => { console.error("Failed to fetch invoices", err); return []; })
+                        api.invoices.getAll().catch(err => { console.error("Failed to fetch invoices", err); return []; }),
+                        api.expenses.getAll().catch(err => { console.error("Failed to fetch expenses", err); return []; })
                     ]);
                     setPatients(pts);
                     setAppointments(appts);
                     setDoctors(docs);
                     setInvoices(invs);
+                    setExpenses(exps);
                     // Stock and others can be added here
                 } catch (e) {
                     console.error("Error loading initial data", e);
