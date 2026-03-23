@@ -3748,76 +3748,77 @@ app.get('/api/jornada/history', async (req, res) => {
 
 app.get('/api/agenda-closures', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { date, doctorId } = req.query;
+        let whereClause = {};
 
-        let query = supabase.from('agenda_closures').select('*').order('date', { ascending: false });
+        if (date) {
+            whereClause.date = new Date(date);
+        }
+        if (doctorId) {
+            whereClause.OR = [
+                { doctorId: doctorId },
+                { doctorId: null }
+            ];
+        }
 
-        if (date) query = query.eq('date', date);
-        if (doctorId) query = query.or(`doctor_id.eq.${doctorId},doctor_id.is.null`);
-
-        const { data, error } = await query;
-        if (error) throw error;
+        const data = await prisma.agendaClosure.findMany({
+            where: whereClause,
+            orderBy: { date: 'desc' }
+        });
+        
         res.json(data || []);
     } catch (e) {
-        console.error('Error fetching agenda closures:', e);
-        res.status(500).json({ error: e.message });
+        console.error('🔥 CRITICAL PRISMA ERROR fetching agenda closures:', e);
+        res.status(500).json({ error: e.message, stack: e.stack });
     }
 });
 
 app.post('/api/agenda-closures', async (req, res) => {
     try {
-        const supabase = getSupabase();
         const { date, doctorId, reason, createdBy } = req.body;
 
         if (!date) return res.status(400).json({ error: 'date is required' });
 
         // Check if already closed
-        let checkQuery = supabase.from('agenda_closures').select('id').eq('date', date);
+        let checkWhere = { date: new Date(date) };
         if (doctorId) {
-            checkQuery = checkQuery.eq('doctor_id', doctorId);
+            checkWhere.doctorId = doctorId;
         } else {
-            checkQuery = checkQuery.is('doctor_id', null);
+            checkWhere.doctorId = null;
         }
-        const { data: existing } = await checkQuery;
+
+        const existing = await prisma.agendaClosure.findMany({ where: checkWhere });
+        
         if (existing && existing.length > 0) {
             return res.status(409).json({ error: 'This agenda is already closed for this date' });
         }
 
-        const { data, error } = await supabase
-            .from('agenda_closures')
-            .insert([{
+        const data = await prisma.agendaClosure.create({
+            data: {
                 id: crypto.randomUUID(),
-                date,
-                doctor_id: doctorId || null,
+                date: new Date(date),
+                doctorId: doctorId || null,
                 reason: reason || null,
-                created_by: createdBy || null,
-                created_at: new Date().toISOString()
-            }])
-            .select()
-            .single();
+                createdBy: createdBy || null
+            }
+        });
 
-        if (error) throw error;
         res.status(201).json(data);
     } catch (e) {
-        console.error('Error creating agenda closure:', e);
-        res.status(500).json({ error: e.message });
+        console.error('🔥 CRITICAL PRISMA ERROR creating agenda closure:', e);
+        res.status(500).json({ error: e.message, stack: e.stack });
     }
 });
 
 app.delete('/api/agenda-closures/:id', async (req, res) => {
     try {
-        const supabase = getSupabase();
-        const { error } = await supabase
-            .from('agenda_closures')
-            .delete()
-            .eq('id', req.params.id);
-
-        if (error) throw error;
+        await prisma.agendaClosure.delete({
+            where: { id: req.params.id }
+        });
         res.json({ success: true });
     } catch (e) {
-        console.error('Error deleting agenda closure:', e);
-        res.status(500).json({ error: e.message });
+        console.error('🔥 CRITICAL PRISMA ERROR deleting agenda closure:', e);
+        res.status(500).json({ error: e.message, stack: e.stack });
     }
 });
 

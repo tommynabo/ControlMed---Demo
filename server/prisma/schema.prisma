@@ -444,11 +444,12 @@ model ClinicalTreatmentStep {
 
 model AgendaClosure {
   id        String   @id @default(uuid())
-  date      DateTime @db.Date
-  doctorId  String?
+  date      DateTime @map("closure_date") @db.Date
+  doctorId  String?  @map("doctor_id")
   reason    String?
-  createdBy String?
-  createdAt DateTime @default(now())
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
 
+  @@map("agenda_closures")
   @@index([date])
 }

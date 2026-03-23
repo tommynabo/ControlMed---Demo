@@ -6,7 +6,7 @@
     "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
     "dev:client": "vite",
     "dev:server": "cd server && npm run dev",
-    "build": "vite build",
+    "build": "npx prisma generate --schema=./server/prisma/schema.prisma && vite build",
     "preview": "vite preview",
     "postinstall": "npx prisma generate --schema=./server/prisma/schema.prisma"
   },
