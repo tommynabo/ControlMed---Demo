@@ -1389,7 +1389,6 @@ const Agenda: React.FC = () => {
                                             setPatientBudgets([]);
                                         }
                                     }}
-                                    disabled={!!selectedAppt} // Readonly if viewing
                                 />
                                 {/* Suggestions - Solo mostrar si NO hay paciente seleccionado */}
                                 {!selectedAppt && apptSearch.length > 0 && !bookingPatientId && (
@@ -1429,7 +1428,7 @@ const Agenda: React.FC = () => {
                                             setBookingBudgetItemId('');
                                             setBookingPrice(0);
                                         }}
-                                        disabled={!!selectedAppt}
+                                        disabled={false}
                                     >
                                         <option value="">-- Sin vincular --</option>
                                         {patientBudgets.map(b => (
@@ -1454,7 +1453,7 @@ const Agenda: React.FC = () => {
                                                         type="checkbox"
                                                         className="w-4 h-4 rounded"
                                                         checked={isChecked}
-                                                        disabled={!!selectedAppt}
+                                                        disabled={false}
                                                         onChange={() => {
                                                             let newSelected;
                                                             if (isChecked) {
@@ -1492,7 +1491,7 @@ const Agenda: React.FC = () => {
                                     onChange={(e) => {
                                         setBookingDoctorId(e.target.value);
                                     }}
-                                    disabled={!!selectedAppt}
+                                    disabled={false}
                                 >
                                     <option value="">Seleccionar Doctor...</option>
                                     {doctors.map(d => (
@@ -1502,7 +1501,7 @@ const Agenda: React.FC = () => {
                             </div>
 
                             {/* Multi-Treatment Selection - Only show if NO budget is selected */}
-                            {!bookingBudgetId && !selectedAppt && (
+                            {!bookingBudgetId && (
                                 <div>
                                     <div className="flex justify-between items-center">
                                         <label className="text-xs font-bold uppercase text-slate-400">Tratamientos</label>
@@ -1561,14 +1560,13 @@ const Agenda: React.FC = () => {
                                 <div>
                                     <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
                                     <input
-                                        className="w-full bg-slate-100 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 opacity-80 cursor-not-allowed"
+                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-700"
                                         value={
                                             typeof selectedAppt.treatment === 'object' && selectedAppt.treatment !== null
                                                 ? (selectedAppt.treatment as any).name
                                                 : ((selectedAppt as any).treatmentName || selectedAppt.treatment || 'No especificado')
                                         }
-                                        readOnly
-                                        disabled
+                                        onChange={(e) => setBookingTreatment(e.target.value)}
                                     />
                                 </div>
                             )}
@@ -1582,7 +1580,7 @@ const Agenda: React.FC = () => {
                                         className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
                                         value={bookingPrice}
                                         onChange={e => setBookingPrice(Number(e.target.value))}
-                                        disabled={!!selectedAppt}
+                                        disabled={false}
                                     />
                                 </div>
                                 <div>
@@ -1591,7 +1589,7 @@ const Agenda: React.FC = () => {
                                         className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
                                         value={bookingDuration}
                                         onChange={e => setBookingDuration(Number(e.target.value))}
-                                        disabled={!!selectedAppt && !isEditingAppt}
+                                        disabled={false}
                                     >
                                         {DURATION_OPTIONS.map(opt => (
                                             <option key={opt} value={opt}>{opt} min</option>
@@ -1607,7 +1605,7 @@ const Agenda: React.FC = () => {
                                     placeholder="Notas adicionales..."
                                     value={bookingObservation}
                                     onChange={e => setBookingObservation(e.target.value)}
-                                    disabled={!!selectedAppt && !isEditingAppt}
+                                    disabled={false}
                                 />
                             </div>
 
@@ -1619,7 +1617,7 @@ const Agenda: React.FC = () => {
                                     placeholder="Pago pendiente, alergias, indicaciones especiales..."
                                     value={bookingVisitDetails}
                                     onChange={e => setBookingVisitDetails(e.target.value)}
-                                    disabled={!!selectedAppt && !isEditingAppt}
+                                    disabled={false}
                                 />
                             </div>
 
@@ -1628,30 +1626,31 @@ const Agenda: React.FC = () => {
                             <button onClick={() => { setIsAppointmentModalOpen(false); setIsEditingAppt(false); }} className="flex-1 py-3 font-bold text-slate-500">
                                 {selectedAppt ? 'Cerrar' : 'Cancelar'}
                             </button>
-                            {selectedAppt && !isEditingAppt && currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
-                                <button
-                                    onClick={() => setIsEditingAppt(true)}
-                                    className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2"
-                                >
-                                    ✏️ Editar
-                                </button>
-                            )}
-                            {selectedAppt && isEditingAppt && (
+                            {selectedAppt && (
                                 <button
                                     onClick={async () => {
                                         try {
                                             await api.appointments.update(selectedAppt.id, {
+                                                date: `${bookingDate}T00:00:00.000Z`,
+                                                time: bookingTime,
+                                                patientId: bookingPatientId,
+                                                doctorId: bookingDoctorId,
+                                                treatmentName: bookingTreatment || null,
+                                                amount: bookingPrice || null,
                                                 duration: bookingDuration,
                                                 observations: bookingObservation,
-                                                visitDetails: bookingVisitDetails
+                                                visitDetails: bookingVisitDetails,
+                                                budgetId: bookingBudgetId || null,
+                                                budgetItemId: bookingBudgetItemId || null
                                             });
                                             // Refresh appointments via context
                                             await refreshAppointments();
                                             setIsAppointmentModalOpen(false);
                                             setIsEditingAppt(false);
                                             setSelectedAppt(null);
+                                            alert("✅ Cita actualizada con éxito.");
                                         } catch (e: any) {
-                                            alert('Error: ' + (e.message || e));
+                                            alert('Error al actualizar: ' + (e.message || e));
                                         }
                                     }}
                                     className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2"
