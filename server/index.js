@@ -3727,6 +3727,81 @@ app.delete('/api/agenda-closures/:id', async (req, res) => {
     }
 });
 
+// =========================================================
+// EXPENSES (Gastos de la Clínica)
+// =========================================================
+app.get('/api/expenses', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { month } = req.query; // optional YYYY-MM filter
+        let query = supabase.from('expenses').select('*').order('date', { ascending: false });
+        if (month) {
+            const from = `${month}-01`;
+            const to = `${month}-31`;
+            query = query.gte('date', from).lte('date', to);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        console.error('Error fetching expenses:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/expenses', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { date, description, category, amount, paymentMethod, receiptUrl } = req.body;
+        if (!description || !category || !amount || !paymentMethod) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios: description, category, amount, paymentMethod' });
+        }
+        const { data, error } = await supabase
+            .from('expenses')
+            .insert([{ date, description, category, amount, paymentMethod, receiptUrl }])
+            .select()
+            .single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (e) {
+        console.error('Error creating expense:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/expenses/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { date, description, category, amount, paymentMethod, receiptUrl } = req.body;
+        const { data, error } = await supabase
+            .from('expenses')
+            .update({ date, description, category, amount, paymentMethod, receiptUrl })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        console.error('Error updating expense:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/expenses/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { error } = await supabase
+            .from('expenses')
+            .delete()
+            .eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting expense:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Note: Using regex pattern for Express 5 compatibility
 app.get(/^\/(?!api).*/, (req, res) => {
     // Check if file exists, if not send error (debugging)
