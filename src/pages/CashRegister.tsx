@@ -123,6 +123,7 @@ const CashRegister: React.FC = () => {
     };
 
     return (
+        <>
         <div className="p-10 h-full overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="max-w-6xl mx-auto space-y-12">
                 <div>
@@ -284,6 +285,7 @@ const CashRegister: React.FC = () => {
         </div>
 
             {/* ARQUEO MODAL */}
+
             {showArqueoModal && (
                 <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-6 animate-in fade-in">
                     <div className="bg-white max-w-xl w-full rounded-[2rem] shadow-2xl max-h-[90vh] flex flex-col">
@@ -379,7 +381,7 @@ const CashRegister: React.FC = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </>
     );
 };
 
