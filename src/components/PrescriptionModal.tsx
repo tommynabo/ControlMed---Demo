@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Printer, Save, Sparkles, FileText, User, UserCheck, Pill, Calendar, ClipboardList, Eye } from 'lucide-react';
+import { X, Printer, Save, Sparkles, FileText, User, UserCheck, Pill, Calendar, ClipboardList, Eye, Mail } from 'lucide-react';
 import { api } from '../services/api';
 import { Patient } from '../../types';
 
@@ -8,37 +8,60 @@ interface PrescriptionModalProps {
     onClose: () => void;
     patient: Patient;
     onSave: (prescriptionData: any) => void;
+    prescription?: any;
 }
 
 export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({ 
     isOpen, 
     onClose, 
     patient, 
-    onSave 
+    onSave,
+    prescription
 }) => {
     const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
     const [isGenerating, setIsGenerating] = useState(false);
 
+    // Initial State Helper
+    const getInitialData = () => {
+        if (prescription) {
+            return {
+                ...prescription,
+                // Ensure dates are string for date input
+                prescriptionDate: prescription.prescriptionDate ? new Date(prescription.prescriptionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                dispensationDate: prescription.dispensationDate ? new Date(prescription.dispensationDate).toISOString().split('T')[0] : '',
+            };
+        }
+        return {
+            medication: '',
+            pharmaceuticalForm: 'Comprimidos',
+            administrationRoute: 'Oral',
+            packagesNumber: 1,
+            dose: '',
+            duration: '',
+            posology: '',
+            units: '1 caja',
+            schedulePattern: 'Cada 8 horas',
+            prescriptionDate: new Date().toISOString().split('T')[0],
+            dispensationDate: '',
+            dispensationOrderNumber: '',
+            diagnosis: '',
+            patientInstructions: '',
+            pharmacyInstructions: '',
+            prescriberName: 'CHC Clínica Dental',
+            prescriberSpecialty: 'Odontología General'
+        };
+    };
+
     // Form State
-    const [formData, setFormData] = useState({
-        medication: '',
-        pharmaceuticalForm: 'Comprimidos',
-        administrationRoute: 'Oral',
-        packagesNumber: 1,
-        dose: '',
-        duration: '',
-        posology: '',
-        units: '1 caja',
-        schedulePattern: 'Cada 8 horas',
-        prescriptionDate: new Date().toISOString().split('T')[0],
-        dispensationDate: '',
-        dispensationOrderNumber: '',
-        diagnosis: '',
-        patientInstructions: '',
-        pharmacyInstructions: '',
-        prescriberName: 'CHC Clínica Dental',
-        prescriberSpecialty: 'Odontología General'
-    });
+    const [formData, setFormData] = useState(getInitialData());
+
+    // Effect to update formData when prescription changes (when modal opens)
+    useEffect(() => {
+        if (isOpen) {
+            setFormData(getInitialData());
+            setViewMode(prescription ? 'preview' : 'edit');
+        }
+    }, [isOpen, prescription]);
 
     const specialties = [
         'Odontología General',
@@ -70,6 +93,25 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
         }
     };
 
+    const handleSendEmail = () => {
+        const subject = encodeURIComponent(`Receta Médica - ${patient.name}`);
+        const bodyContent = `
+Hola ${patient.name},
+
+Te enviamos tu receta médica:
+
+Medicamento: ${formData.medication}
+Pauta: ${formData.schedulePattern}
+Duración: ${formData.duration}
+Instrucciones: ${formData.patientInstructions}
+
+Saludos,
+${formData.prescriberName}
+        `.trim();
+        const body = encodeURIComponent(bodyContent);
+        window.location.href = `mailto:${patient.email}?subject=${subject}&body=${body}`;
+    };
+
     const handlePrint = () => {
         const w = window.open('', '_blank');
         if (!w) return;
@@ -79,6 +121,12 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                 <head>
                     <title>Receta - ${patient.name}</title>
                     <script src="https://cdn.tailwindcss.com"></script>
+                    <style>
+                        @media print {
+                            body { padding: 0; }
+                            .no-print { display: none; }
+                        }
+                    </style>
                 </head>
                 <body class="p-10 font-sans">
                     <div class="flex justify-between items-start border-b-4 border-slate-900 pb-6 mb-8">
@@ -100,7 +148,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                         </div>
                         <div class="text-right">
                             <p class="text-[10px] font-black uppercase text-slate-400 mb-1">F. Nacimiento</p>
-                            <p class="text-lg font-bold text-slate-900">${new Date(patient.birthDate).toLocaleDateString('es-ES')}</p>
+                            <p class="text-lg font-bold text-slate-900">${patient.birthDate ? new Date(patient.birthDate).toLocaleDateString('es-ES') : '--/--/----'}</p>
                         </div>
                     </div>
 
@@ -174,7 +222,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
                     <div>
                         <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3">
                             <FileText className="text-blue-600" size={28} />
-                            {viewMode === 'edit' ? 'Nueva Receta Simplificada' : 'Vista Previa de Impresión'}
+                            {prescription ? 'Detalle de Receta' : (viewMode === 'edit' ? 'Nueva Receta Simplificada' : 'Vista Previa de Impresión')}
                         </h3>
                         <p className="text-xs font-bold text-slate-400 uppercase mt-1">
                             Paciente: {patient.name} {patient.lastName1} | DNI: {patient.dni}
@@ -438,20 +486,29 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
 
                     <div className="flex gap-4">
                         {viewMode === 'preview' && (
-                            <button
-                                onClick={handlePrint}
-                                className="flex items-center gap-2 px-8 py-3 rounded-2xl font-black bg-slate-900 text-white shadow-xl hover:shadow-2xl hover:scale-105 transition-all text-sm uppercase"
-                            >
-                                <Printer size={20} />
-                                Imprimir
-                            </button>
+                            <>
+                                <button
+                                    onClick={handleSendEmail}
+                                    className="flex items-center gap-2 px-6 py-3 rounded-2xl font-black bg-blue-100 text-blue-600 hover:bg-blue-200 transition-all text-sm uppercase shadow-sm"
+                                >
+                                    <Mail size={20} />
+                                    Email
+                                </button>
+                                <button
+                                    onClick={handlePrint}
+                                    className="flex items-center gap-2 px-8 py-3 rounded-2xl font-black bg-slate-900 text-white shadow-xl hover:shadow-2xl hover:scale-105 transition-all text-sm uppercase"
+                                >
+                                    <Printer size={20} />
+                                    Imprimir
+                                </button>
+                            </>
                         )}
                         <button
                             onClick={() => onSave(formData)}
                             className="flex items-center gap-2 px-10 py-3 rounded-2xl font-black bg-emerald-500 text-white shadow-xl hover:bg-emerald-600 transition-all text-sm uppercase"
                         >
                             <Save size={20} />
-                            Guardar Receta
+                            {prescription ? 'Guardar Cambios' : 'Guardar Receta'}
                         </button>
                     </div>
                 </div>

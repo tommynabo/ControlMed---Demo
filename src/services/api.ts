@@ -254,6 +254,15 @@ export const api = {
         delete: async (id: string) => {
             const res = await fetch(`${API_URL}/prescriptions/${id}`, { method: 'DELETE', headers });
             if (!res.ok) throw new Error('Failed to delete prescription');
+        },
+        update: async (id: string, data: any) => {
+            const res = await fetch(`${API_URL}/prescriptions/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update prescription');
+            return res.json();
         }
     },
 

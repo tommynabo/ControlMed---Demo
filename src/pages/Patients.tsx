@@ -361,35 +361,50 @@ const Patients: React.FC = () => {
     const [prescriptionText, setPrescriptionText] = useState("");
     const [localPrescriptions, setLocalPrescriptions] = useState<any[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [editingPrescriptionIndex, setEditingPrescriptionIndex] = useState<number | null>(null);
+    const [selectedPrescription, setSelectedPrescription] = useState<any | null>(null);
 
     const handleSavePrescription = async (formData: any) => {
         if (!formData || !selectedPatient) return;
 
         try {
-            await api.prescriptions.create({
-                ...formData,
-                patientId: selectedPatient.id
-            });
+            if (selectedPrescription) {
+                // UPDATE
+                await api.prescriptions.update(selectedPrescription.id, {
+                    ...formData,
+                    patientId: selectedPatient.id
+                });
+                alert("✅ Receta actualizada correctamente.");
+            } else {
+                // CREATE
+                await api.prescriptions.create({
+                    ...formData,
+                    patientId: selectedPatient.id,
+                    doctorId: (api as any).currentUser?.id || '00000000-0000-0000-0000-000000000000'
+                });
 
-            // Refresh local list if tab is active
-            if (patientTab === 'prescriptions') {
-                const updated = await api.prescriptions.getByPatient(selectedPatient.id);
-                setLocalPrescriptions(updated);
+                // Log to clinical records too for audit
+                await api.clinicalRecords.create({
+                    patientId: selectedPatient.id,
+                    treatment: `RECETA: ${formData.medication}`,
+                    observation: `Pauta: ${formData.schedulePattern}. ${formData.patientInstructions || ''}`,
+                    specialization: 'General'
+                });
+                alert("✅ Receta guardada y registrada en el historial.");
             }
 
-            // Log to clinical records too for audit
-            await api.clinicalRecords.create({
-                patientId: selectedPatient.id,
-                treatment: `RECETA: ${formData.medication}`,
-                observation: `Pauta: ${formData.schedulePattern}. ${formData.patientInstructions || ''}`,
-                specialization: 'General'
-            });
+            // Refresh local list
+            const updated = await api.prescriptions.getByPatient(selectedPatient.id);
+            setLocalPrescriptions(updated);
+            
+            // Refresh clinical records for the timeline if it was a new record
+            if (!selectedPrescription) {
+                const records = await api.clinicalRecords.getByPatient(selectedPatient.id);
+                setClinicalRecords(records);
+            }
 
             setPrescriptionText("");
-            setEditingPrescriptionIndex(null);
+            setSelectedPrescription(null);
             setIsPrescriptionOpen(false);
-            alert("✅ Receta guardada y registrada en el historial.");
         } catch (e: any) {
             console.error(e);
             alert("Error al guardar receta: " + (e.message || "Error desconocido"));
@@ -1485,9 +1500,10 @@ const Patients: React.FC = () => {
                                                     <div className="flex gap-2">
                                                         <button 
                                                             className="p-2 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-xl transition-colors"
-                                                            title="Ver Detalle"
+                                                            title="Ver Detalle / Editar"
                                                             onClick={() => {
-                                                                alert(`Medicamento: ${p.medication}\nPauta: ${p.schedulePattern}\nInstrucciones: ${p.patientInstructions}`);
+                                                                setSelectedPrescription(p);
+                                                                setIsPrescriptionOpen(true);
                                                             }}
                                                         >
                                                             <Eye size={16} />
@@ -2232,36 +2248,13 @@ const Patients: React.FC = () => {
             {selectedPatient && (
                 <PrescriptionModal
                     isOpen={isPrescriptionOpen}
-                    onClose={() => setIsPrescriptionOpen(false)}
-                    patient={selectedPatient}
-                    onSave={async (formData) => {
-                        try {
-                            // 1. Save to the new Prescription table via API
-                            await api.prescriptions.create({
-                                ...formData,
-                                patientId: selectedPatient.id,
-                                doctorId: (api as any).currentUser?.id || '00000000-0000-0000-0000-000000000000' // Use System Admin as fallback
-                            });
-
-                            // 2. Log to clinical records for the timeline
-                            await api.clinicalRecords.create({
-                                patientId: selectedPatient.id,
-                                treatment: `RECETA: ${formData.medication}`,
-                                observation: `Pauta: ${formData.schedulePattern}. Instrucciones: ${formData.patientInstructions}`,
-                                specialization: 'General'
-                            });
-
-                            // 3. Refresh data
-                            const records = await api.clinicalRecords.getByPatient(selectedPatient.id);
-                            setClinicalRecords(records);
-                            
-                            setIsPrescriptionOpen(false);
-                            alert("✅ Receta guardada correctamente e incorporada al historial.");
-                        } catch (e) {
-                            console.error(e);
-                            alert("Error al guardar la receta. Asegúrese de que el servidor esté actualizado.");
-                        }
+                    onClose={() => {
+                        setIsPrescriptionOpen(false);
+                        setSelectedPrescription(null);
                     }}
+                    patient={selectedPatient}
+                    prescription={selectedPrescription}
+                    onSave={handleSavePrescription}
                 />
             )}
             {/* Payment Modal */}

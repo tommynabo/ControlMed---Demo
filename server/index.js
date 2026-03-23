@@ -179,6 +179,34 @@ app.delete('/api/prescriptions/:id', async (req, res) => {
     }
 });
 
+app.put('/api/prescriptions/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+        
+        // Remove nested fields if present to avoid prisma update error
+        if (data.doctor) delete data.doctor;
+        if (data.patient) delete data.patient;
+        if (data.id) delete data.id;
+
+        const updated = await prisma.prescription.update({
+            where: { id },
+            data: {
+                ...data,
+                // Ensure dates are Date objects if provided
+                prescriptionDate: data.prescriptionDate ? new Date(data.prescriptionDate) : undefined,
+                dispensationDate: data.dispensationDate ? new Date(data.dispensationDate) : undefined,
+                packagesNumber: data.packagesNumber ? parseInt(data.packagesNumber) : undefined,
+            },
+            include: { doctor: { select: { id: true, name: true } } }
+        });
+        res.json(updated);
+    } catch (e) {
+        console.error('Error updating prescription:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- SCHEDULE DURATIONS (Missing API Endpoints) ---
 app.get('/api/schedule/durations', async (req, res) => {
     try {
