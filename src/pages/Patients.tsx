@@ -2240,7 +2240,7 @@ const Patients: React.FC = () => {
                             await api.prescriptions.create({
                                 ...formData,
                                 patientId: selectedPatient.id,
-                                doctorId: (api as any).currentUser?.id || 'doc-1' // Fallback or get from context
+                                doctorId: (api as any).currentUser?.id || '00000000-0000-0000-0000-000000000000' // Use System Admin as fallback
                             });
 
                             // 2. Log to clinical records for the timeline
