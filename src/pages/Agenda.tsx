@@ -54,6 +54,10 @@ const Agenda: React.FC = () => {
     const [bookingPrice, setBookingPrice] = useState<number>(0);
     const [bookingDuration, setBookingDuration] = useState<number>(30);
 
+    // Multi-treatment state
+    const [treatmentToAdd, setTreatmentToAdd] = useState<string>('');
+    const [selectedTreatmentsList, setSelectedTreatmentsList] = useState<Array<{id: string, name: string, price: number}>>([]);
+
     // Budget & Patient State
     const [bookingPatientId, setBookingPatientId] = useState<string>('');
     const [patientBudgets, setPatientBudgets] = useState<any[]>([]);
@@ -242,6 +246,7 @@ const Agenda: React.FC = () => {
 
         const doctorNameNorm = doctor.name?.toLowerCase().trim();
         const schedules = doctorSchedules.filter(s =>
+            s.doctor_id === doctorId ||
             s.doctor_name?.toLowerCase().trim() === doctorNameNorm
         );
         
@@ -390,11 +395,30 @@ const Agenda: React.FC = () => {
         setBookingVisitDetails('');
         setBookingPrice(0);
         setBookingDuration(30);
+        setSelectedTreatmentsList([]);
+        setTreatmentToAdd('');
         setPatientBudgets([]);
         setIsEditingAppt(false);
         setIsDuplicating(false);
         setBookingDate(formatDateLocal(currentDate));
         setBookingTime('08:00');
+    };
+
+    // Multi-treatment handlers
+    const handleAddTreatmentToList = () => {
+        if (!treatmentToAdd) return;
+        const svc = DENTAL_SERVICES.find(s => s.id === treatmentToAdd);
+        if (!svc) return;
+        const newList = [...selectedTreatmentsList, { id: svc.id, name: svc.name, price: svc.price }];
+        setSelectedTreatmentsList(newList);
+        setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+        setTreatmentToAdd('');
+    };
+
+    const handleRemoveTreatmentFromList = (idx: number) => {
+        const newList = selectedTreatmentsList.filter((_, i) => i !== idx);
+        setSelectedTreatmentsList(newList);
+        setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
     };
 
     // Handle Booking
@@ -405,9 +429,15 @@ const Agenda: React.FC = () => {
             return;
         }
         
-        // Use bookingDate/Time instead of activeSlot for flexibility (especially for duplication)
-        if (!bookingDate || !bookingTime || !bookingPatientId) {
-            alert("Faltan datos obligatorios (Paciente, Fecha u Horario).");
+        // Validate patient selected from dropdown
+        if (!bookingPatientId) {
+            alert("Por favor selecciona un paciente de la lista de sugerencias.");
+            return;
+        }
+
+        // Validate date and time
+        if (!bookingDate || !bookingTime) {
+            alert("Por favor completa la Fecha y la Hora.");
             return;
         }
 
@@ -441,9 +471,12 @@ const Agenda: React.FC = () => {
             time: bookingTime,
             patientId: patient.id,
             doctorId: bookingDoctorId,
-            treatmentId: !bookingBudgetId && bookingTreatment ? bookingTreatment : null, // Solo guarda si no hay presupuesto
-            treatmentName: !bookingBudgetId && bookingTreatment
-                ? DENTAL_SERVICES.find(t => t.id === bookingTreatment)?.name || null
+            treatmentId: !bookingBudgetId && selectedTreatmentsList.length > 0 ? selectedTreatmentsList[0].id : null,
+            treatmentName: !bookingBudgetId && selectedTreatmentsList.length > 0
+                ? selectedTreatmentsList.map(t => t.name).join(', ')
+                : null,
+            treatmentIds: !bookingBudgetId && selectedTreatmentsList.length > 1
+                ? selectedTreatmentsList.map(t => t.id)
                 : null,
             budgetId: bookingBudgetId || null,
             budgetItemId: bookingBudgetItemId || null,
@@ -1457,30 +1490,50 @@ const Agenda: React.FC = () => {
                                 </select>
                             </div>
 
-                            {/* Treatment Selection - Only show if NO budget is selected */}
+                            {/* Multi-Treatment Selection - Only show if NO budget is selected */}
                             {!bookingBudgetId && !selectedAppt && (
                                 <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
-                                    <select
-                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                        value={bookingTreatment}
-                                        onChange={(e) => {
-                                            const tId = e.target.value;
-                                            setBookingTreatment(tId);
-                                            if (tId) {
-                                                const t = DENTAL_SERVICES.find(s => s.id === tId);
-                                                if (t) setBookingPrice(t.price);
-                                            }
-                                        }}
-                                        disabled={!!selectedAppt}
-                                    >
-                                        <option value="">Seleccionar Tratamiento...</option>
-                                        {DENTAL_SERVICES
-                                            .map(t => (
-                                                <option key={t.id} value={t.id}>{t.name} ({t.price}€)</option>
-                                            ))
-                                        }
-                                    </select>
+                                    <label className="text-xs font-bold uppercase text-slate-400">Tratamientos</label>
+                                    <div className="flex gap-2 mt-2">
+                                        <select
+                                            className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold text-slate-600 text-sm"
+                                            value={treatmentToAdd}
+                                            onChange={(e) => setTreatmentToAdd(e.target.value)}
+                                        >
+                                            <option value="">Añadir tratamiento...</option>
+                                            {DENTAL_SERVICES.map(t => (
+                                                <option key={t.id} value={t.id}>{t.name} — {t.price}€</option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            onClick={handleAddTreatmentToList}
+                                            disabled={!treatmentToAdd}
+                                            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-black disabled:opacity-40 hover:bg-slate-700 transition-colors"
+                                        >
+                                            +
+                                        </button>
+                                    </div>
+                                    {selectedTreatmentsList.length > 0 && (
+                                        <div className="mt-2 space-y-1">
+                                            {selectedTreatmentsList.map((t, i) => (
+                                                <div key={i} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
+                                                    <span className="text-xs font-bold text-blue-800">{t.name}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-black text-blue-600">{t.price}€</span>
+                                                        <button
+                                                            onClick={() => handleRemoveTreatmentFromList(i)}
+                                                            className="w-5 h-5 flex items-center justify-center bg-blue-200 hover:bg-red-200 text-blue-700 hover:text-red-700 rounded-full text-xs font-black transition-colors"
+                                                        >
+                                                            ×
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div className="text-right text-xs font-black text-blue-700 pr-1 pt-1">
+                                                Total: {selectedTreatmentsList.reduce((sum, t) => sum + t.price, 0).toFixed(2)}€
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

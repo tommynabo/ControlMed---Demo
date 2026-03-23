@@ -364,7 +364,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                     : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
                                     }`}
                             >
-                                <Wallet className="inline mb-1" size={18} />
+                                <ArrowRightLeft className="inline mb-1" size={18} />
                                 <br />Transfer
                             </button>
                             {!useCombinedPayment && isDirectPayment && (

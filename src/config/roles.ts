@@ -24,7 +24,7 @@ export const ROLE_ALLOWED_PAGES: Record<UserRole, string[]> = {
         'stock', 'ai', 'payroll', 'settings', 'users', 'attendance',
     ],
     RECEPTION: [
-        'dashboard', 'patients', 'agenda', 'caja', 'billing', 'stock', 'attendance',
+        'dashboard', 'patients', 'agenda', 'caja', 'billing', 'stock', 'attendance', 'settings',
     ],
     AUXILIAR: [
         'dashboard', 'patients', 'agenda', 'attendance',
@@ -84,6 +84,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
         'cashregister.edit': true,
         'stock.edit': true,
         'users.manage': false,
+        'templates.edit': true,
     },
     AUXILIAR: {
         'patients.edit': true,
