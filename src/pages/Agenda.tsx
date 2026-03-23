@@ -409,7 +409,24 @@ const Agenda: React.FC = () => {
         if (!treatmentToAdd) return;
         const svc = DENTAL_SERVICES.find(s => s.id === treatmentToAdd);
         if (!svc) return;
-        const newList = [...selectedTreatmentsList, { id: svc.id, name: svc.name, price: svc.price }];
+
+        let itemsToAdd: any[] = [];
+        if (svc.id === 'pack-1') {
+            itemsToAdd = [
+                { id: 'srv-11', name: 'Primera visita', price: 0 },
+                { id: 'srv-12', name: 'OPG', price: 45 }
+            ];
+        } else if (svc.id === 'pack-2') {
+            itemsToAdd = [
+                { id: 'srv-11', name: 'Primera visita', price: 0 },
+                { id: 'srv-12', name: 'OPG', price: 15 },
+                { id: 'srv-13', name: 'Tartrectomía', price: 45 }
+            ];
+        } else {
+            itemsToAdd = [{ id: svc.id, name: svc.name, price: svc.price }];
+        }
+
+        const newList = [...selectedTreatmentsList, ...itemsToAdd];
         setSelectedTreatmentsList(newList);
         setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
         setTreatmentToAdd('');

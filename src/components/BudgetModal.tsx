@@ -22,7 +22,13 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         if (isOpen) {
             setIsLoadingServices(true);
             api.services.getAll()
-                .then(setAvailableServices)
+                .then(fetched => {
+                    const packs = [
+                        { id: 'pack-1', name: 'Pack: 1ª Visita + OPG', price: 45, isPack: true },
+                        { id: 'pack-2', name: 'Pack: 1ª Visita + OPG + Tartrectomía', price: 60, isPack: true }
+                    ];
+                    setAvailableServices([...packs, ...fetched]);
+                })
                 .catch(console.error)
                 .finally(() => setIsLoadingServices(false));
         }
@@ -33,6 +39,25 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     );
 
     const handleAddItem = (service: any) => {
+        if (service.isPack) {
+            if (service.id === 'pack-1') {
+                setItems(prev => [
+                    ...prev,
+                    { serviceId: 'srv-11', name: 'Primera visita', price: 0, quantity: 1, tooth: '' },
+                    { serviceId: 'srv-12', name: 'OPG', price: 45, quantity: 1, tooth: '' }
+                ]);
+            } else if (service.id === 'pack-2') {
+                setItems(prev => [
+                    ...prev,
+                    { serviceId: 'srv-11', name: 'Primera visita', price: 0, quantity: 1, tooth: '' },
+                    { serviceId: 'srv-12', name: 'OPG', price: 15, quantity: 1, tooth: '' },
+                    { serviceId: 'srv-13', name: 'Tartrectomía', price: 45, quantity: 1, tooth: '' }
+                ]);
+            }
+            setSearchQuery('');
+            return;
+        }
+
         setItems(prev => [...prev, {
             serviceId: service.id, // Keep reference if needed
             name: service.name,

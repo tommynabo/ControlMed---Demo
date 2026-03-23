@@ -21,7 +21,9 @@ export const DENTAL_SERVICES = [
   { id: 'srv-10', name: 'Curetaje por Cuadrante', price: 70, specialization: Specialization.PERIODONTICS },
   { id: 'srv-11', name: 'Primera visita', price: 0, specialization: Specialization.GENERAL },
   { id: 'srv-12', name: 'OPG', price: 30, specialization: Specialization.GENERAL },
-  { id: 'srv-13', name: 'Tartrectomía', price: 50, specialization: Specialization.GENERAL }
+  { id: 'srv-13', name: 'Tartrectomía', price: 50, specialization: Specialization.GENERAL },
+  { id: 'pack-1', name: 'Pack: 1ª Visita + OPG', price: 45, specialization: Specialization.GENERAL, isPack: true },
+  { id: 'pack-2', name: 'Pack: 1ª Visita + OPG + Tartrectomía', price: 60, specialization: Specialization.GENERAL, isPack: true }
 ];
 
 // Bloques de tiempo para la agenda (cada 5 minutos para mayor precisión)

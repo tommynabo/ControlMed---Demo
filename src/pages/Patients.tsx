@@ -552,8 +552,39 @@ const Patients: React.FC = () => {
     React.useEffect(() => {
         if (isWhatsAppModalOpen) {
             api.whatsapp.getTemplates().then(setWhatsappTemplates).catch(console.error);
+            
+            // Set dynamic default template
+            const initTemplate = async () => {
+                let aptDate = "[Fecha]";
+                let aptTime = "[Hora]";
+                
+                try {
+                    if (selectedPatient) {
+                        const apts = await api.appointments.getByPatient(selectedPatient.id);
+                        const upcoming = apts.filter((a: any) => new Date(a.date) >= new Date()).sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        if (upcoming.length > 0) {
+                            const dateObj = new Date(upcoming[0].date);
+                            aptDate = dateObj.toLocaleDateString('es-ES');
+                            aptTime = upcoming[0].time || dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to load upcoming appointments for template", e);
+                }
+
+                const firstName = selectedPatient?.name?.split(' ')[0] || 'Paciente';
+                const defaultMsg = `Recordatorio de cita – CHC Clínica Dental. Hola ${firstName}. Te recordamos que tienes una cita programada en CHC Clínica Dental: Día: ${aptDate} Hora: ${aptTime} Dirección: Carrer de la Foneria 24, 08038 Barcelona. Si necesitas cambiar la cita, avísanos con al menos 24 horas de antelación llamando al 615049704. ¡Te esperamos! — Equipo de CHC Clínica Dental`;
+                
+                setWhatsAppForm(prev => ({
+                    ...prev,
+                    content: prev.content || defaultMsg
+                }));
+            };
+            initTemplate();
+        } else {
+            setWhatsAppForm({ templateId: '', scheduledDate: '', content: '' });
         }
-    }, [isWhatsAppModalOpen]);
+    }, [isWhatsAppModalOpen, selectedPatient]);
 
     const handleCreatePatient = async () => {
         try {
