@@ -114,6 +114,71 @@ app.get('/api/liquidations', async (req, res) => {
 // --- BUDGETS ---
 // --- BUDGETS (Moved to Module 8 below) ---
 
+// --- PRESCRIPTIONS ---
+app.get('/api/patients/:patientId/prescriptions', async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const prescriptions = await prisma.prescription.findMany({
+            where: { patientId },
+            include: { doctor: { select: { id: true, name: true } } },
+            orderBy: { prescriptionDate: 'desc' }
+        });
+        res.json(prescriptions);
+    } catch (e) {
+        console.error('Error fetching prescriptions:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/prescriptions', async (req, res) => {
+    try {
+        const data = req.body;
+        // In this system, doctorId often comes from headers via authMiddleware unless provided
+        const doctorId = data.doctorId || req.user.id;
+        
+        if (!data.patientId) return res.status(400).json({ error: 'patientId is required' });
+
+        const prescription = await prisma.prescription.create({
+            data: {
+                id: crypto.randomUUID(),
+                patientId: data.patientId,
+                doctorId: doctorId,
+                medication: data.medication,
+                pharmaceuticalForm: data.pharmaceuticalForm,
+                administrationRoute: data.administrationRoute,
+                packagesNumber: data.packagesNumber ? parseInt(data.packagesNumber) : null,
+                dose: data.dose,
+                duration: data.duration,
+                posology: data.posology,
+                units: data.units,
+                schedulePattern: data.schedulePattern,
+                diagnosis: data.diagnosis,
+                patientInstructions: data.patientInstructions,
+                pharmacyInstructions: data.pharmacyInstructions,
+                prescriptionDate: data.prescriptionDate ? new Date(data.prescriptionDate) : new Date(),
+                dispensationDate: data.dispensationDate ? new Date(data.dispensationDate) : null,
+                dispensationOrderNumber: data.dispensationOrderNumber
+            },
+            include: { doctor: { select: { id: true, name: true } } }
+        });
+        res.status(201).json(prescription);
+    } catch (e) {
+        console.error('Error creating prescription:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/prescriptions/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.prescription.delete({ where: { id } });
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting prescription:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- SCHEDULE DURATIONS (Missing API Endpoints) ---
 app.get('/api/schedule/durations', async (req, res) => {
     try {
@@ -3071,70 +3136,6 @@ app.get('/api/whatsapp/logs', async (req, res) => {
     }
 });
 
-// --- PRESCRIPTIONS ---
-app.get('/api/patients/:patientId/prescriptions', async (req, res) => {
-    try {
-        const { patientId } = req.params;
-        const prescriptions = await prisma.prescription.findMany({
-            where: { patientId },
-            include: { doctor: { select: { id: true, name: true } } },
-            orderBy: { prescriptionDate: 'desc' }
-        });
-        res.json(prescriptions);
-    } catch (e) {
-        console.error('Error fetching prescriptions:', e);
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.post('/api/prescriptions', async (req, res) => {
-    try {
-        const data = req.body;
-        // In this system, doctorId often comes from headers via authMiddleware unless provided
-        const doctorId = data.doctorId || req.user.id;
-        
-        if (!data.patientId) return res.status(400).json({ error: 'patientId is required' });
-
-        const prescription = await prisma.prescription.create({
-            data: {
-                id: crypto.randomUUID(),
-                patientId: data.patientId,
-                doctorId: doctorId,
-                medication: data.medication,
-                pharmaceuticalForm: data.pharmaceuticalForm,
-                administrationRoute: data.administrationRoute,
-                packagesNumber: data.packagesNumber ? parseInt(data.packagesNumber) : null,
-                dose: data.dose,
-                duration: data.duration,
-                posology: data.posology,
-                units: data.units,
-                schedulePattern: data.schedulePattern,
-                diagnosis: data.diagnosis,
-                patientInstructions: data.patientInstructions,
-                pharmacyInstructions: data.pharmacyInstructions,
-                prescriptionDate: data.prescriptionDate ? new Date(data.prescriptionDate) : new Date(),
-                dispensationDate: data.dispensationDate ? new Date(data.dispensationDate) : null,
-                dispensationOrderNumber: data.dispensationOrderNumber
-            },
-            include: { doctor: { select: { id: true, name: true } } }
-        });
-        res.status(201).json(prescription);
-    } catch (e) {
-        console.error('Error creating prescription:', e);
-        res.status(500).json({ error: e.message });
-    }
-});
-
-app.delete('/api/prescriptions/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        await prisma.prescription.delete({ where: { id } });
-        res.json({ success: true });
-    } catch (e) {
-        console.error('Error deleting prescription:', e);
-        res.status(500).json({ error: e.message });
-    }
-});
 
 // Serve static files from React app (Production Support)
 app.use(express.static(path.join(__dirname, '../dist')));
