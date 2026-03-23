@@ -19,8 +19,9 @@ export const DENTAL_SERVICES = [
   { id: 'srv-8', name: 'Corona Zirconio', price: 350, specialization: Specialization.ESTHETICS }, // Prosthodontics/Esthetics
   { id: 'srv-9', name: 'Extracción Simple', price: 40, specialization: Specialization.GENERAL },
   { id: 'srv-10', name: 'Curetaje por Cuadrante', price: 70, specialization: Specialization.PERIODONTICS },
-  { id: 'srv-11', name: 'Primera Visita', price: 0, specialization: Specialization.GENERAL },
-  { id: 'srv-12', name: 'OPG (Ortopantomografía)', price: 80, specialization: Specialization.GENERAL }
+  { id: 'srv-11', name: 'Primera visita', price: 0, specialization: Specialization.GENERAL },
+  { id: 'srv-12', name: 'OPG', price: 30, specialization: Specialization.GENERAL },
+  { id: 'srv-13', name: 'Tartrectomía', price: 50, specialization: Specialization.GENERAL }
 ];
 
 // Bloques de tiempo para la agenda (cada 5 minutos para mayor precisión)

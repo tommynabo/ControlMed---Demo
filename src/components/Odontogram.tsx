@@ -329,7 +329,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
             <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-lg">
                 <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                     <h4 className="text-lg font-black text-slate-900">📋 Tratamientos ({treatments.length})</h4>
-                    <button onClick={handleCreateBudget} disabled={selectedTreatmentsForBudget.length === 0}
+                    <button onClick={handleCreateBudget} disabled={treatments.length === 0}
                         className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-6 py-3 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
                         <FileText size={16} /> Presupuestar ({selectedTreatmentsForBudget.length})
                     </button>

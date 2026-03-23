@@ -3,7 +3,7 @@ import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle, Printer
+    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
@@ -18,8 +18,8 @@ import { PrescriptionModal } from '../components/PrescriptionModal';
 import { DOCTORS, DENTAL_SERVICES } from '../constants';
 import { PlanTratamientoTab } from '../components/PlanTratamientoTab';
 
-// Helper function to normalize patient data, ensuring prescriptions is always an array
-const normalizePrescriptions = (prescriptions: any): string[] => {
+// Helper function to normalize patient data, ensuring prescriptions is always an array of objects
+const normalizePrescriptions = (prescriptions: any): any[] => {
     if (Array.isArray(prescriptions)) return prescriptions;
     if (typeof prescriptions === 'string') {
         try {
@@ -46,12 +46,17 @@ const Patients: React.FC = () => {
     // Local State for Budgets
     const [budgets, setBudgets] = useState<any[]>([]);
 
-    // Fetch budgets when patient is selected or tab changes
+    // Fetch budgets and prescriptions when patient is selected or tab changes
     React.useEffect(() => {
         if (selectedPatient && patientTab === 'budget') {
             api.budget.getByPatient(selectedPatient.id)
                 .then(setBudgets)
                 .catch(err => console.error("Failed to load budgets", err));
+        }
+        if (selectedPatient && patientTab === 'prescriptions') {
+            api.prescriptions.getByPatient(selectedPatient.id)
+                .then(setLocalPrescriptions)
+                .catch(err => console.error("Failed to load prescriptions", err));
         }
     }, [selectedPatient, patientTab]);
 
@@ -354,58 +359,54 @@ const Patients: React.FC = () => {
     // Prescriptions
     const [isPrescriptionOpen, setIsPrescriptionOpen] = useState(false);
     const [prescriptionText, setPrescriptionText] = useState("");
-    const prescriptionInputRef = useRef<HTMLInputElement>(null);
+    const [localPrescriptions, setLocalPrescriptions] = useState<any[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [editingPrescriptionIndex, setEditingPrescriptionIndex] = useState<number | null>(null);
 
-    const handleSavePrescription = async () => {
-        if (!prescriptionText || !selectedPatient) return;
+    const handleSavePrescription = async (formData: any) => {
+        if (!formData || !selectedPatient) return;
 
         try {
-            const currentRecetas = [...normalizePrescriptions(selectedPatient.prescriptions)];
+            await api.prescriptions.create({
+                ...formData,
+                patientId: selectedPatient.id
+            });
 
-            if (editingPrescriptionIndex !== null) {
-                currentRecetas[editingPrescriptionIndex] = prescriptionText;
-            } else {
-                currentRecetas.push(prescriptionText);
+            // Refresh local list if tab is active
+            if (patientTab === 'prescriptions') {
+                const updated = await api.prescriptions.getByPatient(selectedPatient.id);
+                setLocalPrescriptions(updated);
             }
-
-            const updated = await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
-            setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
-            setSelectedPatient(updated);
 
             // Log to clinical records too for audit
             await api.clinicalRecords.create({
                 patientId: selectedPatient.id,
-                treatment: 'RECETA (Guardada)',
-                observation: prescriptionText,
+                treatment: `RECETA: ${formData.medication}`,
+                observation: `Pauta: ${formData.schedulePattern}. ${formData.patientInstructions || ''}`,
                 specialization: 'General'
             });
 
             setPrescriptionText("");
             setEditingPrescriptionIndex(null);
             setIsPrescriptionOpen(false);
-            alert("✅ Receta guardada correctame.");
-        } catch (e) {
+            alert("✅ Receta guardada y registrada en el historial.");
+        } catch (e: any) {
             console.error(e);
-            alert("Error al guardar receta");
+            alert("Error al guardar receta: " + (e.message || "Error desconocido"));
         }
     };
 
-    const handleDeletePrescription = async (idx: number) => {
+    const handleDeletePrescription = async (id: string) => {
         if (!confirm("¿Borrar esta receta?")) return;
         if (!selectedPatient) return;
 
         try {
-            const currentRecetas = [...normalizePrescriptions(selectedPatient.prescriptions)];
-            currentRecetas.splice(idx, 1);
-
-            const updated = await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
-            setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
-            setSelectedPatient(updated);
-        } catch (e) {
+            await (api as any).prescriptions.delete(id);
+            setLocalPrescriptions(prev => prev.filter(p => p.id !== id));
+            alert("✅ Receta eliminada.");
+        } catch (e: any) {
             console.error(e);
-            alert("Error borrando receta");
+            alert("Error borrando receta: " + e.message);
         }
     };
 
@@ -1409,68 +1410,7 @@ const Patients: React.FC = () => {
                             </div>
                         )}
 
-                        {/* PRESCRIPTIONS TAB */}
-                        {patientTab === 'prescriptions' && (
-                            <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Recetas</h2>
-                                    <button onClick={() => {
-                                        setIsPrescriptionOpen(true);
-                                        setEditingPrescriptionIndex(null);
-                                        setPrescriptionText('');
-                                    }} className="bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg"><Plus size={16} /> Nueva Receta</button>
-                                </div>
 
-
-
-                                <div className="space-y-4">
-                                    {normalizePrescriptions(selectedPatient.prescriptions).length === 0 ? (
-                                        <div className="text-center p-10 opacity-50 font-bold uppercase text-xs">No hay recetas guardadas</div>
-                                    ) : (
-                                        normalizePrescriptions(selectedPatient.prescriptions).map((receta, idx) => (
-                                            <div key={idx} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all group">
-                                                <div className="flex justify-between items-start gap-4">
-                                                    <div className="flex items-start gap-4 flex-1">
-                                                        <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center shrink-0">
-                                                            <FileTextIcon size={24} />
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">Receta #{idx + 1}</span>
-                                                            </div>
-                                                            <p className="font-medium text-slate-600 text-sm whitespace-pre-wrap leading-relaxed">{receta}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button
-                                                            onClick={() => handlePrintPrescription(receta)}
-                                                            className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
-                                                            title="Imprimir"
-                                                        >
-                                                            <Printer size={18} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => { setPrescriptionText(receta); setEditingPrescriptionIndex(idx); setIsPrescriptionOpen(true); }}
-                                                            className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors"
-                                                            title="Editar"
-                                                        >
-                                                            <Edit3 size={18} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeletePrescription(idx)}
-                                                            className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
-                                                            title="Borrar"
-                                                        >
-                                                            <Trash2 size={18} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        )}
 
                         {/* ODONTOGRAM TAB */}
                         {patientTab === 'odontogram' && (
@@ -1490,6 +1430,95 @@ const Patients: React.FC = () => {
                                         <span>Abrir Odontograma</span>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1" /></svg>
                                     </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* PRESCRIPTIONS TAB (New Entity) */}
+                        {patientTab === 'prescriptions' && (
+                            <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-3xl font-black text-slate-900 tracking-tight">Recetas Emitidas</h3>
+                                    <button
+                                        onClick={() => {
+                                            setPrescriptionText('');
+                                            setIsPrescriptionOpen(true);
+                                        }}
+                                        className="bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg"
+                                    >
+                                        <Plus size={16} /> Nueva Receta
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4">
+                                    {localPrescriptions.length === 0 ? (
+                                        <div className="bg-white p-20 rounded-[3rem] border border-slate-100 text-center">
+                                            <div className="w-20 h-20 bg-indigo-50 text-indigo-400 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+                                                <Pill size={40} />
+                                            </div>
+                                            <p className="text-lg font-black text-slate-900">No hay recetas emitidas</p>
+                                            <p className="text-sm text-slate-400 mt-2 max-w-xs mx-auto">
+                                                Comienza emitiendo una receta para llevar un control detallado de la medicación del paciente.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        localPrescriptions.map((p: any) => (
+                                            <div key={p.id} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow group">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="flex gap-4 items-center">
+                                                        <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                                                            <Pill size={24} />
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-lg font-black text-slate-900">{p.medication}</h4>
+                                                            <div className="flex items-center gap-3 mt-1">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                                                    {new Date(p.date || p.createdAt || p.date).toLocaleDateString()}
+                                                                </span>
+                                                                <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                                                                <span className="text-[10px] font-bold text-indigo-500 uppercase">
+                                                                    Dr. {DOCTORS.find(d => d.id === p.doctorId)?.name || 'General'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button 
+                                                            className="p-2 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-xl transition-colors"
+                                                            title="Ver Detalle"
+                                                            onClick={() => {
+                                                                alert(`Medicamento: ${p.medication}\nPauta: ${p.schedulePattern}\nInstrucciones: ${p.patientInstructions}`);
+                                                            }}
+                                                        >
+                                                            <Eye size={16} />
+                                                        </button>
+                                                        <button 
+                                                            className="p-2 bg-slate-50 text-slate-400 hover:text-red-500 rounded-xl transition-colors"
+                                                            title="Eliminar"
+                                                            onClick={() => handleDeletePrescription(p.id)}
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-2 gap-4 mt-4 bg-slate-50 p-4 rounded-2xl">
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Pauta</p>
+                                                        <p className="text-sm font-bold text-slate-700">{p.schedulePattern}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Duración</p>
+                                                        <p className="text-sm font-bold text-slate-700">{p.duration}</p>
+                                                    </div>
+                                                    <div className="col-span-2 border-t border-slate-200 pt-3">
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase mb-1">Instrucciones</p>
+                                                        <p className="text-xs text-slate-500 italic leading-relaxed">{p.patientInstructions}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -2200,49 +2229,41 @@ const Patients: React.FC = () => {
                 }}
             />
 
-            {/* Prescription Modal (New Component) */}
-            <PrescriptionModal
-                isOpen={isPrescriptionOpen}
-                onClose={() => setIsPrescriptionOpen(false)}
-                patientName={selectedPatient?.name || ''}
-                initialText={prescriptionText}
-                onSave={async (text) => {
-                    setPrescriptionText(text);
-                    setIsPrescriptionOpen(false);
-
-                    if (selectedPatient && text) {
+            {selectedPatient && (
+                <PrescriptionModal
+                    isOpen={isPrescriptionOpen}
+                    onClose={() => setIsPrescriptionOpen(false)}
+                    patient={selectedPatient}
+                    onSave={async (formData) => {
                         try {
-                            // Save to clinical records
+                            // 1. Save to the new Prescription table via API
+                            await api.prescriptions.create({
+                                ...formData,
+                                patientId: selectedPatient.id,
+                                doctorId: (api as any).currentUser?.id || 'doc-1' // Fallback or get from context
+                            });
+
+                            // 2. Log to clinical records for the timeline
                             await api.clinicalRecords.create({
                                 patientId: selectedPatient.id,
-                                treatment: 'Receta Médica',
-                                observation: text,
+                                treatment: `RECETA: ${formData.medication}`,
+                                observation: `Pauta: ${formData.schedulePattern}. Instrucciones: ${formData.patientInstructions}`,
                                 specialization: 'General'
                             });
 
-                            // Legacy: also update patient prescriptions array
-                            const currentRecetas = [...normalizePrescriptions(selectedPatient.prescriptions)];
-                            currentRecetas.push(text);
-                            await api.updatePatient(selectedPatient.id, { ...selectedPatient, prescriptions: currentRecetas });
-
-
-                            // Refresh
+                            // 3. Refresh data
                             const records = await api.clinicalRecords.getByPatient(selectedPatient.id);
                             setClinicalRecords(records);
-
-                            const updatedList = await api.getPatients();
-                            setPatients(updatedList);
-                            const updatedPatient = updatedList.find(p => p.id === selectedPatient.id);
-                            if (updatedPatient) setSelectedPatient(updatedPatient);
-
-                            alert("✅ Receta guardada e historial actualizado");
+                            
+                            setIsPrescriptionOpen(false);
+                            alert("✅ Receta guardada correctamente e incorporada al historial.");
                         } catch (e) {
                             console.error(e);
-                            alert("Error guardando receta");
+                            alert("Error al guardar la receta. Asegúrese de que el servidor esté actualizado.");
                         }
-                    }
-                }}
-            />
+                    }}
+                />
+            )}
             {/* Payment Modal */}
             <PaymentModal
                 isOpen={isPaymentModalOpen}

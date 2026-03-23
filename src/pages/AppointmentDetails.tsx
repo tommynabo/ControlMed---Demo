@@ -4,12 +4,13 @@ import { ArrowLeft, CreditCard, Calendar, Trash2, Check, FileText } from 'lucide
 import { Appointment, Patient, Budget, Payment, Invoice } from '../../types';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAppContext } from '../context/AppContext';
+import { DENTAL_SERVICES, DURATION_OPTIONS } from '../constants';
 
 export const AppointmentDetails: React.FC = () => {
     const { appointmentId } = useParams<{ appointmentId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
-    const { patients, api, refreshAppointments, refreshInvoices } = useAppContext();
+    const { patients, api, refreshAppointments, refreshInvoices, doctors } = useAppContext();
 
     const [appointment, setAppointment] = useState<Appointment | null>(null);
     const [patient, setPatient] = useState<Patient | null>(null);
@@ -297,22 +298,117 @@ export const AppointmentDetails: React.FC = () => {
                     <div className="grid grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
                         <div>
                             <p className="text-xs font-black uppercase text-slate-400">Fecha</p>
-                            <p className="text-sm font-bold text-slate-900 mt-1">
-                                {new Date(appointment.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}
-                            </p>
+                            <input
+                                type="date"
+                                value={appointment.date ? new Date(appointment.date).toISOString().split('T')[0] : ''}
+                                onChange={async (e) => {
+                                    const newDate = e.target.value;
+                                    try {
+                                        const isoDate = `${newDate}T00:00:00.000Z`;
+                                        await api.appointments.update(appointment.id, { date: isoDate });
+                                        setAppointment({ ...appointment, date: isoDate as any });
+                                        refreshAppointments();
+                                    } catch (err) { console.error('Error al actualizar fecha:', err); }
+                                }}
+                                className="w-full mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                            />
                         </div>
                         <div>
                             <p className="text-xs font-black uppercase text-slate-400">Hora</p>
-                            <p className="text-sm font-bold text-slate-900 mt-1">{appointment.time}</p>
+                            <input
+                                type="time"
+                                value={appointment.time || ''}
+                                onChange={async (e) => {
+                                    const newTime = e.target.value;
+                                    try {
+                                        await api.appointments.update(appointment.id, { time: newTime });
+                                        setAppointment({ ...appointment, time: newTime });
+                                        refreshAppointments();
+                                    } catch (err) { console.error('Error al actualizar hora:', err); }
+                                }}
+                                className="w-full mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                            />
                         </div>
+                        <div className="col-span-2">
+                            <p className="text-xs font-black uppercase text-slate-400">Tratamiento / Concepto</p>
+                            <div className="flex gap-2">
+                                <select 
+                                    className="mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                                    onChange={async (e) => {
+                                        const svc = DENTAL_SERVICES.find(s => s.name === e.target.value);
+                                        if (svc) {
+                                            try {
+                                                await api.appointments.update(appointment.id, { 
+                                                    treatmentName: svc.name,
+                                                    amount: svc.price 
+                                                });
+                                                setAppointment({ ...appointment, treatmentName: svc.name, amount: svc.price });
+                                            } catch (err) { console.error(err); }
+                                        }
+                                    }}
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    {DENTAL_SERVICES.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                </select>
+                                <input
+                                    type="text"
+                                    value={appointment.treatmentName || (typeof appointment.treatment === 'object' ? (appointment.treatment as any)?.name : (appointment.treatment as string)) || ''}
+                                    onChange={async (e) => {
+                                        const newVal = e.target.value;
+                                        setAppointment({ ...appointment, treatmentName: newVal });
+                                    }}
+                                    onBlur={async (e) => {
+                                        try {
+                                            await api.appointments.update(appointment.id, { treatmentName: e.target.value });
+                                            refreshAppointments();
+                                        } catch (err) { console.error(err); }
+                                    }}
+                                    className="flex-1 mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                                />
+                            </div>
+                        </div>
+
                         <div>
-                            <p className="text-xs font-black uppercase text-slate-400">Tratamiento</p>
-                            <p className="text-sm font-bold text-slate-900 mt-1">
-                                {typeof appointment.treatment === 'object' && appointment.treatment !== null
-                                    ? (appointment.treatment as any).name || '-'
-                                    : appointment.treatment || '-'}
-                            </p>
+                            <p className="text-xs font-black uppercase text-slate-400">Doctor</p>
+                            <select
+                                value={appointment.doctorId || ''}
+                                onChange={async (e) => {
+                                    const newDocId = e.target.value;
+                                    try {
+                                        await api.appointments.update(appointment.id, { doctorId: newDocId });
+                                        setAppointment({ ...appointment, doctorId: newDocId });
+                                        refreshAppointments();
+                                    } catch (err) { console.error('Error al actualizar doctor:', err); }
+                                }}
+                                className="w-full mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                            >
+                                <option value="">Seleccionar...</option>
+                                {doctors.map(d => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
                         </div>
+
+                        <div>
+                            <p className="text-xs font-black uppercase text-slate-400">Duración</p>
+                            <select
+                                value={appointment.duration || 60}
+                                onChange={async (e) => {
+                                    const newDuration = parseInt(e.target.value);
+                                    try {
+                                        await api.appointments.update(appointment.id, { duration: newDuration });
+                                        setAppointment({ ...appointment, duration: newDuration });
+                                        refreshAppointments();
+                                    } catch (err) { console.error('Error al actualizar duración:', err); }
+                                }}
+                                className="w-full mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                            >
+                                {DURATION_OPTIONS.map(opt => (
+                                    <option key={opt} value={opt}>{opt} min</option>
+                                ))}
+                            </select>
+                        </div>
+
                         <div>
                             <p className="text-xs font-black uppercase text-slate-400">N° Historia</p>
                             <p className="text-sm font-bold text-blue-600 mt-1">{patient.historyNumber || '-'}</p>

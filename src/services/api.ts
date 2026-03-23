@@ -236,6 +236,27 @@ export const api = {
         }
     },
 
+    prescriptions: {
+        create: async (data: any) => {
+            const res = await fetch(`${API_URL}/prescriptions`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to create prescription');
+            return res.json();
+        },
+        getByPatient: async (patientId: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/prescriptions`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch prescriptions');
+            return res.json();
+        },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/prescriptions/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete prescription');
+        }
+    },
+
     // Patients
     getPatients: async (): Promise<Patient[]> => {
         const res = await fetch(`${API_URL}/patients`, { headers });
@@ -1090,6 +1111,7 @@ export const api = {
     agendaClosures: {
         getAll: async (date?: string) => {
             const url = date ? `${API_URL}/agenda-closures?date=${date}` : `${API_URL}/agenda-closures`;
+            const res = await fetch(url, { headers });
             if (!res.ok) return [];
             return res.json();
         },

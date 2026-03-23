@@ -43,6 +43,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const [notes, setNotes] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [originalAmount, setOriginalAmount] = useState(0); // Locked original treatment cost
+    const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
 
     // Combined payment state
     const [useCombinedPayment, setUseCombinedPayment] = useState(false);
@@ -63,6 +64,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             setUseCombinedPayment(false);
             setSplits([]);
             setWalletAmount('');
+            setSelectedBudgetId('');
         }
     }, [isOpen, defaultAmount, defaultConcept, appointment]);
 
@@ -228,6 +230,51 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
                 {/* Content */}
                 <div className="p-8 space-y-6">
+
+                    {/* Budget Selection */}
+                    {budgets && budgets.length > 0 && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
+                                Cargar desde Presupuesto
+                            </label>
+                            <select
+                                value={selectedBudgetId}
+                                onChange={(e) => setSelectedBudgetId(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                            >
+                                <option value="">-- Seleccionar presupuesto --</option>
+                                {budgets.filter(b => b.status === 'APPROVED' || b.status === 'ACCEPTED' || b.status === 'PENDING').map(b => (
+                                    <option key={b.id} value={b.id}>
+                                        {b.title || 'Presupuesto'} ({b.totalAmount}€)
+                                    </option>
+                                ))}
+                            </select>
+
+                            {selectedBudgetId && (
+                                <div className="mt-4 space-y-2 max-h-40 overflow-y-auto pr-2">
+                                    {budgets.find(b => b.id === selectedBudgetId)?.items.map((item, idx) => (
+                                        <div key={item.id || idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800">{item.name}</p>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase">{item.price.toFixed(2)}€</p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const curAmt = parseFloat(totalAmount) || 0;
+                                                    setTotalAmount((curAmt + item.price).toFixed(2));
+                                                    setConcept(prev => prev ? `${prev}, ${item.name}` : item.name);
+                                                    setOriginalAmount(prev => prev + item.price);
+                                                }}
+                                                className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-xs font-black uppercase hover:bg-blue-600 hover:text-white transition-all"
+                                            >
+                                                + Añadir
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {!isDirectPayment && (
                         <div className="bg-blue-50 p-4 rounded-xl text-xs text-blue-700 font-bold flex gap-2 items-start mb-4">

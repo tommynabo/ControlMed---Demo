@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
     ChevronLeft, ChevronRight, Search, Plus, Calendar, User, Clock, CheckCircle2, ExternalLink,
-    Lock, Unlock, Eye, EyeOff, Save, X, AlertTriangle
+    Lock, Unlock, Eye, EyeOff, Save, X, AlertTriangle, Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -606,6 +606,17 @@ const Agenda: React.FC = () => {
 
         window.addEventListener('mousemove', onMouseMove);
         window.addEventListener('mouseup', onMouseUp);
+    };
+
+    const handlePackPrimeraVisita = () => {
+        const pack = [
+            { id: 'srv-11', name: 'Primera visita', price: 0 },
+            { id: 'srv-12', name: 'OPG', price: 30 },
+            { id: 'srv-13', name: 'Tartrectomía', price: 50 }
+        ];
+        setSelectedTreatmentsList(pack);
+        setBookingPrice(80);
+        setBookingDuration(60);
     };
 
     const handleDuplicate = () => {
@@ -1493,7 +1504,15 @@ const Agenda: React.FC = () => {
                             {/* Multi-Treatment Selection - Only show if NO budget is selected */}
                             {!bookingBudgetId && !selectedAppt && (
                                 <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Tratamientos</label>
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-xs font-bold uppercase text-slate-400">Tratamientos</label>
+                                        <button 
+                                            onClick={handlePackPrimeraVisita}
+                                            className="text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                        >
+                                            <Sparkles size={12} /> Pack Primera Visita
+                                        </button>
+                                    </div>
                                     <div className="flex gap-2 mt-2">
                                         <select
                                             className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold text-slate-600 text-sm"

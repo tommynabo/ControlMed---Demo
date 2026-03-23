@@ -26,6 +26,34 @@ model User {
   doctor    Doctor?     @relation(fields: [doctorId], references: [id])
   createdAt DateTime    @default(now())
   workShifts WorkShift[]
+  prescriptions Prescription[]
+}
+
+model Prescription {
+  id                      String   @id @default(uuid())
+  patient                 Patient  @relation(fields: [patientId], references: [id])
+  patientId               String
+  doctor                  User     @relation(fields: [doctorId], references: [id])
+  doctorId                String
+  medication              String
+  pharmaceuticalForm      String?
+  administrationRoute     String?
+  packagesNumber          Int?
+  dose                    String?
+  duration                String?
+  posology                String?
+  units                   String?
+  schedulePattern         String?  // Pauta
+  prescriptionDate        DateTime @default(now())
+  dispensationDate        DateTime?
+  dispensationOrderNumber String?
+  diagnosis               String?
+  patientInstructions     String?
+  pharmacyInstructions    String?
+  createdAt               DateTime @default(now())
+
+  @@index([patientId])
+  @@index([doctorId])
 }
 
 model WorkShift {
@@ -69,7 +97,7 @@ model Patient {
   diseases        String?
   medications     String?
   criticalAlerts  String?
-  prescriptions   String?
+  prescriptions   Prescription[]
   medicalHistory  String?
   createdAt       DateTime         @default(now())
   payments        Payment[]

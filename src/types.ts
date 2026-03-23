@@ -1,3 +1,17 @@
+export interface Prescription {
+    id: string;
+    patientId: string;
+    doctorId: string;
+    date: string;
+    medication: string;
+    dosage: string;
+    frequency: string;
+    duration: string;
+    schedulePattern: string;
+    patientInstructions: string;
+    diagnosis?: string;
+}
+
 export interface Patient {
     id: string;
     historyNumber?: string; // Auto-generated: HCL-0001, etc.
@@ -12,7 +26,7 @@ export interface Patient {
     insurance?: string;
     assignedDoctorId?: string;
     clinicalHistory?: ClinicalRecord[];
-    prescriptions?: string[];
+    prescriptions?: Prescription[];
 
     // Medical Info
     smoker?: boolean; // New
