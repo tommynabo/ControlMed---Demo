@@ -219,11 +219,51 @@ const convertBudgetToInvoice = async (supabase, budgetId) => {
     return invoice;
 };
 
+const updateBudget = async (supabase, budgetId, items = [], title = "") => {
+    const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+
+    // Update budget title & total
+    const { error: budgetError } = await supabase
+        .from('Budget')
+        .update({ title: title || "Presupuesto General", totalAmount, updatedAt: new Date().toISOString() })
+        .eq('id', budgetId);
+
+    if (budgetError) throw new Error("Error updating budget: " + budgetError.message);
+
+    // Delete existing items
+    await supabase.from('BudgetLineItem').delete().eq('budgetId', budgetId);
+
+    // Create new items
+    if (items.length > 0) {
+        const lineItems = items.map(item => ({
+            id: crypto.randomUUID(),
+            budgetId: budgetId,
+            name: item.tooth && !item.name.includes('Diente') ? `${item.name} - Diente ${item.tooth}` : item.name,
+            price: Number(item.price),
+            quantity: Number(item.quantity) || 1,
+            tooth: item.tooth ? String(item.tooth) : null,
+            face: item.face || null,
+            treatmentId: null
+        }));
+
+        await supabase.from('BudgetLineItem').insert(lineItems);
+    }
+
+    const { data: fullBudget } = await supabase
+        .from('Budget')
+        .select('*, items:BudgetLineItem(*)')
+        .eq('id', budgetId)
+        .single();
+    
+    return fullBudget;
+};
+
 module.exports = {
     createBudget,
     getBudgetsByPatient,
     updateBudgetStatus,
     addItemToDraftBudget,
     deleteItem,
-    convertBudgetToInvoice
+    convertBudgetToInvoice,
+    updateBudget
 };

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Budget, TreatmentPlan, Installment } from '../types';
-import { Plus, Check, X, CreditCard, FileText, Loader2, Trash2 } from 'lucide-react';
+import { Plus, Check, X, CreditCard, FileText, Loader2, Trash2, Edit } from 'lucide-react';
 import { FinanceModal } from './FinanceModal';
 import { api } from '../services/api';
+import { BudgetModal } from '../src/components/BudgetModal';
 
 interface BudgetManagerProps {
     patientId: string;
@@ -13,6 +14,8 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
     const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null);
     const [showFinanceModal, setShowFinanceModal] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [showBudgetModal, setShowBudgetModal] = useState(false);
+    const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
     const loadBudgets = async () => {
         setLoading(true);
@@ -97,21 +100,9 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold">Presupuestos</h3>
                 <button
-                    onClick={async () => {
-                        console.log("Attempting to create budget for patient:", patientId);
-                        try {
-                            if (!patientId) {
-                                alert("Error: No patient ID found.");
-                                return;
-                            }
-                            const res = await api.budget.create(patientId, [], "Presupuesto Manual");
-                            console.log("Budget created response:", res);
-                            alert("✅ Presupuesto Manual Creado (Borrador).");
-                            loadBudgets();
-                        } catch (e) {
-                            console.error("Budget creation error:", e);
-                            alert("Error creando presupuesto: " + (e as Error).message);
-                        }
+                    onClick={() => {
+                        setEditingBudget(null);
+                        setShowBudgetModal(true);
                     }}
                     className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                 >
@@ -131,7 +122,17 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                         <div key={bg.id} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-md">
                             <div className="flex justify-between items-start mb-4">
                                 <div>
-                                    <h4 className="font-bold text-lg">Presupuesto #{bg.id.slice(0, 8)}</h4>
+                                    <h4 className="font-bold text-lg flex items-center gap-2">
+                                        Presupuesto #{bg.id.slice(0, 8)} 
+                                        {(bg.status === 'pending' || bg.status === 'draft') && (
+                                            <button onClick={() => {
+                                                setEditingBudget(bg);
+                                                setShowBudgetModal(true);
+                                            }} className="text-blue-600 hover:text-blue-800 transition-colors ml-2" title="Editar Presupuesto">
+                                                <Edit size={16} />
+                                            </button>
+                                        )}
+                                    </h4>
                                     <p className="text-sm font-bold text-slate-800">{bg.title || "Sin título"}</p>
                                     <p className="text-xs text-slate-500">{new Date(bg.date).toLocaleDateString()}</p>
                                 </div>
@@ -153,6 +154,7 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <span className="font-mono font-bold">{item.price}€</span>
+                                            {item.quantity > 1 && <span className="text-slate-400 text-xs text-right">x{item.quantity}</span>}
                                             {(bg.status === 'pending' || bg.status === 'draft') && (
                                                 <button onClick={async () => {
                                                     if (confirm("¿Borrar item?")) {
@@ -253,6 +255,14 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                     onSave={handleSaveFinancing}
                 />
             )}
+
+            <BudgetModal
+                isOpen={showBudgetModal}
+                onClose={() => setShowBudgetModal(false)}
+                patientId={patientId}
+                onSave={loadBudgets}
+                initialBudget={editingBudget}
+            />
         </div>
     );
 };

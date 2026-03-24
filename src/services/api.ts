@@ -445,6 +445,18 @@ export const api = {
             }
             return res.json();
         },
+        update: async (budgetId: string, items: any[], title?: string) => {
+            const res = await fetch(`${API_URL}/budgets/${budgetId}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ items, title })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to update budget');
+            }
+            return res.json();
+        },
         addItemToDraft: async (patientId: string, item: any) => {
             const res = await fetch(`${API_URL}/patients/${patientId}/budgets/draft/items`, {
                 method: 'POST',

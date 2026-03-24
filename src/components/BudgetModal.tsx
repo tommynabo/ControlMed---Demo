@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Search, DollarSign } from 'lucide-react';
+import { X, Plus, Trash2, Search, DollarSign, CheckSquare, Square, Percent, Calculator } from 'lucide-react';
 import { api } from '../services/api';
 
 interface BudgetModalProps {
@@ -7,19 +7,33 @@ interface BudgetModalProps {
     onClose: () => void;
     patientId: string;
     onSave: () => void;
+    initialBudget?: any;
 }
 
-export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patientId, onSave }) => {
+export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patientId, onSave, initialBudget }) => {
     const [title, setTitle] = useState('');
     const [items, setItems] = useState<any[]>([]);
     const [availableServices, setAvailableServices] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
     // Loading state
     const [isLoadingServices, setIsLoadingServices] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
+            if (initialBudget) {
+                setTitle(initialBudget.title || '');
+                setItems(initialBudget.items ? initialBudget.items.map((i: any) => ({
+                    ...i,
+                    quantity: i.quantity || 1,
+                    tooth: i.tooth || ''
+                })) : []);
+            } else {
+                setTitle('');
+                setItems([]);
+            }
+
             setIsLoadingServices(true);
             api.services.getAll()
                 .then(fetched => {
@@ -32,7 +46,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 .catch(console.error)
                 .finally(() => setIsLoadingServices(false));
         }
-    }, [isOpen]);
+    }, [isOpen, initialBudget]);
 
     const filteredServices = availableServices.filter(s =>
         s.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -76,15 +90,73 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         setItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
     };
 
-    const totalAmount = items.reduce((acc, item) => acc + (Number(item.price) * (item.quantity || 1)), 0);
+    const toggleSelection = (index: number) => {
+        setSelectedIndices(prev => {
+            const next = new Set(prev);
+            if (next.has(index)) next.delete(index);
+            else next.add(index);
+            return next;
+        });
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIndices.size === items.length) {
+            setSelectedIndices(new Set());
+        } else {
+            setSelectedIndices(new Set(items.keys()));
+        }
+    };
+
+    const applyBulkDiscount = (type: 'percent' | 'fixed') => {
+        const val = prompt(type === 'percent' ? "Porcentaje de descuento (ej: 10):" : "Importe de descuento fijo (ej: 50):");
+        if (!val) return;
+        const num = parseFloat(val);
+        if (isNaN(num)) return;
+
+        setItems(prev => prev.map((item, idx) => {
+            if (!selectedIndices.has(idx)) return item;
+            let newPrice = Number(item.price);
+            if (type === 'percent') newPrice = newPrice * (1 - num / 100);
+            else newPrice = newPrice - num;
+            return { ...item, price: Math.max(0, newPrice).toFixed(2) };
+        }));
+    };
+
+    const applyBulkIVA = (ivaPercent: number) => {
+        setItems(prev => prev.map((item, idx) => {
+            if (!selectedIndices.has(idx)) return item;
+            let currentPrice = Number(item.price);
+            let basePrice = currentPrice;
+            
+            // If we are "applying" 21% to something that might have it, or removing it.
+            // Simple logic: we assume price is base price.
+            if (ivaPercent === 21) basePrice = currentPrice * 1.21;
+            else if (ivaPercent === 0) basePrice = currentPrice / 1.21; // Attempt to "una-apply" if it was 21%
+            
+            return { ...item, price: basePrice.toFixed(2) };
+        }));
+    };
+
+    const removeBulk = () => {
+        if (!confirm(`¿Eliminar ${selectedIndices.size} items?`)) return;
+        setItems(prev => prev.filter((_, idx) => !selectedIndices.has(idx)));
+        setSelectedIndices(new Set());
+    };
+
+    const totalAmount = items.reduce((acc, item) => acc + (Number(item.price) * (Number(item.quantity) || 1)), 0);
 
     const handleSafeSave = async () => {
         if (!title) return alert("Por favor indica un título");
         if (items.length === 0) return alert("Añade al menos un tratamiento");
 
         try {
-            await api.budget.create(patientId, items, title);
-            alert("✅ Presupuesto creado correctamente");
+            if (initialBudget && initialBudget.id) {
+                await api.budget.update(initialBudget.id, items, title);
+                alert("✅ Presupuesto actualizado correctamente");
+            } else {
+                await api.budget.create(patientId, items, title);
+                alert("✅ Presupuesto creado correctamente");
+            }
             onSave();
             onClose();
         } catch (e: any) {
@@ -101,7 +173,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 {/* Header */}
                 <div className="p-8 border-b border-slate-100 flex justify-between items-center">
                     <div>
-                        <h3 className="text-2xl font-black text-slate-900">Nuevo Presupuesto</h3>
+                        <h3 className="text-2xl font-black text-slate-900">{initialBudget ? 'Editar Presupuesto' : 'Nuevo Presupuesto'}</h3>
                         <p className="text-sm text-slate-400 font-medium">Añade tratamientos al presupuesto</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-colors">
@@ -162,14 +234,34 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
 
                     {/* Selected Items List */}
                     <div className="space-y-3">
-                        <label className="text-[10px] font-black uppercase text-slate-400 block">Items del Presupuesto</label>
+                        <div className="flex justify-between items-center mb-1">
+                            <label className="text-[10px] font-black uppercase text-slate-400 block">Items del Presupuesto</label>
+                            {items.length > 0 && (
+                                <button 
+                                    onClick={toggleSelectAll}
+                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                                >
+                                    {selectedIndices.size === items.length ? <CheckSquare size={12} /> : <Square size={12} />}
+                                    {selectedIndices.size === items.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                                </button>
+                            )}
+                        </div>
                         {items.length === 0 ? (
                             <div className="p-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center text-slate-400 text-sm">
                                 No hay items añadidos
                             </div>
                         ) : (
                             items.map((item, idx) => (
-                                <div key={idx} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center animate-in slide-in-from-left-2">
+                                <div key={idx} className={`bg-white border ${selectedIndices.has(idx) ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-200'} p-4 rounded-xl shadow-sm flex flex-col md:flex-row gap-4 items-start md:items-center animate-in slide-in-from-left-2 transition-all`}>
+                                    
+                                    {/* Selection Checkbox */}
+                                    <button 
+                                        onClick={() => toggleSelection(idx)}
+                                        className={`transition-colors ${selectedIndices.has(idx) ? 'text-blue-600' : 'text-slate-300 hover:text-slate-400'}`}
+                                    >
+                                        {selectedIndices.has(idx) ? <CheckSquare size={20} /> : <Square size={20} />}
+                                    </button>
+
                                     <div className="flex-1">
                                         <input
                                             value={item.name}
@@ -180,13 +272,23 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                     </div>
 
                                     <div className="flex gap-2 items-center">
-                                        <div className="w-24">
+                                        <div className="w-20">
                                             <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">Diente</label>
                                             <input
                                                 value={item.tooth}
                                                 onChange={(e) => handleUpdateItem(idx, 'tooth', e.target.value)}
                                                 className="w-full bg-slate-50 rounded-lg p-2 text-xs font-bold text-center outline-none"
                                                 placeholder="-"
+                                            />
+                                        </div>
+                                        <div className="w-20">
+                                            <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">Cant.</label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={item.quantity}
+                                                onChange={(e) => handleUpdateItem(idx, 'quantity', Number(e.target.value))}
+                                                className="w-full bg-slate-50 rounded-lg p-2 text-xs font-bold text-center outline-none"
                                             />
                                         </div>
                                         <div className="w-24">
@@ -215,6 +317,34 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                         )}
                     </div>
 
+                    {/* Bulk Action Toolbar */}
+                    {selectedIndices.size > 0 && (
+                        <div className="sticky bottom-0 bg-blue-600 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between animate-in slide-in-from-bottom-4 z-[60]">
+                            <div className="flex items-center gap-3">
+                                <span className="bg-blue-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">{selectedIndices.size} seleccionados</span>
+                                <div className="h-6 w-px bg-blue-500 mx-2" />
+                                <div className="flex gap-1">
+                                    <button onClick={() => applyBulkDiscount('percent')} className="flex items-center gap-1 px-3 py-2 hover:bg-blue-700 rounded-lg transition-colors text-xs font-bold">
+                                        <Percent size={14} /> Dto %
+                                    </button>
+                                    <button onClick={() => applyBulkDiscount('fixed')} className="flex items-center gap-1 px-3 py-2 hover:bg-blue-700 rounded-lg transition-colors text-xs font-bold">
+                                        <DollarSign size={14} /> Dto €
+                                    </button>
+                                    <div className="h-6 w-px bg-blue-500 mx-1" />
+                                    <button onClick={() => applyBulkIVA(21)} className="flex items-center gap-1 px-3 py-2 hover:bg-blue-700 rounded-lg transition-colors text-xs font-bold">
+                                        <Calculator size={14} /> IVA 21%
+                                    </button>
+                                    <button onClick={() => applyBulkIVA(0)} className="flex items-center gap-1 px-3 py-2 hover:bg-blue-700 rounded-lg transition-colors text-xs font-bold">
+                                        <Calculator size={14} /> IVA 0%
+                                    </button>
+                                </div>
+                            </div>
+                            <button onClick={removeBulk} className="p-2 hover:bg-blue-700 rounded-lg transition-colors text-white/80 hover:text-white">
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
+                    )}
+
                 </div>
 
                 {/* Footer */}
@@ -232,7 +362,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                             className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold uppercase shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2"
                         >
                             <DollarSign size={18} />
-                            Crear Presupuesto
+                            {initialBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
                         </button>
                     </div>
                 </div>

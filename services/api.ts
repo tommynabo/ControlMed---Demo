@@ -20,11 +20,19 @@ export const api = {
             const res = await fetch(`${API_URL}/patients/${patientId}/budgets`, { headers: getHeaders() });
             return res.json();
         },
-        create: async (patientId: string, items: any[]) => {
+        create: async (patientId: string, items: any[], title?: string) => {
             const res = await fetch(`${API_URL}/patients/${patientId}/budgets`, {
                 method: 'POST',
                 headers: getHeaders(),
-                body: JSON.stringify({ items })
+                body: JSON.stringify({ items, title })
+            });
+            return res.json();
+        },
+        update: async (budgetId: string, items: any[], title?: string) => {
+            const res = await fetch(`${API_URL}/budgets/${budgetId}`, {
+                method: 'PUT',
+                headers: getHeaders(),
+                body: JSON.stringify({ items, title })
             });
             return res.json();
         },
@@ -41,6 +49,13 @@ export const api = {
                 method: 'PUT',
                 headers: getHeaders(),
                 body: JSON.stringify({ status })
+            });
+            return res.json();
+        },
+        deleteItem: async (itemId: string) => {
+            const res = await fetch(`${API_URL}/budgets/items/${itemId}`, { 
+                method: 'DELETE', 
+                headers: getHeaders() 
             });
             return res.json();
         },

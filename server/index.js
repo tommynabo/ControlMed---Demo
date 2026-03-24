@@ -2251,6 +2251,16 @@ app.delete('/api/budgets/items/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.put('/api/budgets/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { items, title } = req.body;
+        const data = await budgetService.updateBudget(supabase, req.params.id, items, title);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/patients/:patientId/budgets/draft/items', async (req, res) => {
     try {
         let supabase;
@@ -3521,15 +3531,15 @@ app.get('/api/clinical-plans/:patientId', async (req, res) => {
         const { data: plans, error } = await supabase
             .from('clinical_treatment_plans')
             .select('*, steps:clinical_treatment_steps(*)')
-            .eq('patient_id', patientId)
-            .order('created_at', { ascending: false });
+            .eq('patientId', patientId)
+            .order('createdAt', { ascending: false });
 
         if (error) throw error;
 
-        // Sort steps by step_order within each plan
+        // Sort steps by stepOrder within each plan
         const sorted = (plans || []).map(p => ({
             ...p,
-            steps: (p.steps || []).sort((a, b) => a.step_order - b.step_order)
+            steps: (p.steps || []).sort((a, b) => a.stepOrder - b.stepOrder)
         }));
 
         res.json(sorted);
@@ -3552,12 +3562,12 @@ app.post('/api/clinical-plans', async (req, res) => {
             .from('clinical_treatment_plans')
             .insert([{
                 id: planId,
-                patient_id: patientId,
+                patientId: patientId,
                 name: name || 'Plan de Tratamiento',
                 status: 'ACTIVE',
                 notes: notes || null,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             }])
             .select()
             .single();
@@ -3568,13 +3578,13 @@ app.post('/api/clinical-plans', async (req, res) => {
         if (steps && steps.length > 0) {
             const stepsToInsert = steps.map((s, idx) => ({
                 id: crypto.randomUUID(),
-                plan_id: planId,
-                step_order: idx,
-                treatment_name: s.treatmentName || s.treatment_name,
-                tooth_id: s.toothId || s.tooth_id || null,
+                planId: planId,
+                stepOrder: idx,
+                treatmentName: s.treatmentName || s.treatment_name,
+                toothId: s.toothId || s.tooth_id || null,
                 status: 'PENDIENTE',
                 notes: s.notes || null,
-                created_at: new Date().toISOString()
+                createdAt: new Date().toISOString()
             }));
 
             const { error: stepsError } = await supabase
@@ -3604,7 +3614,7 @@ app.put('/api/clinical-plans/:id', async (req, res) => {
         const { id } = req.params;
         const { name, status, notes } = req.body;
 
-        const updates = { updated_at: new Date().toISOString() };
+        const updates = { updatedAt: new Date().toISOString() };
         if (name !== undefined) updates.name = name;
         if (status !== undefined) updates.status = status;
         if (notes !== undefined) updates.notes = notes;
@@ -3653,27 +3663,27 @@ app.post('/api/clinical-plan-steps', async (req, res) => {
             return res.status(400).json({ error: 'planId and treatmentName are required' });
         }
 
-        // Get current max step_order
+        // Get current max stepOrder
         const { data: existing } = await supabase
             .from('clinical_treatment_steps')
-            .select('step_order')
-            .eq('plan_id', planId)
-            .order('step_order', { ascending: false })
+            .select('stepOrder')
+            .eq('planId', planId)
+            .order('stepOrder', { ascending: false })
             .limit(1);
 
-        const maxOrder = existing && existing.length > 0 ? existing[0].step_order : -1;
+        const maxOrder = existing && existing.length > 0 ? existing[0].stepOrder : -1;
 
         const { data, error } = await supabase
             .from('clinical_treatment_steps')
             .insert([{
                 id: crypto.randomUUID(),
-                plan_id: planId,
-                step_order: stepOrder !== undefined ? stepOrder : maxOrder + 1,
-                treatment_name: treatmentName,
-                tooth_id: toothId || null,
+                planId: planId,
+                stepOrder: stepOrder !== undefined ? stepOrder : maxOrder + 1,
+                treatmentName: treatmentName,
+                toothId: toothId || null,
                 status: 'PENDIENTE',
                 notes: notes || null,
-                created_at: new Date().toISOString()
+                createdAt: new Date().toISOString()
             }])
             .select()
             .single();
@@ -3695,13 +3705,13 @@ app.put('/api/clinical-plan-steps/:id', async (req, res) => {
         const updates = {};
         if (status !== undefined) {
             updates.status = status;
-            if (status === 'COMPLETADO') updates.completed_at = new Date().toISOString();
-            else updates.completed_at = null;
+            if (status === 'COMPLETADO') updates.completedAt = new Date().toISOString();
+            else updates.completedAt = null;
         }
-        if (stepOrder !== undefined) updates.step_order = stepOrder;
-        if (treatmentName !== undefined) updates.treatment_name = treatmentName;
+        if (stepOrder !== undefined) updates.stepOrder = stepOrder;
+        if (treatmentName !== undefined) updates.treatmentName = treatmentName;
         if (notes !== undefined) updates.notes = notes;
-        if (toothId !== undefined) updates.tooth_id = toothId;
+        if (toothId !== undefined) updates.toothId = toothId;
 
         const { data, error } = await supabase
             .from('clinical_treatment_steps')
