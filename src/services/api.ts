@@ -268,7 +268,7 @@ export const api = {
 
     // Patients
     getPatients: async (): Promise<Patient[]> => {
-        const res = await fetch(`${API_URL}/patients`, { headers });
+        const res = await fetch(`${API_URL}/patients?_t=${Date.now()}`, { headers });
         if (!res.ok) throw new Error('Failed to fetch patients');
         return res.json();
     },

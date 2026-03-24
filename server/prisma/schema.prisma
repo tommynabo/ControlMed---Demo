@@ -219,8 +219,8 @@ model Liquidation {
   id              String      @id @default(uuid())
   doctorId        String
   doctor          Doctor      @relation(fields: [doctorId], references: [id])
-  appointmentId   String      @unique
-  appointment     Appointment @relation(fields: [appointmentId], references: [id])
+  appointmentId   String?     @unique
+  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
   grossAmount     Float
   labCost         Float
   commissionRate  Float

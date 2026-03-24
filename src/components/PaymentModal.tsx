@@ -44,6 +44,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const [isProcessing, setIsProcessing] = useState(false);
     const [originalAmount, setOriginalAmount] = useState(0); // Locked original treatment cost
     const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
+    const [doctors, setDoctors] = useState<any[]>([]);
+    const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
 
     // Combined payment state
     const [useCombinedPayment, setUseCombinedPayment] = useState(false);
@@ -65,6 +67,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             setSplits([]);
             setWalletAmount('');
             setSelectedBudgetId('');
+            setSelectedDoctorId('');
+
+            // Fetch doctors if no appointment is linked to allow attribution
+            if (!appointment) {
+                api.getDoctors().then(setDoctors).catch(console.error);
+            }
         }
     }, [isOpen, defaultAmount, defaultConcept, appointment]);
 
@@ -102,6 +110,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             return;
         }
 
+        if (isDirectPayment && !appointment && !selectedDoctorId) {
+            alert('Por favor, selecciona el doctor responsable para registrar la comisión correctamente.');
+            return;
+        }
+
         const breakdown = getPaymentBreakdown();
         const walletUsed = breakdown.find(b => b.method === 'wallet');
         if (walletUsed && walletUsed.amount > availableWallet) {
@@ -131,7 +144,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 method: mainMethod,
                 type: isDirectPayment ? ('DIRECT_CHARGE' as const) : ('ADVANCE_PAYMENT' as const),
                 appointmentId: appointment?.id,
-                doctorId: appointment?.doctorId,
+                doctorId: appointment?.doctorId || selectedDoctorId,
                 treatmentName: concept,
                 notes: notes || undefined,
                 isPartial: isPartialPayment,
@@ -324,6 +337,25 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             />
                         </div>
                     </div>
+
+                    {/* Doctor Selection (Only for direct payments with no appointment linked) */}
+                    {isDirectPayment && !appointment && doctors.length > 0 && (
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
+                                Doctor Responsable (para comisiones)
+                            </label>
+                            <select
+                                value={selectedDoctorId}
+                                onChange={(e) => setSelectedDoctorId(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                            >
+                                <option value="">-- Seleccionar Doctor --</option>
+                                {doctors.map(d => (
+                                    <option key={d.id} value={d.id}>{d.name} ({d.specialization || d.specialty?.name})</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
 
                     {/* Combined Payment Toggle */}
                     {isDirectPayment && availableWallet > 0 && (

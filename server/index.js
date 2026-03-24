@@ -64,6 +64,15 @@ const authMiddleware = (req, res, next) => {
 
 app.use(authMiddleware);
 
+// --- CACHE-CONTROL MIDDLEWARE ---
+// Critical Fix: Prevent Vercel from caching API responses (Next.js / ISR / Edge Cache)
+app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    next();
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date(), env: process.env.NODE_ENV });
 });
@@ -2705,9 +2714,9 @@ app.post('/api/payments/create', async (req, res) => {
                 data: { invoiceId: invoice.id }
             });
 
-            // 4. Create Liquidation
+            // 4. Create Liquidation (Support both appointment-linked and direct doctor-assigned payments)
             let liquidation = null;
-            if (appointmentId && doctor && type === 'DIRECT_CHARGE') {
+            if (doctor && type === 'DIRECT_CHARGE') {
                 const rawRate = doctor.commissionPercentage || 30;
                 const commissionRateDecimal = rawRate / 100;
                 const labCost = req.body.costeLab || 0;
@@ -2717,7 +2726,7 @@ app.post('/api/payments/create', async (req, res) => {
                     data: {
                         id: crypto.randomUUID(),
                         doctorId: doctor.id,
-                        appointmentId: appointmentId,
+                        appointmentId: appointmentId || null, // Optional now
                         grossAmount: numericAmount,
                         labCost,
                         commissionRate: rawRate,
