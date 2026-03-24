@@ -1,13 +1,10 @@
 const axios = require('axios');
 
-const API_URL = process.env.EVOLUTION_API_URL;
-const API_KEY = process.env.EVOLUTION_API_KEY;
 const INSTANCE_NAME = "chc-clinica";
+const safeInstanceName = encodeURIComponent(INSTANCE_NAME);
 
 let status = 'DISCONNECTED';
 let qrCodeData = null;
-
-const safeInstanceName = encodeURIComponent(INSTANCE_NAME);
 
 /**
  * Helper to get headers for request
@@ -15,14 +12,14 @@ const safeInstanceName = encodeURIComponent(INSTANCE_NAME);
 const getHeaders = () => {
     return {
         'Content-Type': 'application/json',
-        'apikey': API_KEY
+        'apikey': process.env.EVOLUTION_API_KEY
     };
 };
 
 const initialize = async () => {
     console.log('🔄 Checking Evolution API Connection...');
 
-    if (!API_URL || !API_KEY) {
+    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) {
         console.error('❌ Missing Evolution API Configuration. Service disabled.');
         status = 'DISABLED';
         return;
@@ -31,7 +28,7 @@ const initialize = async () => {
     try {
         // Check connection state
         const response = await axios.get(
-            `${API_URL}/instance/connectionState/${safeInstanceName}`,
+            `${process.env.EVOLUTION_API_URL}/instance/connectionState/${safeInstanceName}`,
             { headers: getHeaders() }
         );
 
@@ -59,9 +56,9 @@ const initialize = async () => {
 
 const createInstance = async () => {
     try {
-        await axios.post(`${API_URL}/instance/create`, {
+        await axios.post(`${process.env.EVOLUTION_API_URL}/instance/create`, {
             instanceName: INSTANCE_NAME,
-            token: API_KEY, // Optional: Evolution API allows custom token
+            token: process.env.EVOLUTION_API_KEY, // Optional: Evolution API allows custom token
             qrcode: true
         }, { headers: getHeaders() });
         console.log(`✅ Instance ${INSTANCE_NAME} created.`);
@@ -74,7 +71,7 @@ const createInstance = async () => {
 const getStatus = async () => {
     try {
         const response = await axios.get(
-            `${API_URL}/instance/connectionState/${safeInstanceName}`,
+            `${process.env.EVOLUTION_API_URL}/instance/connectionState/${safeInstanceName}`,
             { headers: getHeaders() }
         );
         const connectionState = response.data?.instance?.state || response.data?.state;
@@ -92,7 +89,7 @@ const getStatus = async () => {
 const getQrCode = async () => {
     try {
         const response = await axios.get(
-            `${API_URL}/instance/connect/${safeInstanceName}`,
+            `${process.env.EVOLUTION_API_URL}/instance/connect/${safeInstanceName}`,
             { headers: getHeaders() }
         );
         
@@ -112,13 +109,13 @@ const getQrCode = async () => {
 };
 
 const sendMessage = async (to, message) => {
-    if (!API_URL || !API_KEY) throw new Error('WA_DISABLED');
+    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) throw new Error('WA_DISABLED');
 
     try {
         let number = to.replace(/[^0-9]/g, '');
         if (number.length === 9) number = '34' + number;
 
-        const url = `${API_URL}/message/sendText/${safeInstanceName}`;
+        const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${safeInstanceName}`;
         const payload = {
             number: number,
             text: message,
@@ -135,7 +132,7 @@ const sendMessage = async (to, message) => {
 
 const logout = async () => {
     try {
-        await axios.delete(`${API_URL}/instance/logout/${safeInstanceName}`, { headers: getHeaders() });
+        await axios.delete(`${process.env.EVOLUTION_API_URL}/instance/logout/${safeInstanceName}`, { headers: getHeaders() });
         status = 'DISCONNECTED';
         qrCodeData = null;
         return { success: true };
