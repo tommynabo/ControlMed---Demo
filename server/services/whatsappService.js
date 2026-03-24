@@ -10,6 +10,9 @@ let qrCodeData = null;
  * Helper to get headers for request
  */
 const getHeaders = () => {
+    if (!process.env.EVOLUTION_API_KEY) {
+        console.warn('⚠️ [WA] EVOLUTION_API_KEY is missing in getHeaders');
+    }
     return {
         'Content-Type': 'application/json',
         'apikey': process.env.EVOLUTION_API_KEY
