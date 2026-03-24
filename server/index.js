@@ -3175,11 +3175,21 @@ app.get('/api/whatsapp/logs', async (req, res) => {
 
 // --- CRON ENGINE: AUTOMATIC REMINDERS ---
 app.post('/api/cron/whatsapp-reminders', async (req, res) => {
-    const cronSecret = process.env.CRON_SECRET;
     const authHeader = req.headers['authorization'] || req.headers['x-cron-secret'];
-    
-    if (!cronSecret || authHeader !== cronSecret) {
-        console.warn(`[CRON] Unauthorized attempt from ${req.ip}`);
+    const expectedSecret = process.env.CRON_SECRET;
+
+    console.log('[DEBUG] CRON_SECRET cargado en entorno:', !!expectedSecret);
+
+    if (!expectedSecret) {
+        console.error('[CRON ERROR] La variable CRON_SECRET no está definida en el entorno.');
+        return res.status(500).json({ error: 'Configuración del servidor incompleta' });
+    }
+
+    // Normalización: Limpiar el token de posibles prefijos "Bearer " y espacios
+    const providedToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+
+    if (!providedToken || providedToken !== expectedSecret.trim()) {
+        console.warn(`[CRON] Intento no autorizado. Token recibido: ${providedToken ? '***' : 'NULO'}`);
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
