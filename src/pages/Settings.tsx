@@ -60,6 +60,7 @@ const Settings: React.FC = () => {
     const [waLogs, setWaLogs] = useState<any[]>([]);
     const [waActiveTab, setWaActiveTab] = useState<'dashboard' | 'connection' | 'templates'>('dashboard');
     const [newWaTemplate, setNewWaTemplate] = useState({ name: '', content: '', triggerType: 'APPOINTMENT_REMINDER', triggerOffsetValue: '12', triggerOffsetUnit: 'h', triggerOffsetDirection: 'before' });
+    const [isGeneratingQr, setIsGeneratingQr] = useState(false);
 
     // TEMPLATES DATA - Restored complete list
     const [templates, setTemplates] = useState<DocumentTemplate[]>([
@@ -90,6 +91,23 @@ const Settings: React.FC = () => {
             setWaLogs(logs);
         } catch (e) {
             console.error(e);
+        }
+    };
+
+    const handleGenerateQR = async () => {
+        setIsGeneratingQr(true);
+        try {
+            const res = await api.whatsapp.getQr();
+            if (res && res.qrCode) {
+                setWaStatus(prev => ({ ...prev, qrCode: res.qrCode }));
+            } else {
+                alert('No se pudo generar el código QR. Inténtalo de nuevo.');
+            }
+        } catch (e) {
+            console.error('Error generating QR:', e);
+            alert('Error al conectar con el servidor de WhatsApp.');
+        } finally {
+            setIsGeneratingQr(false);
         }
     };
 
@@ -377,13 +395,19 @@ const Settings: React.FC = () => {
                                                     </p>
                                                 </div>
                                                 <button 
-                                                    onClick={async () => {
-                                                        const res = await api.whatsapp.getQr();
-                                                        setWaStatus(prev => ({ ...prev, qrCode: res.qrCode }));
-                                                    }}
-                                                    className="px-10 py-4 bg-green-500 text-white rounded-2xl font-black text-sm uppercase shadow-lg shadow-green-100 hover:scale-105 transition-all flex items-center gap-3 mx-auto"
+                                                    onClick={handleGenerateQR}
+                                                    disabled={isGeneratingQr}
+                                                    className={`px-10 py-4 ${isGeneratingQr ? 'bg-slate-400' : 'bg-green-500 hover:scale-105'} text-white rounded-2xl font-black text-sm uppercase shadow-lg shadow-green-100 transition-all flex items-center gap-3 mx-auto`}
                                                 >
-                                                    <QrCode size={20} /> Generar Código QR
+                                                    {isGeneratingQr ? (
+                                                        <>
+                                                            <RefreshCw size={20} className="animate-spin" /> Generando...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <QrCode size={20} /> Generar Código QR
+                                                        </>
+                                                    )}
                                                 </button>
                                             </div>
                                         )}
