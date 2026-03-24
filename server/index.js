@@ -3206,16 +3206,16 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
 
         const appointments = await prisma.appointment.findMany({
             where: {
-                status: { in: ['Confirmed', 'CONFIRMED', 'Confirmada'] },
+                status: 'Confirmed',
                 date: {
                     gte: startOfTomorrow,
                     lte: endOfTomorrow
                 },
-                whatsappReminderSent: false
+                whatsappSent: false
             },
             include: {
                 patient: true,
-                doctor: true
+                treatment: true
             }
         });
 
@@ -3241,12 +3241,22 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
             // Variable Replacement
             const appointmentDate = new Date(appt.date);
             const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const formattedTime = appt.time || appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+            
+            // Format time: ensuring HH:mm
+            let formattedTime = '00:00';
+            if (appt.time) {
+                formattedTime = appt.time.substring(0, 5);
+            } else {
+                formattedTime = appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+            }
+
+            const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta General';
 
             let message = defaultTemplate.content
-                .replace(/{{nombre}}/g, appt.patient.firstName || appt.patient.name)
+                .replace(/{{nombre}}/g, appt.patient.name)
                 .replace(/{{fecha}}/g, formattedDate)
-                .replace(/{{hora}}/g, formattedTime);
+                .replace(/{{hora}}/g, formattedTime)
+                .replace(/{{tratamiento}}/g, treatmentName);
 
             try {
                 // Formatting number for Evolution API
@@ -3258,7 +3268,7 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
                 // Update DB
                 await prisma.appointment.update({
                     where: { id: appt.id },
-                    data: { whatsappReminderSent: true }
+                    data: { whatsappSent: true }
                 });
 
                 // Log it

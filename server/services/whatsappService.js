@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const API_URL = process.env.EVOLUTION_API_URL;
 const API_KEY = process.env.EVOLUTION_API_KEY;
-const INSTANCE_NAME = "ControlMed";
+const INSTANCE_NAME = "chc-clinica";
 
 let status = 'DISCONNECTED';
 let qrCodeData = null;
