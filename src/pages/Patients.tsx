@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
@@ -40,11 +41,39 @@ const Patients: React.FC = () => {
     } = useAppContext();
 
 
+    // URL Deep Linking
+    const [searchParams, setSearchParams] = useSearchParams();
+    const patientIdFromUrl = searchParams.get('id');
+    const tabFromUrl = searchParams.get('tab');
+
     // Navigation State
-    const [patientTab, setPatientTab] = useState<string>('ficha');
+    const [patientTab, setPatientTab] = useState<string>(tabFromUrl || 'ficha');
 
     // Local State for Budgets
     const [budgets, setBudgets] = useState<any[]>([]);
+
+    // Sync State -> URL
+    React.useEffect(() => {
+        const params: any = {};
+        if (selectedPatient) params.id = selectedPatient.id;
+        if (patientTab && patientTab !== 'ficha') params.tab = patientTab;
+        
+        // Only update if actually changed to avoid infinite loops
+        if (selectedPatient?.id !== patientIdFromUrl || patientTab !== (tabFromUrl || 'ficha')) {
+            setSearchParams(params, { replace: true });
+        }
+    }, [selectedPatient, patientTab, setSearchParams]);
+
+    // Sync URL -> State (Initial load or browser back/forward)
+    React.useEffect(() => {
+        if (patientIdFromUrl && (!selectedPatient || selectedPatient.id !== patientIdFromUrl)) {
+            const p = patients.find(p => p.id === patientIdFromUrl);
+            if (p) setSelectedPatient(p);
+        }
+        if (tabFromUrl && patientTab !== tabFromUrl) {
+            setPatientTab(tabFromUrl);
+        }
+    }, [patientIdFromUrl, tabFromUrl, patients, selectedPatient, setSelectedPatient, patientTab]);
 
     // Fetch budgets and prescriptions when patient is selected or tab changes
     React.useEffect(() => {

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { DocumentTemplate } from '../../types';
@@ -27,9 +28,29 @@ interface Service {
 const Settings: React.FC = () => {
     const { stock, setStock, currentUserRole } = useAppContext();
     const isReception = currentUserRole === 'RECEPTION';
-    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users'>('templates');
+    
+    // URL Deep Linking
+    const [searchParams, setSearchParams] = useSearchParams();
+    const tabFromUrl = searchParams.get('tab') as any;
+
+    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users'>(tabFromUrl || 'templates');
     const [templateSearch, setTemplateSearch] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Sync State -> URL
+    useEffect(() => {
+        if (settingsTab && settingsTab !== (searchParams.get('tab') || 'templates')) {
+            setSearchParams({ tab: settingsTab }, { replace: true });
+        }
+    }, [settingsTab, setSearchParams]);
+
+    // Sync URL -> State (Initial load or browser back/forward)
+    useEffect(() => {
+        const urlTab = searchParams.get('tab');
+        if (urlTab && urlTab !== settingsTab) {
+            setSettingsTab(urlTab as any);
+        }
+    }, [searchParams, settingsTab]);
 
     // SECURITY: Limit tabs for RECEPTION role
     useEffect(() => {
