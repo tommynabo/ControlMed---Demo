@@ -31,6 +31,13 @@ const Settings: React.FC = () => {
     const [templateSearch, setTemplateSearch] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // SECURITY: Limit tabs for RECEPTION role
+    useEffect(() => {
+        if (isReception && !['templates', 'whatsapp'].includes(settingsTab)) {
+            setSettingsTab('templates');
+        }
+    }, [isReception, settingsTab]);
+
     // Services State
     const [services, setServices] = useState<Service[]>([]);
     const [serviceSearch, setServiceSearch] = useState('');
@@ -232,6 +239,9 @@ const Settings: React.FC = () => {
                     <button onClick={() => setSettingsTab('templates')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'templates' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         Plantillas
                     </button>
+                    <button onClick={() => setSettingsTab('whatsapp')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'whatsapp' ? 'bg-green-50 text-green-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        WhatsApp & CRM
+                    </button>
                     {!isReception && (
                     <>
                     <button onClick={() => setSettingsTab('stock')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'stock' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
@@ -239,9 +249,6 @@ const Settings: React.FC = () => {
                     </button>
                     <button onClick={() => setSettingsTab('services')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'services' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         Servicios / Tarifas
-                    </button>
-                    <button onClick={() => setSettingsTab('whatsapp')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'whatsapp' ? 'bg-green-50 text-green-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-                        WhatsApp & CRM
                     </button>
                     </>
                     )}
