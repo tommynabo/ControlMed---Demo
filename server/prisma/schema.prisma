@@ -212,6 +212,7 @@ model Appointment {
   amount       Float?
   liquidation Liquidation?
   invoice     Invoice?
+  whatsappReminderSent Boolean   @default(false) @map("whatsapp_reminder_sent")
 }
 
 model Liquidation {

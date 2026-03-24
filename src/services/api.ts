@@ -658,6 +658,11 @@ export const api = {
             if (!res.ok) throw new Error('Failed to fetch status');
             return res.json();
         },
+        getQr: async () => {
+            const res = await fetch(`${API_URL}/whatsapp/qr`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch QR');
+            return res.json();
+        },
         logout: async () => {
             const res = await fetch(`${API_URL}/whatsapp/logout`, { method: 'POST', headers });
             if (!res.ok) throw new Error('Failed to logout');

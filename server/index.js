@@ -3078,8 +3078,17 @@ app.get('/api/invoices', async (req, res) => {
 });
 
 // --- MODULE 7: WHATSAPP INTEGRATION ---
-app.get('/api/whatsapp/status', (req, res) => {
-    res.json(whatsappService.getStatus());
+app.get('/api/whatsapp/status', async (req, res) => {
+    res.json(await whatsappService.getStatus());
+});
+
+app.get('/api/whatsapp/qr', async (req, res) => {
+    try {
+        const qr = await whatsappService.getQrCode();
+        res.json({ qrCode: qr });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.post('/api/whatsapp/send-test', async (req, res) => {
@@ -3160,6 +3169,120 @@ app.get('/api/whatsapp/logs', async (req, res) => {
         });
         res.json(logs);
     } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- CRON ENGINE: AUTOMATIC REMINDERS ---
+app.post('/api/cron/whatsapp-reminders', async (req, res) => {
+    const cronSecret = process.env.CRON_SECRET;
+    const authHeader = req.headers['authorization'] || req.headers['x-cron-secret'];
+    
+    if (!cronSecret || authHeader !== cronSecret) {
+        console.warn(`[CRON] Unauthorized attempt from ${req.ip}`);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+        console.log('[CRON] Starting WhatsApp reminders processing...');
+        
+        // Calculate date for tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        // Exact 24h range for tomorrow
+        const startOfTomorrow = new Date(tomorrow.setHours(0, 0, 0, 0));
+        const endOfTomorrow = new Date(tomorrow.setHours(23, 59, 59, 999));
+
+        const appointments = await prisma.appointment.findMany({
+            where: {
+                status: { in: ['Confirmed', 'CONFIRMED', 'Confirmada'] },
+                date: {
+                    gte: startOfTomorrow,
+                    lte: endOfTomorrow
+                },
+                whatsappReminderSent: false
+            },
+            include: {
+                patient: true,
+                doctor: true
+            }
+        });
+
+        console.log(`[CRON] Found ${appointments.length} appointments for ${startOfTomorrow.toLocaleDateString()} to remind.`);
+
+        const defaultTemplate = await prisma.whatsAppTemplate.findFirst({
+            where: { triggerType: 'APPOINTMENT_REMINDER' }
+        });
+
+        if (!defaultTemplate && appointments.length > 0) {
+            console.error('[CRON] No APPOINTMENT_REMINDER template found.');
+            return res.status(404).json({ error: 'Reminder template not found' });
+        }
+
+        const stats = { sent: 0, failed: 0, skipped: 0 };
+
+        for (const appt of appointments) {
+            if (!appt.patient?.phone) {
+                stats.skipped++;
+                continue;
+            }
+
+            // Variable Replacement
+            const appointmentDate = new Date(appt.date);
+            const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const formattedTime = appt.time || appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+            let message = defaultTemplate.content
+                .replace(/{{nombre}}/g, appt.patient.firstName || appt.patient.name)
+                .replace(/{{fecha}}/g, formattedDate)
+                .replace(/{{hora}}/g, formattedTime);
+
+            try {
+                // Formatting number for Evolution API
+                let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                if (number.length === 9) number = '34' + number;
+
+                await whatsappService.sendMessage(number, message);
+                
+                // Update DB
+                await prisma.appointment.update({
+                    where: { id: appt.id },
+                    data: { whatsappReminderSent: true }
+                });
+
+                // Log it
+                await prisma.whatsAppLog.create({
+                    data: {
+                        patientId: appt.patientId,
+                        type: 'APPOINTMENT_REMINDER',
+                        status: 'SENT',
+                        content: message,
+                        sentAt: new Date()
+                    }
+                });
+
+                stats.sent++;
+            } catch (err) {
+                console.error(`[CRON] Failed to send reminder for appt ${appt.id}:`, err.message);
+                stats.failed++;
+                
+                await prisma.whatsAppLog.create({
+                    data: {
+                        patientId: appt.patientId,
+                        type: 'APPOINTMENT_REMINDER',
+                        status: 'FAILED',
+                        content: message,
+                        error: err.message,
+                        sentAt: new Date()
+                    }
+                });
+            }
+        }
+
+        res.json({ message: 'Cron finished', stats });
+    } catch (e) {
+        console.error('[CRON] Error during reminders:', e);
         res.status(500).json({ error: e.message });
     }
 });

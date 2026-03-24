@@ -333,28 +333,63 @@ const Settings: React.FC = () => {
                                             <CheckCircle2 size={48} className="text-green-600" />
                                         </div>
                                         <h3 className="text-2xl font-bold text-slate-900">WhatsApp Conectado</h3>
-                                        <p className="text-slate-500 mb-8">El servicio está activo y enviando mensajes.</p>
-                                        <button onClick={() => api.whatsapp.logout().then(refreshWhatsApp)} className="px-6 py-3 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors">
-                                            Desconectar Sesión
-                                        </button>
+                                        <p className="text-slate-500 mb-8">El servicio está activo y enviando recordatorios automáticos.</p>
+                                        <div className="flex gap-4 justify-center">
+                                            <button onClick={refreshWhatsApp} className="px-6 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase hover:bg-slate-200 transition-colors flex items-center gap-2">
+                                                <RefreshCw size={14} /> Actualizar Estado
+                                            </button>
+                                            <button onClick={() => api.whatsapp.logout().then(refreshWhatsApp)} className="px-6 py-3 bg-red-50 text-red-600 rounded-xl font-bold text-xs uppercase hover:bg-red-100 transition-colors">
+                                                Desconectar Sesión
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="text-center">
-                                        <h3 className="text-xl font-bold text-slate-900 mb-6">Escanea el código QR</h3>
-                                        <div className="bg-white p-4 rounded-xl border-2 border-slate-900 inline-block mb-6 shadow-xl">
-                                            {waStatus.qrCode ? (
-                                                <img src={waStatus.qrCode} alt="WhatsApp QR" className="w-64 h-64 object-contain" />
-                                            ) : (
-                                                <div className="w-64 h-64 flex items-center justify-center bg-slate-50 text-slate-400">
-                                                    {waStatus.status === 'DISCONNECTED' ? 'Iniciando cliente...' : 'Cargando QR...'}
-                                                </div>
-                                            )}
+                                        <div className="mb-8">
+                                            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <QrCode size={40} className="text-slate-400" />
+                                            </div>
+                                            <h3 className="text-2xl font-bold text-slate-900">Vinculación de Dispositivo</h3>
+                                            <p className="text-slate-500 max-w-md mx-auto mt-2">
+                                                Para activar el envío de recordatorios, vincula el WhatsApp de la clínica escaneando el código.
+                                            </p>
                                         </div>
-                                        <p className="text-xs text-slate-500 font-medium max-w-sm mx-auto">
-                                            Abre WhatsApp en tu teléfono {'>'} Dispositivos Vinculados {'>'} Vincular un dispositivo
-                                        </p>
-                                        <button onClick={refreshWhatsApp} className="mt-8 text-blue-600 font-bold text-xs uppercase tracking-widest hover:underline">
-                                            Actualizar Estado
+
+                                        {waStatus.qrCode ? (
+                                            <div className="space-y-6 animate-in fade-in zoom-in duration-500">
+                                                <div className="bg-white p-4 rounded-3xl border-4 border-slate-900 inline-block shadow-2xl">
+                                                    <img src={waStatus.qrCode} alt="WhatsApp QR" className="w-72 h-72 object-contain rounded-xl" />
+                                                </div>
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <p className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                                        <RefreshCw size={12} className="animate-spin" /> Esperando escaneo...
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 font-medium">
+                                                        Abre WhatsApp {'>'} Dispositivos Vinculados {'>'} Vincular
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-4">
+                                                <div className="w-72 h-72 bg-slate-50 rounded-3xl border border-dashed border-slate-200 flex items-center justify-center mx-auto mb-6">
+                                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center px-8">
+                                                        {waStatus.status === 'INITIALIZING' ? 'Iniciando conexión...' : 'Haz clic en el botón para generar un código QR'}
+                                                    </p>
+                                                </div>
+                                                <button 
+                                                    onClick={async () => {
+                                                        const res = await api.whatsapp.getQr();
+                                                        setWaStatus(prev => ({ ...prev, qrCode: res.qrCode }));
+                                                    }}
+                                                    className="px-10 py-4 bg-green-500 text-white rounded-2xl font-black text-sm uppercase shadow-lg shadow-green-100 hover:scale-105 transition-all flex items-center gap-3 mx-auto"
+                                                >
+                                                    <QrCode size={20} /> Generar Código QR
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        <button onClick={refreshWhatsApp} className="mt-12 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-blue-600 transition-colors flex items-center gap-2 mx-auto">
+                                            <RefreshCw size={12} /> Refrescar Estado
                                         </button>
                                     </div>
                                 )}
