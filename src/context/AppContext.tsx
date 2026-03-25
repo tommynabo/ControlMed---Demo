@@ -106,12 +106,10 @@ export const INITIAL_STOCK: InventoryItem[] = [
 ];
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-    // === TabGuard: Restore session on initial mount ===
-    const restoredUser = restoreSession();
-
-    const [isAuthenticated, setIsAuthenticated] = useState(!!restoredUser);
-    const [currentUser, setCurrentUser] = useState<any>(restoredUser);
-    const [role, setRole] = useState<UserRole>(restoredUser?.role || 'ADMIN');
+    // === TabGuard: Restore session ONCE on initial mount (useState lazy initializer) ===
+    const [isAuthenticated, setIsAuthenticated] = useState(() => !!restoreSession());
+    const [currentUser, setCurrentUser] = useState<any>(() => restoreSession());
+    const [role, setRole] = useState<UserRole>(() => restoreSession()?.role || 'ADMIN');
 
     const [patients, setPatients] = useState<Patient[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);

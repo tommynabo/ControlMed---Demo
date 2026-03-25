@@ -48,6 +48,9 @@ const Patients: React.FC = () => {
 
     // Navigation State
     const [patientTab, setPatientTab] = useState<string>(tabFromUrl || 'ficha');
+    // Ref so Effect B can read latest patientTab without being triggered by it
+    const patientTabRef = React.useRef(patientTab);
+    patientTabRef.current = patientTab;
 
     // Local State for Budgets
     const [budgets, setBudgets] = useState<any[]>([]);
@@ -57,23 +60,31 @@ const Patients: React.FC = () => {
         const params: any = {};
         if (selectedPatient) params.id = selectedPatient.id;
         if (patientTab && patientTab !== 'ficha') params.tab = patientTab;
-        
+
         // Only update if actually changed to avoid infinite loops
-        if (selectedPatient?.id !== patientIdFromUrl || patientTab !== (tabFromUrl || 'ficha')) {
+        const currentId = selectedPatient?.id ?? null;
+        const currentTab = patientTab;
+        const urlId = patientIdFromUrl;
+        const urlTab = tabFromUrl || 'ficha';
+        if (currentId !== urlId || currentTab !== urlTab) {
             setSearchParams(params, { replace: true });
         }
-    }, [selectedPatient, patientTab, setSearchParams]);
+    }, [selectedPatient, patientTab, patientIdFromUrl, tabFromUrl, setSearchParams]);
 
-    // Sync URL -> State (Initial load or browser back/forward)
+    // Sync URL -> State (browser back/forward or direct link)
+    // NOTE: patientTab is intentionally read via ref and NOT in deps —
+    // adding it would cause this effect to fire when the user clicks a tab,
+    // reading a stale tabFromUrl and reverting the selection.
     React.useEffect(() => {
         if (patientIdFromUrl && (!selectedPatient || selectedPatient.id !== patientIdFromUrl)) {
             const p = patients.find(p => p.id === patientIdFromUrl);
             if (p) setSelectedPatient(p);
         }
-        if (tabFromUrl && patientTab !== tabFromUrl) {
+        if (tabFromUrl && patientTabRef.current !== tabFromUrl) {
             setPatientTab(tabFromUrl);
         }
-    }, [patientIdFromUrl, tabFromUrl, patients, selectedPatient, setSelectedPatient, patientTab]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [patientIdFromUrl, tabFromUrl, patients, selectedPatient, setSelectedPatient]);
 
     // Fetch budgets and prescriptions when patient is selected or tab changes
     React.useEffect(() => {
