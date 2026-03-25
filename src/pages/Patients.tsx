@@ -100,6 +100,15 @@ const Patients: React.FC = () => {
         }
     }, [selectedPatient, patientTab]);
 
+    // Fetch clinical records when history tab is active
+    React.useEffect(() => {
+        if (selectedPatient && patientTab === 'history') {
+            api.clinicalRecords.getByPatient(selectedPatient.id)
+                .then((records: any[]) => setClinicalRecords(records || []))
+                .catch((err: any) => console.error("Failed to load clinical records", err));
+        }
+    }, [selectedPatient, patientTab]);
+
     // Modal & Form States
     const [isNewPatientModalOpen, setIsNewPatientModalOpen] = useState(false);
     const [isEditingPatient, setIsEditingPatient] = useState(false);

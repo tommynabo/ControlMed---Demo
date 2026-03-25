@@ -2231,6 +2231,66 @@ app.delete('/api/templates/:id', async (req, res) => {
     }
 });
 
+// --- MODULE: VACACIONES ---
+app.get('/api/vacations', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+            .from('DoctorVacation')
+            .select('*')
+            .order('start_date', { ascending: false });
+        if (error) return res.json([]); // table may not exist yet
+        res.json(data || []);
+    } catch (e) {
+        res.json([]); // graceful fallback
+    }
+});
+
+app.post('/api/vacations', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+            .from('DoctorVacation')
+            .insert([req.body])
+            .select()
+            .single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.status(201).json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.put('/api/vacations/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+            .from('DoctorVacation')
+            .update(req.body)
+            .eq('id', req.params.id)
+            .select()
+            .single();
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/vacations/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { error } = await supabase
+            .from('DoctorVacation')
+            .delete()
+            .eq('id', req.params.id);
+        if (error) return res.status(500).json({ error: error.message });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- MODULE 8: BUDGETS ---
 app.get('/api/patients/:patientId/budgets', async (req, res) => {
     try {

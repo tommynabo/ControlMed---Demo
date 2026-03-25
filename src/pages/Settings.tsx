@@ -34,23 +34,31 @@ const Settings: React.FC = () => {
     const tabFromUrl = searchParams.get('tab') as any;
 
     const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users'>(tabFromUrl || 'templates');
+    // Ref so URL→State effect can read latest tab without being re-triggered by it
+    const settingsTabRef = React.useRef(settingsTab);
+    settingsTabRef.current = settingsTab;
+
     const [templateSearch, setTemplateSearch] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Sync State -> URL
     useEffect(() => {
-        if (settingsTab && settingsTab !== (searchParams.get('tab') || 'templates')) {
+        const urlTab = searchParams.get('tab') || 'templates';
+        if (settingsTab && settingsTab !== urlTab) {
             setSearchParams({ tab: settingsTab }, { replace: true });
         }
-    }, [settingsTab, setSearchParams]);
+    }, [settingsTab, searchParams, setSearchParams]);
 
-    // Sync URL -> State (Initial load or browser back/forward)
+    // Sync URL -> State (browser back/forward or direct link)
+    // settingsTab is intentionally read via ref — adding it as a dep would revert
+    // the tab selection when the user clicks a tab before the URL updates.
     useEffect(() => {
         const urlTab = searchParams.get('tab');
-        if (urlTab && urlTab !== settingsTab) {
+        if (urlTab && urlTab !== settingsTabRef.current) {
             setSettingsTab(urlTab as any);
         }
-    }, [searchParams, settingsTab]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
 
     // SECURITY: Limit tabs for RECEPTION role
     useEffect(() => {

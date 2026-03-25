@@ -182,6 +182,11 @@ export const api = {
 
     // Payments (New)
     payments: {
+        getAll: async () => {
+            const res = await fetch(`${API_URL}/finance/payments`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
         getByPatient: async (patientId: string) => {
             const res = await fetch(`${API_URL}/patients/${patientId}/payments`, { headers });
             if (!res.ok) throw new Error('Failed to fetch payments');

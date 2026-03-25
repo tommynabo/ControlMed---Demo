@@ -11,8 +11,17 @@ const Billing: React.FC = () => {
     const { patients, setPatients, invoices, setInvoices, expenses, setExpenses, currentUserRole, refreshPatients, appointments } = useAppContext();
     const api = apiService; // Use direct import
 
-    const [billingTab, setBillingTab] = useState<'invoices' | 'expenses'>('invoices');
+    const [billingTab, setBillingTab] = useState<'invoices' | 'payments' | 'expenses'>('invoices');
     const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+
+    // All payments (caja movements)
+    const [allPayments, setAllPayments] = useState<any[]>([]);
+    const [paymentsFilterDate, setPaymentsFilterDate] = useState('');
+    useEffect(() => {
+        if (billingTab === 'payments') {
+            api.payments.getAll().then(setAllPayments).catch(() => setAllPayments([]));
+        }
+    }, [billingTab]);
     const [exportDateFrom, setExportDateFrom] = useState('');
     const [exportDateTo, setExportDateTo] = useState('');
     const [filterDate, setFilterDate] = useState(''); // Filtro para la tabla de facturas
@@ -222,13 +231,13 @@ const Billing: React.FC = () => {
                 </div>
 
                 <div className="flex gap-8 border-b border-slate-100 mb-8">
-                    {(['invoices', 'expenses'] as const).map(tab => (
+                    {(['invoices', 'payments', 'expenses'] as const).map(tab => (
                         <button
                             key={tab}
                             onClick={() => setBillingTab(tab)}
                             className={`pb-4 text-[10px] font-black uppercase tracking-widest transition-colors ${billingTab === tab ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-300'}`}
                         >
-                            {tab === 'invoices' ? 'Facturación' : 'Gastos'}
+                            {tab === 'invoices' ? 'Facturas' : tab === 'payments' ? 'Cobros / Caja' : 'Gastos'}
                         </button>
                     ))}
                 </div>
@@ -377,6 +386,86 @@ const Billing: React.FC = () => {
                                                     </td>
                                                 </tr>
                                             ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {billingTab === 'payments' && (
+                    <div className="space-y-8 animate-in fade-in duration-700">
+                        {/* Date filter */}
+                        <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/20 shadow-2xl flex flex-wrap items-center gap-6">
+                            <div className="flex items-center gap-6">
+                                <div className="bg-slate-100 p-4 rounded-2xl text-slate-500"><Calendar size={24} /></div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Filtrar por Fecha</span>
+                                    <input
+                                        type="date"
+                                        value={paymentsFilterDate}
+                                        onChange={e => setPaymentsFilterDate(e.target.value)}
+                                        className="bg-transparent border-none text-xl font-bold text-slate-900 outline-none p-0 focus:ring-0"
+                                    />
+                                </div>
+                                {paymentsFilterDate && (
+                                    <button onClick={() => setPaymentsFilterDate('')} className="text-xs font-bold text-slate-400 hover:text-slate-900 uppercase">Limpiar</button>
+                                )}
+                            </div>
+                            <div className="ml-auto text-right">
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total cobros filtrados</p>
+                                <p className="text-2xl font-black text-emerald-600">
+                                    {allPayments
+                                        .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
+                                        .filter(p => p.amount > 0)
+                                        .reduce((s, p) => s + (p.amount || 0), 0)
+                                        .toFixed(2)}€
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white/90 backdrop-blur-xl rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-2xl">
+                            <div className="w-full overflow-x-auto">
+                                <table className="w-full min-w-max text-left border-collapse">
+                                    <thead className="bg-slate-50/50 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                        <tr>
+                                            <th className="p-6 pl-10">Fecha</th>
+                                            <th className="p-6">Paciente</th>
+                                            <th className="p-6">Concepto / Notas</th>
+                                            <th className="p-6 text-center">Método</th>
+                                            <th className="p-6 text-right pr-10">Importe</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {allPayments
+                                            .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
+                                            .length === 0 ? (
+                                            <tr><td colSpan={5} className="p-16 text-center text-slate-400 font-bold uppercase tracking-widest opacity-50">
+                                                {paymentsFilterDate ? 'No hay cobros para esta fecha' : 'No hay cobros registrados'}
+                                            </td></tr>
+                                        ) : (
+                                            allPayments
+                                                .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
+                                                .map(pmt => (
+                                                    <tr key={pmt.id} className="group hover:bg-blue-50/30 transition-colors duration-300">
+                                                        <td className="p-6 pl-10">
+                                                            <span className="font-bold text-slate-700 text-sm">{pmt.createdAt ? new Date(pmt.createdAt).toLocaleDateString('es-ES') : '—'}</span>
+                                                        </td>
+                                                        <td className="p-6">
+                                                            <span className="font-bold text-slate-900 text-sm">{patients.find(p => p.id === pmt.patientId)?.name || 'Anónimo'}</span>
+                                                        </td>
+                                                        <td className="p-6">
+                                                            <span className="text-sm text-slate-500 font-medium">{pmt.notes || pmt.type || '—'}</span>
+                                                        </td>
+                                                        <td className="p-6 text-center">
+                                                            <span className="bg-slate-100 px-4 py-2 rounded-xl text-[10px] font-black uppercase text-slate-500 tracking-wider">{pmt.method}</span>
+                                                        </td>
+                                                        <td className="p-6 pr-10 text-right">
+                                                            <span className={`font-black text-lg ${pmt.amount >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{pmt.amount >= 0 ? '+' : ''}{(pmt.amount || 0).toFixed(2)}€</span>
+                                                        </td>
+                                                    </tr>
+                                                ))
                                         )}
                                     </tbody>
                                 </table>
