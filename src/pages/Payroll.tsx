@@ -50,28 +50,29 @@ const Payroll: React.FC = () => {
         const doc = doctors.find(d => d.id === selectedDoctorId);
         if (doc) {
             const total = getEffectiveTotal();
+            const period = new Date(selectedYear, selectedMonth - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
             try {
-                const res = await api.invoices.create({
-                    patient: { id: doc.id, name: doc.name, dni: 'DOC-NIF', email: 'doctor@medicore.cloud', birthDate: '01/01/1980' } as any,
-                    items: [{ name: `Liquidación Comisiones ${new Date(selectedYear, selectedMonth - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`, price: total }],
-                    paymentMethod: 'cash',
-                    type: 'rectificative'
+                await api.expenses.create({
+                    date: new Date().toISOString().split('T')[0],
+                    description: `Liquidación Comisiones - ${doc.name} - ${period}`,
+                    category: 'Comision Doctor',
+                    amount: total,
+                    paymentMethod: 'bank_transfer'
                 });
 
                 const newExpense: Expense = {
                     id: `exp-${Date.now()}`,
                     description: `Liquidación Comisiones - ${doc.name}`,
-                    category: 'Comision',
+                    category: 'Comision Doctor',
                     amount: total,
                     date: new Date().toLocaleDateString(),
                     receiver: doc.name,
-                    url: res.url,
-                    paymentMethod: 'cash'
+                    paymentMethod: 'bank_transfer'
                 };
                 setExpenses(prev => [...prev, newExpense]);
-                alert(`✅ Factura de Doctor Generada y Gasto Registrado.\nReferencia: ${res.invoiceNumber}\n(El doctor recibirá su copia automáticamente)`);
+                alert(`✅ Gasto de Liquidación Registrado.\nDoctor: ${doc.name}\nPeriodo: ${period}\nImporte: ${total.toFixed(2)} €`);
             } catch (e) {
-                alert("Error al generar factura de doctor.");
+                alert("Error al registrar el gasto de liquidación.");
                 console.error(e);
             }
         }

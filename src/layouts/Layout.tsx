@@ -37,7 +37,6 @@ const Layout: React.FC = () => {
         { id: 'billing', label: 'Facturación', icon: Activity, path: '/billing' },
         { id: 'stock', label: 'Stock', icon: Package, path: '/stock' },
         { id: 'ai', label: 'Asistente IA', icon: Brain, path: '/ai' },
-        { id: 'liquidations', label: 'Liquidaciones', icon: TrendingUp, path: '/liquidations' },
         { id: 'payroll', label: 'Liquid. Doctores', icon: Users, path: '/payroll' },
         { id: 'users', label: 'Usuarios', icon: UserCog, path: '/users' },
         { id: 'attendance', label: 'Control de Jornada', icon: Clock, path: '/jornada' },
