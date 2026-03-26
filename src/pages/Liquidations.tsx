@@ -121,41 +121,41 @@ export const Liquidations: React.FC = () => {
     const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-8">
+        <div className="min-h-screen bg-white p-8">
             <div className="max-w-7xl mx-auto space-y-8">
 
                 {/* Header */}
                 <div>
                     <div className="flex items-start justify-between gap-4 mb-6">
                         <div>
-                            <h1 className="text-4xl font-black text-white flex items-center gap-3 mb-2">
+                            <h1 className="text-4xl font-black text-slate-900 flex items-center gap-3 mb-2">
                                 <div className="bg-gradient-to-br from-emerald-400 to-teal-500 p-3 rounded-2xl">
                                     <TrendingUp size={32} className="text-white" />
                                 </div>
                                 Liquidaciones Doctores
                             </h1>
-                            <p className="text-slate-300 text-sm font-semibold">Reportes de productividad y cobros por médico</p>
+                            <p className="text-slate-500 text-sm font-semibold">Reportes de productividad y cobros por médico</p>
                         </div>
                         <div className="text-right">
-                            <div className="text-3xl font-black text-emerald-400">{records.length}</div>
-                            <div className="text-xs text-slate-400 font-bold uppercase">Registros</div>
+                            <div className="text-3xl font-black text-emerald-600">{records.length}</div>
+                            <div className="text-xs text-slate-500 font-bold uppercase">Registros</div>
                         </div>
                     </div>
 
                     {/* Summary Stats */}
                     {records.length > 0 && (
                         <div className="grid grid-cols-3 gap-4">
-                            <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
-                                <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Total Cobrado</div>
-                                <div className="text-3xl font-black text-emerald-400">{totalImporte.toFixed(2)}€</div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Total Cobrado</div>
+                                <div className="text-3xl font-black text-emerald-600">{totalImporte.toFixed(2)}€</div>
                             </div>
-                            <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
-                                <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Período</div>
-                                <div className="text-sm font-black text-white">{dateFrom} a {dateTo}</div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Período</div>
+                                <div className="text-sm font-black text-slate-900">{dateFrom} a {dateTo}</div>
                             </div>
-                            <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
-                                <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Doctor</div>
-                                <div className="text-sm font-black text-white">
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Doctor</div>
+                                <div className="text-sm font-black text-slate-900">
                                     {selectedDoctor ? `${selectedDoctor.nombre} ${selectedDoctor.apellido || ''}` : 'Seleccionar'}
                                 </div>
                             </div>
@@ -164,20 +164,20 @@ export const Liquidations: React.FC = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4">
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
                     <div className="flex items-center gap-2 mb-4">
-                        <Filter size={20} className="text-slate-400" />
-                        <h2 className="text-lg font-black text-white">Filtros</h2>
+                        <Filter size={20} className="text-slate-500" />
+                        <h2 className="text-lg font-black text-slate-900">Filtros</h2>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Doctor Selector */}
                         <div>
-                            <label className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2 block">Doctor</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2 block">Doctor</label>
                             <select
                                 value={selectedDoctorId}
                                 onChange={(e) => setSelectedDoctorId(e.target.value)}
-                                className="w-full bg-slate-700 border border-slate-600 text-white px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full bg-white border border-slate-300 text-slate-900 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                             >
                                 <option value="">-- Seleccionar Doctor --</option>
                                 {doctors.map(d => (
@@ -190,23 +190,23 @@ export const Liquidations: React.FC = () => {
 
                         {/* Date From */}
                         <div>
-                            <label className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2 block">Desde</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2 block">Desde</label>
                             <input
                                 type="date"
                                 value={dateFrom}
                                 onChange={(e) => setDateFrom(e.target.value)}
-                                className="w-full bg-slate-700 border border-slate-600 text-white px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full bg-white border border-slate-300 text-slate-900 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                             />
                         </div>
 
                         {/* Date To */}
                         <div>
-                            <label className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2 block">Hasta</label>
+                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2 block">Hasta</label>
                             <input
                                 type="date"
                                 value={dateTo}
                                 onChange={(e) => setDateTo(e.target.value)}
-                                className="w-full bg-slate-700 border border-slate-600 text-white px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full bg-white border border-slate-300 text-slate-900 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                             />
                         </div>
                     </div>
@@ -243,43 +243,43 @@ export const Liquidations: React.FC = () => {
 
                 {/* Results Table */}
                 {records.length > 0 ? (
-                    <div className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                                <thead className="bg-slate-900 border-b border-slate-700">
+                                <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
-                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-300 tracking-wider">Fecha</th>
-                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-300 tracking-wider">Concepto</th>
-                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-300 tracking-wider">Paciente</th>
-                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-300 tracking-wider">NUM</th>
-                                        <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-300 tracking-wider">Importe</th>
+                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Fecha</th>
+                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Concepto</th>
+                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Paciente</th>
+                                        <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">NUM</th>
+                                        <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Importe</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-700">
+                                <tbody className="divide-y divide-slate-200">
                                     {records.map((record) => (
-                                        <tr key={record.id} className="hover:bg-slate-700/50 transition-colors">
-                                            <td className="px-6 py-4 text-slate-200 font-semibold">{record.fecha}</td>
-                                            <td className="px-6 py-4 text-slate-200 font-semibold">{record.concepto}</td>
-                                            <td className="px-6 py-4 text-slate-200 font-semibold">{record.nombrePaciente}</td>
-                                            <td className="px-6 py-4 text-slate-400 text-xs font-bold">{record.numeroHistoria}</td>
-                                            <td className="px-6 py-4 text-right font-black text-emerald-400">{record.importeCobrado.toFixed(2)}€</td>
+                                        <tr key={record.id} className="hover:bg-blue-50/30 transition-colors">
+                                            <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
+                                            <td className="px-6 py-4 text-slate-700 font-semibold">{record.concepto}</td>
+                                            <td className="px-6 py-4 text-slate-700 font-semibold">{record.nombrePaciente}</td>
+                                            <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
+                                            <td className="px-6 py-4 text-right font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</td>
                                         </tr>
                                     ))}
                                     {/* Total Row */}
-                                    <tr className="bg-emerald-500/20 border-t-2 border-emerald-500/50">
-                                        <td colSpan={4} className="px-6 py-4 text-right font-black uppercase text-emerald-300 text-sm">
+                                    <tr className="bg-emerald-50 border-t-2 border-emerald-200">
+                                        <td colSpan={4} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
                                             TOTAL
                                         </td>
-                                        <td className="px-6 py-4 text-right font-black text-emerald-300 text-lg">{totalImporte.toFixed(2)}€</td>
+                                        <td className="px-6 py-4 text-right font-black text-emerald-700 text-lg">{totalImporte.toFixed(2)}€</td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 ) : (
-                    <div className="bg-slate-800 border border-slate-700 rounded-2xl p-12 text-center">
-                        <Wallet size={48} className="mx-auto text-slate-500 mb-4 opacity-50" />
-                        <p className="text-slate-400 font-semibold">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
+                        <Wallet size={48} className="mx-auto text-slate-400 mb-4 opacity-50" />
+                        <p className="text-slate-500 font-semibold">
                             {loading ? 'Cargando liquidaciones...' : 'Selecciona filtros y busca para ver liquidaciones'}
                         </p>
                     </div>

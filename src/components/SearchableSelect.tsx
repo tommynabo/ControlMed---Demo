@@ -34,6 +34,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const [filteredOptions, setFilteredOptions] = useState<SearchableSelectOption[]>(options);
     const containerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
+    const onSearchRef = useRef(onSearch);
+    onSearchRef.current = onSearch;
 
     // Get selected option label
     const selectedOption = options.find(o => o.value === value);
@@ -53,12 +55,13 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         }
     }, [searchQuery, options]);
 
-    // Handle search callback
+    // Handle search callback - use ref to prevent infinite re-render loop
+    // when parent re-renders and creates a new onSearch function reference
     useEffect(() => {
-        if (onSearch && isOpen) {
-            onSearch(searchQuery);
+        if (onSearchRef.current && isOpen) {
+            onSearchRef.current(searchQuery);
         }
-    }, [searchQuery, isOpen, onSearch]);
+    }, [searchQuery, isOpen]);
 
     // Close dropdown when clicking outside
     useEffect(() => {

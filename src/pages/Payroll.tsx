@@ -65,7 +65,8 @@ const Payroll: React.FC = () => {
                     amount: total,
                     date: new Date().toLocaleDateString(),
                     receiver: doc.name,
-                    url: res.url
+                    url: res.url,
+                    paymentMethod: 'cash'
                 };
                 setExpenses(prev => [...prev, newExpense]);
                 alert(`✅ Auto-Factura de Doctor Generada y Gasto Registrado.\nReferencia: ${res.invoiceNumber}\n(El doctor recibirá su copia automáticamente)`);
