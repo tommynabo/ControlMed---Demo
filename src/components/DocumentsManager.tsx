@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Download, Trash2, Upload, FileText, Calendar, User, Eye, Minimize2 } from 'lucide-react';
 
 interface Document {
@@ -31,6 +31,9 @@ export const DocumentsManager: React.FC<DocumentsManagerProps> = ({
     const [loading, setLoading] = useState(false);
     const [filter, setFilter] = useState<'all' | Document['documentType']>('all');
     const [selectedDoc, setSelectedDoc] = useState<Document | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [dragActive, setDragActive] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const DOC_TYPES = {
         'clinical_history': { label: 'Historia Clínica', color: 'bg-blue-100 text-blue-800', icon: '📋' },
@@ -99,6 +102,83 @@ export const DocumentsManager: React.FC<DocumentsManagerProps> = ({
         link.download = doc.fileName;
         // For demo, show alert
         alert(`📥 Descargando: ${doc.fileName}\n\n(En producción, se descargaría desde el servidor)`);
+    };
+
+    const handleFileInput = (files: FileList) => {
+        if (files.length === 0) return;
+
+        Array.from(files).forEach((file) => {
+            // Validate file type and size
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+
+            if (file.size > maxSize) {
+                alert(`❌ El archivo ${file.name} es demasiado grande (máx. 10MB)`);
+                return;
+            }
+
+            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(pdf|doc|docx)$/i)) {
+                alert(`❌ Tipo de archivo no permitido: ${file.type}`);
+                return;
+            }
+
+            // Create a new document entry
+            const newDoc: Document = {
+                id: `doc-${Date.now()}-${Math.random()}`,
+                patientId,
+                fileName: file.name,
+                documentType: 'other',
+                fileSize: file.size,
+                uploadDate: new Date().toISOString().split('T')[0],
+                createdBy: 'Usuario Sistema',
+                description: `Documento subido: ${file.name}`
+            };
+
+            // Add to documents list
+            setDocuments(prev => [newDoc, ...prev]);
+            
+            // Trigger callback
+            if (onDocumentUploaded) {
+                onDocumentUploaded();
+            }
+        });
+
+        // Reset input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileInput(e.dataTransfer.files);
+        }
+    };
+
+    const handleUploadClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            handleFileInput(e.target.files);
+        }
     };
 
     const handleDelete = async (docId: string) => {
@@ -248,10 +328,30 @@ export const DocumentsManager: React.FC<DocumentsManagerProps> = ({
                             </div>
 
                             {/* Upload Section */}
-                            <div className="border-2 border-dashed border-indigo-300 rounded-xl p-8 text-center hover:border-indigo-500 transition-colors cursor-pointer bg-indigo-50 group">
+                            <div
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                onClick={handleUploadClick}
+                                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer group transition-all ${
+                                    dragActive
+                                        ? 'border-indigo-600 bg-indigo-100 scale-105'
+                                        : 'border-indigo-300 bg-indigo-50 hover:border-indigo-500'
+                                }`}
+                            >
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    multiple
+                                    accept=".pdf,.doc,.docx"
+                                    onChange={handleFileChange}
+                                    className="hidden"
+                                    aria-label="Upload documents"
+                                />
                                 <Upload size={32} className="text-indigo-600 mx-auto mb-2 group-hover:scale-110 transition-transform" />
                                 <p className="text-sm font-bold text-slate-900">Arrastra documentos aquí o haz clic para subir</p>
                                 <p className="text-xs text-slate-500 mt-1">PDF, DOC, DOCX (máx. 10MB)</p>
+                                {uploading && <p className="text-xs text-indigo-600 mt-2 font-semibold">⏳ Subiendo...</p>}
                             </div>
 
                             {/* Documents Grid */}

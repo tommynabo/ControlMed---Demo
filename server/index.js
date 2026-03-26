@@ -3137,6 +3137,49 @@ app.get('/api/patients/:patientId/advance-balance', async (req, res) => {
     }
 });
 
+/**
+ * GET SIMPLIFIED BALANCE
+ * Returns just the available balance (saldo a favor)
+ */
+app.get('/api/patients/:patientId/balance', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { patientId } = req.params;
+
+        // Get all advance payments
+        const { data: advances, error: advError } = await supabase
+            .from('Payment')
+            .select('*')
+            .eq('patientId', patientId)
+            .eq('type', 'ADVANCE_PAYMENT')
+            .order('createdAt', { ascending: false });
+
+        if (advError) throw advError;
+
+        // Get all transfers (usage of advance money)
+        const { data: transfers, error: transError } = await supabase
+            .from('Payment')
+            .select('*')
+            .eq('patientId', patientId)
+            .eq('type', 'TRANSFER');
+
+        if (transError) throw transError;
+
+        // Calculate totals
+        const totalAdvanced = advances.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalTransferred = transfers.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const availableBalance = totalAdvanced - totalTransferred;
+
+        res.json({
+            balance: parseFloat(availableBalance.toFixed(2))
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.get('/api/patients/:patientId/payments', async (req, res) => {
     try {
         let supabase;

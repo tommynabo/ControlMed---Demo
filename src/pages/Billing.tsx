@@ -48,6 +48,22 @@ const Billing: React.FC = () => {
     const [treatmentSuggestions, setTreatmentSuggestions] = useState<any[]>([]);
     const [activeSuggestionIdx, setActiveSuggestionIdx] = useState<number | null>(null);
 
+    // Load all services when modal opens
+    useEffect(() => {
+        if (isInvoiceModalOpen && treatmentSuggestions.length === 0) {
+            const loadServices = async () => {
+                try {
+                    const results = await apiService.services.getAll({});
+                    setTreatmentSuggestions(results || []);
+                } catch (err) {
+                    console.error('Error loading services:', err);
+                    setTreatmentSuggestions([]);
+                }
+            };
+            loadServices();
+        }
+    }, [isInvoiceModalOpen]);
+
     const handleTreatmentSearch = async (idx: number, query: string) => {
         handleItemChange(idx, 'name', query);
         setActiveSuggestionIdx(idx);
@@ -57,7 +73,11 @@ const Billing: React.FC = () => {
                 setTreatmentSuggestions(results || []);
             } catch { setTreatmentSuggestions([]); }
         } else {
-            setTreatmentSuggestions([]);
+            // Load all services if query is empty
+            try {
+                const results = await apiService.services.getAll({});
+                setTreatmentSuggestions(results || []);
+            } catch { setTreatmentSuggestions([]); }
         }
     };
 
@@ -163,6 +183,7 @@ const Billing: React.FC = () => {
             setInvoiceStep(1); // Reset to step 1
             setSelectedPatientId('');
             setInvoiceItems([{ name: 'Consulta General', price: 50.0 }]);
+            setTreatmentSuggestions([]); // Clear services for next invoice
 
         } catch (e: any) {
             console.error("Emit Error", e);
@@ -632,29 +653,19 @@ const Billing: React.FC = () => {
                                         {invoiceItems.map((item, idx) => (
                                             <div key={idx} className="flex gap-2 items-center">
                                                 <div className="flex-1 relative">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Buscar tratamiento..."
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none"
+                                                    <select
+                                                        className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
                                                         value={item.name}
-                                                        onChange={(e) => handleTreatmentSearch(idx, e.target.value)}
-                                                        onFocus={() => { setActiveSuggestionIdx(idx); if (item.name.length >= 2) handleTreatmentSearch(idx, item.name); }}
-                                                        onBlur={() => setTimeout(() => setActiveSuggestionIdx(null), 300)}
-                                                    />
-                                                    {activeSuggestionIdx === idx && treatmentSuggestions.length > 0 && (
-                                                        <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto mt-1">
-                                                            {treatmentSuggestions.map((svc: any) => (
-                                                                <div
-                                                                    key={svc.id}
-                                                                    onMouseDown={() => selectTreatmentSuggestion(idx, svc)}
-                                                                    className="px-3 py-2 hover:bg-blue-50 cursor-pointer text-xs font-bold text-slate-700 border-b border-slate-50 last:border-0 flex justify-between"
-                                                                >
-                                                                    <span>{svc.name}</span>
-                                                                    <span className="text-slate-400">{svc.final_price}€</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
+                                                        onChange={(e) => { const selectedService = treatmentSuggestions.find(s => s.name === e.target.value || s.label === e.target.value); if (selectedService) selectTreatmentSuggestion(idx, selectedService); else handleItemChange(idx, 'name', e.target.value); }}
+                                                        onFocus={() => { setActiveSuggestionIdx(idx); handleTreatmentSearch(idx, ''); }}
+                                                    >
+                                                        <option value="">-- Seleccionar Servicio --</option>
+                                                        {treatmentSuggestions && treatmentSuggestions.length > 0 && treatmentSuggestions.map((svc: any) => (
+                                                            <option key={svc.id} value={svc.name || svc.label}>
+                                                                {svc.name || svc.label} - {svc.final_price || svc.price}€
+                                                            </option>
+                                                        ))}
+                                                    </select>
                                                 </div>
                                                 <input
                                                     type="number"

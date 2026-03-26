@@ -89,7 +89,7 @@ const Payroll: React.FC = () => {
     };
 
     return (
-        <div className="p-10 h-full overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="p-10 h-full overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-500 bg-white">
             <div className="max-w-7xl mx-auto space-y-6">
                 {/* Header */}
                 <div>
@@ -105,7 +105,7 @@ const Payroll: React.FC = () => {
                         <select
                             value={selectedDoctorId}
                             onChange={(e) => setSelectedDoctorId(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
                         >
                             <option value="">-- Selecciona Doctor --</option>
                             {doctors.map(d => (
@@ -122,7 +122,7 @@ const Payroll: React.FC = () => {
                         <select
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
                         >
                             {[
                                 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -139,7 +139,7 @@ const Payroll: React.FC = () => {
                         <select
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(Number(e.target.value))}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
                         >
                             {[2024, 2025, 2026, 2027].map(y => (
                                 <option key={y} value={y}>{y}</option>
