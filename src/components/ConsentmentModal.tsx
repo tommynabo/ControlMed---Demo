@@ -232,6 +232,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             content: htmlContent,
             patientName,
             doctorName: 'Dr. General',
+            logo: `${window.location.origin}/logo.jpeg`,
             fileName: `${template.title.replace(/\s+/g, '_')}_${patientName.replace(/\s+/g, '_')}.pdf`
         });
     };

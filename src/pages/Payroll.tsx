@@ -84,9 +84,112 @@ const Payroll: React.FC = () => {
         }));
     };
 
-    const handleDownloadPDF = async () => {
+    const handleDownloadPDF = () => {
         if (!selectedDoctorId || !liquidations) return;
-        alert('⏳ Función de PDF en desarrollo. Use "Registrar Factura Dr." para generar reporte.');
+
+        const logoUrl = `${window.location.origin}/logo.jpeg`;
+        const doctor = liquidations.doctor?.name || 'Doctor';
+        const period = liquidations.period || `${selectedMonth}/${selectedYear}`;
+        const totalGross = liquidations.totals?.totalGross || 0;
+        const totalLabCost = liquidations.totals?.totalLabCost || 0;
+        const totalToPay = getEffectiveTotal();
+
+        const treatmentRows = (liquidations.treatments || []).map((r: any) => {
+            const edit = editedRecords[r.id] || {};
+            const gross = edit.grossAmount !== undefined ? edit.grossAmount : r.grossAmount;
+            const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
+            const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
+            const net = ((+gross) - (+lab)) * ((+rate) / 100);
+            return `<tr>
+                <td>${r.patientName || '—'}</td>
+                <td>${r.treatmentName || '—'}</td>
+                <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : '—'}</td>
+                <td class="right">${(+gross).toFixed(2)} €</td>
+                <td class="right red">-${(+lab).toFixed(2)} €</td>
+                <td class="right">${rate}%</td>
+                <td class="right green">${net.toFixed(2)} €</td>
+            </tr>`;
+        }).join('');
+
+        const w = window.open('', '_blank');
+        if (!w) return;
+
+        const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Liquidación – ${doctor} – ${period}</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        @page { size:A4; margin:16mm 20mm 20mm 20mm; }
+        body { font-family:Arial,Helvetica,sans-serif; font-size:10pt; color:#111827; background:white; }
+        .header { display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:12px; border-bottom:3px solid #111827; margin-bottom:18px; }
+        .header h1 { font-size:16pt; font-weight:900; text-transform:uppercase; letter-spacing:0.5px; }
+        .header .subtitle { font-size:9pt; color:#6b7280; margin-top:4px; }
+        .header img { height:65px; max-width:120px; object-fit:contain; }
+        .meta-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:#d1d5db; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; margin-bottom:18px; }
+        .meta-item { background:white; padding:10px 14px; }
+        .meta-label { font-size:7pt; font-weight:700; text-transform:uppercase; letter-spacing:1px; color:#9ca3af; margin-bottom:4px; }
+        .meta-value { font-size:13pt; font-weight:800; color:#111827; }
+        .meta-value.blue { color:#1d4ed8; font-size:15pt; }
+        table { width:100%; border-collapse:collapse; font-size:9pt; }
+        thead th { background:#111827; color:white; padding:8px 10px; text-align:left; font-size:7.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; }
+        thead th.right { text-align:right; }
+        tbody tr:nth-child(even) { background:#f9fafb; }
+        tbody td { padding:7px 10px; border-bottom:1px solid #f0f0f0; vertical-align:middle; }
+        tbody td.right { text-align:right; }
+        tbody td.red { color:#dc2626; }
+        tbody td.green { color:#15803d; font-weight:700; }
+        tfoot td { background:#111827; color:white; font-weight:700; padding:10px; font-size:10pt; }
+        tfoot td.right { text-align:right; }
+        .footer { margin-top:24px; padding-top:10px; border-top:1px solid #d1d5db; display:flex; justify-content:space-between; font-size:8pt; color:#9ca3af; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>CHC Clínica Dental</h1>
+            <div class="subtitle">LIQUIDACIÓN MENSUAL DE PRODUCCIÓN</div>
+        </div>
+        <img src="${logoUrl}" onerror="this.style.display='none'" />
+    </div>
+    <div class="meta-grid">
+        <div class="meta-item"><div class="meta-label">Doctor</div><div class="meta-value">${doctor}</div></div>
+        <div class="meta-item"><div class="meta-label">Período</div><div class="meta-value">${period}</div></div>
+        <div class="meta-item"><div class="meta-label">Total Bruto</div><div class="meta-value">${totalGross.toFixed(2)} €</div></div>
+        <div class="meta-item"><div class="meta-label">Total a Pagar Dr.</div><div class="meta-value blue">${totalToPay.toFixed(2)} €</div></div>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Paciente</th><th>Tratamiento</th><th>Fecha</th>
+                <th class="right">Importe Bruto</th><th class="right">Coste Lab.</th>
+                <th class="right">% Comis.</th><th class="right">Neto Dr.</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${treatmentRows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:#9ca3af;">Sin tratamientos en este período</td></tr>'}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3">TOTALES DEL PERÍODO</td>
+                <td class="right">${totalGross.toFixed(2)} €</td>
+                <td class="right">-${totalLabCost.toFixed(2)} €</td>
+                <td class="right">—</td>
+                <td class="right">${totalToPay.toFixed(2)} €</td>
+            </tr>
+        </tfoot>
+    </table>
+    <div class="footer">
+        <span>CHC Clínica Dental — Documento de uso interno confidencial</span>
+        <span>Generado el ${new Date().toLocaleString('es-ES')}</span>
+    </div>
+    <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+</body>
+</html>`;
+
+        w.document.write(html);
+        w.document.close();
     };
 
     return (
@@ -94,8 +197,8 @@ const Payroll: React.FC = () => {
             <div className="max-w-7xl mx-auto space-y-6">
                 {/* Header */}
                 <div>
-                    <h1 className="text-4xl font-black text-slate-900">Liquidaciones Mensuales</h1>
-                    <p className="text-slate-500 font-bold mt-2">Gestiona comisiones y pagos a doctores</p>
+                    <h1 className="text-4xl font-black text-slate-900">Liquidaciones de Doctores</h1>
+                    <p className="text-slate-500 font-bold mt-2">Reporte de producción mensual — cuánto corresponde pagar a cada doctor</p>
                 </div>
 
                 {/* Filters */}
@@ -153,9 +256,9 @@ const Payroll: React.FC = () => {
                         <button
                             onClick={handleDownloadPDF}
                             disabled={!selectedDoctorId || isLoading}
-                            className="flex-1 bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2 rounded-lg font-bold text-xs uppercase hover:bg-amber-100 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="flex-1 bg-slate-900 border border-slate-700 text-white px-3 py-2 rounded-lg font-bold text-xs uppercase hover:bg-black transition disabled:opacity-50 flex items-center justify-center gap-2"
                         >
-                            <Download size={14} /> PDF
+                            <Download size={14} /> Exportar PDF
                         </button>
                     </div>
                 </div>

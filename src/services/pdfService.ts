@@ -26,6 +26,7 @@ export const pdfService = {
             patientName = 'Paciente',
             doctorName = 'Dr. General',
             date = new Date().toLocaleDateString('es-ES'),
+            logo = '',
             headerColor = '#1e293b',
             fileName = `${title.replace(/\s+/g, '_')}_${Date.now()}.pdf`
         } = options;
@@ -259,10 +260,13 @@ export const pdfService = {
             <body>
                 <div class="page-container">
                     <!-- HEADER -->
-                    <div class="header">
-                        <div class="clinic-name">🏥 CHC CLÍNICA DENTAL</div>
-                        <h1>${title}</h1>
-                        <p>Documento generado profesionalmente</p>
+                    <div class="header" style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div class="clinic-name">CHC CLÍNICA DENTAL</div>
+                            <h1>${title}</h1>
+                            <p>Documento generado profesionalmente</p>
+                        </div>
+                        ${logo ? `<img src="${logo}" style="height:65px;max-width:120px;object-fit:contain;border-radius:4px;background:white;padding:4px;" onerror="this.style.display='none'" />` : ''}
                     </div>
                     
                     <!-- INFO GRID -->
@@ -315,15 +319,20 @@ export const pdfService = {
             title,
             content,
             patientName = 'Paciente',
+            logo = '',
             fileName = `${title.replace(/\s+/g, '_')}.pdf`
         } = options;
 
         const htmlContent = `
             <div style="font-family: Arial, sans-serif; max-width: 100%; padding: 20px; color: #333;">
-                <h1 style="text-align: center; color: #1e293b; border-bottom: 3px solid #3b82f6; padding-bottom: 10px;">
-                    ${title}
-                </h1>
-                <div style="margin: 20px 0; padding: 15px; background: #f0f9ff; border-left: 4px solid #3b82f6;">
+                <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1e293b;padding-bottom:12px;margin-bottom:20px;">
+                    <div>
+                        <div style="font-size:9px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">CHC Clínica Dental</div>
+                        <h1 style="font-size:18px;font-weight:800;color:#1e293b;">${title}</h1>
+                    </div>
+                    ${logo ? `<img src="${logo}" style="height:60px;max-width:110px;object-fit:contain;" onerror="this.style.display='none'" />` : ''}
+                </div>
+                <div style="margin: 16px 0; padding: 12px 15px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius:4px;">
                     <p><strong>Paciente:</strong> ${patientName}</p>
                     <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
                 </div>
