@@ -4,8 +4,8 @@ import { useAppContext } from '../context/AppContext';
 
 interface Doctor {
     id: string;
-    nombre: string;
-    apellido?: string;
+    name: string;
+    specialization?: string;
 }
 
 interface LiquidationRecord {
@@ -169,7 +169,7 @@ export const Liquidations: React.FC = () => {
                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                                 <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Doctor</div>
                                 <div className="text-sm font-black text-slate-900">
-                                    {selectedDoctor ? `${selectedDoctor.nombre} ${selectedDoctor.apellido || ''}` : 'Seleccionar'}
+                                    {selectedDoctor ? selectedDoctor.name : 'Seleccionar'}
                                 </div>
                             </div>
                         </div>
@@ -196,7 +196,7 @@ export const Liquidations: React.FC = () => {
                                 >
                                     <span className="truncate">
                                         {selectedDoctorId
-                                            ? (() => { const d = doctors.find(x => x.id === selectedDoctorId); return d ? `${d.nombre} ${d.apellido || ''}` : '-- Seleccionar Doctor --'; })()
+                                            ? (() => { const d = doctors.find(x => x.id === selectedDoctorId); return d ? d.name : '-- Seleccionar Doctor --'; })()
                                             : '-- Seleccionar Doctor --'
                                         }
                                     </span>
@@ -220,7 +220,7 @@ export const Liquidations: React.FC = () => {
                                                 className="w-full text-left px-4 py-2.5 text-sm font-semibold hover:bg-emerald-50 border-b border-slate-100 last:border-0"
                                                 style={{ color: '#111827', backgroundColor: selectedDoctorId === d.id ? '#ecfdf5' : 'transparent' }}
                                             >
-                                                {d.nombre} {d.apellido || ''}
+                                                {d.name}
                                             </button>
                                         ))}
                                     </div>
