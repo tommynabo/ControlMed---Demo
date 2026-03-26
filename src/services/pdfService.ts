@@ -2,6 +2,8 @@
  * PDF SERVICE - Generador de PDFs profesionales para la clínica
  * Maneja márgenes, tipografía, formatos y estilos profesionales
  */
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export interface PDFOptions {
     title: string;
@@ -311,8 +313,8 @@ export const pdfService = {
     },
 
     /**
-     * Genera un HTML2PDF formateado (requiere html2pdf.js en el proyecto)
-     * Alternativa más robusta si html2pdf está disponible
+     * Genera un PDF real usando html2canvas + jsPDF
+     * Convierte el HTML a canvas, lo embebe en un PDF descargable
      */
     generatePDFFromHTML: async (options: PDFOptions): Promise<void> => {
         const {
@@ -323,54 +325,104 @@ export const pdfService = {
             fileName = `${title.replace(/\s+/g, '_')}.pdf`
         } = options;
 
+        // Build the full HTML page for rendering
         const htmlContent = `
-            <div style="font-family: Arial, sans-serif; max-width: 100%; padding: 20px; color: #333;">
-                <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid #1e293b;padding-bottom:12px;margin-bottom:20px;">
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #111827; background: white; width: 794px; padding: 40px 50px; }
+                    .doc-header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 12px; border-bottom: 3px solid #111827; margin-bottom: 20px; }
+                    .doc-header h1 { font-size: 14pt; font-weight: 800; text-transform: uppercase; color: #111827; margin-bottom: 3px; }
+                    .doc-header .clinic { font-size: 9pt; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+                    .doc-header img { height: 60px; max-width: 110px; object-fit: contain; }
+                    .meta-row { display: flex; gap: 24px; margin-bottom: 18px; font-size: 9pt; color: #374151; padding: 10px 14px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px; }
+                    .meta-row strong { font-weight: 700; color: #111827; }
+                    .content { line-height: 1.7; }
+                    .content h2 { font-size: 12pt; font-weight: 700; color: #1e293b; margin: 18px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e2e8f0; }
+                    .content h3 { font-size: 10.5pt; font-weight: 600; color: #475569; margin: 12px 0 6px; }
+                    .content p { margin: 6px 0; text-align: justify; }
+                    .doc-footer { margin-top: 40px; padding-top: 10px; border-top: 1px solid #d1d5db; font-size: 8pt; color: #9ca3af; display: flex; justify-content: space-between; }
+                </style>
+            </head>
+            <body>
+                <div class="doc-header">
                     <div>
-                        <div style="font-size:9px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">CHC Clínica Dental</div>
-                        <h1 style="font-size:18px;font-weight:800;color:#1e293b;">${title}</h1>
+                        <div class="clinic">CHC Clínica Dental</div>
+                        <h1>${title}</h1>
                     </div>
-                    ${logo ? `<img src="${logo}" style="height:60px;max-width:110px;object-fit:contain;" onerror="this.style.display='none'" />` : ''}
+                    ${logo ? `<img src="${logo}" onerror="this.style.display='none'" />` : ''}
                 </div>
-                <div style="margin: 16px 0; padding: 12px 15px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius:4px;">
-                    <p><strong>Paciente:</strong> ${patientName}</p>
-                    <p><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
+                <div class="meta-row">
+                    <span><strong>Paciente:</strong> ${patientName}</span>
+                    <span><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</span>
                 </div>
-                ${content}
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
-                    <p>CHC Clínica Dental - Documento confidencial</p>
-                    <p>Generado: ${new Date().toLocaleString('es-ES')}</p>
+                <div class="content">${content}</div>
+                <div class="doc-footer">
+                    <span>CHC Clínica Dental — Documento confidencial</span>
+                    <span>Generado: ${new Date().toLocaleString('es-ES')}</span>
                 </div>
-            </div>
+            </body>
+            </html>
         `;
 
-        // Crear elemento temporal
-        const element = document.createElement('div');
-        element.innerHTML = htmlContent;
-        element.style.padding = '20mm';
+        // Render in a hidden off-screen iframe
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;top:-10000px;left:-10000px;width:794px;height:1123px;border:none;visibility:hidden;';
+        document.body.appendChild(iframe);
 
-        // Usar html2pdf si está disponible
+        await new Promise<void>(resolve => {
+            iframe.onload = () => resolve();
+            iframe.srcdoc = htmlContent;
+        });
+
         try {
-            const opt = {
-                margin: 10,
-                filename: fileName,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, logging: false },
-                jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            };
+            const iframeBody = iframe.contentDocument?.body;
+            if (!iframeBody) throw new Error('iframe body not available');
 
-            // @ts-ignore - html2pdf puede no existir
-            if (window.html2pdf) {
-                // @ts-ignore
-                window.html2pdf().set(opt).from(element).save();
+            // Wait a tick for images/styles
+            await new Promise(r => setTimeout(r, 300));
+
+            const canvas = await html2canvas(iframeBody, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: '#ffffff',
+                logging: false,
+            });
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.95);
+            const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+            const pdfW = pdf.internal.pageSize.getWidth();
+            const pdfH = pdf.internal.pageSize.getHeight();
+            const ratio = canvas.height / canvas.width;
+            const imgH = pdfW * ratio;
+
+            if (imgH <= pdfH) {
+                pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, imgH);
             } else {
-                // Fallback: descargar HTML como texto
-                pdfService.downloadAsHTML(htmlContent, fileName);
+                // Multi-page: slice canvas into A4-height segments
+                const pageHeightPx = Math.floor(canvas.width * (pdfH / pdfW));
+                let yOffset = 0;
+                while (yOffset < canvas.height) {
+                    const sliceCanvas = document.createElement('canvas');
+                    sliceCanvas.width = canvas.width;
+                    sliceCanvas.height = Math.min(pageHeightPx, canvas.height - yOffset);
+                    const ctx = sliceCanvas.getContext('2d')!;
+                    ctx.drawImage(canvas, 0, -yOffset);
+                    const sliceData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+                    if (yOffset > 0) pdf.addPage();
+                    pdf.addImage(sliceData, 'JPEG', 0, 0, pdfW, pdfH * (sliceCanvas.height / pageHeightPx));
+                    yOffset += pageHeightPx;
+                }
             }
-        } catch (e) {
-            console.warn('html2pdf no disponible, usando fallback:', e);
-            pdfService.downloadAsHTML(htmlContent, fileName);
+
+            pdf.save(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`);
+        } finally {
+            document.body.removeChild(iframe);
         }
     },
 

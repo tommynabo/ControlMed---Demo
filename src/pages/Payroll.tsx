@@ -51,7 +51,7 @@ const Payroll: React.FC = () => {
         if (doc) {
             const total = getEffectiveTotal();
             try {
-                const res = await api.generateInvoice({
+                const res = await api.invoices.create({
                     patient: { id: doc.id, name: doc.name, dni: 'DOC-NIF', email: 'doctor@medicore.cloud', birthDate: '01/01/1980' } as any,
                     items: [{ name: `Liquidación Comisiones ${new Date(selectedYear, selectedMonth - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`, price: total }],
                     paymentMethod: 'cash',
@@ -69,7 +69,7 @@ const Payroll: React.FC = () => {
                     paymentMethod: 'cash'
                 };
                 setExpenses(prev => [...prev, newExpense]);
-                alert(`✅ Auto-Factura de Doctor Generada y Gasto Registrado.\nReferencia: ${res.invoiceNumber}\n(El doctor recibirá su copia automáticamente)`);
+                alert(`✅ Factura de Doctor Generada y Gasto Registrado.\nReferencia: ${res.invoiceNumber}\n(El doctor recibirá su copia automáticamente)`);
             } catch (e) {
                 alert("Error al generar factura de doctor.");
                 console.error(e);

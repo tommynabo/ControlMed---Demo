@@ -4226,47 +4226,47 @@ app.get('/api/liquidations/summary', async (req, res) => {
             return res.status(400).json({ error: 'doctorId is required' });
         }
 
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0, 23, 59, 59);
+        const monthInt = parseInt(month, 10) || new Date().getMonth() + 1;
+        const yearInt  = parseInt(year,  10) || new Date().getFullYear();
+
+        const startDate = new Date(yearInt, monthInt - 1, 1);
+        const endDate   = new Date(yearInt, monthInt, 0, 23, 59, 59);
+
+        // Lookup doctor first — return 404 if not found
+        const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+        if (!doctor) {
+            return res.status(404).json({ error: 'Doctor not found' });
+        }
 
         // Get all liquidations for doctor in period
-        const liquidations = await prisma.liquidation.findMany({
-            where: {
-                doctorId,
-                createdAt: {
-                    gte: startDate,
-                    lte: endDate,
+        let liquidations = [];
+        try {
+            liquidations = await prisma.liquidation.findMany({
+                where: {
+                    doctorId,
+                    createdAt: { gte: startDate, lte: endDate },
                 },
-            },
-            orderBy: { createdAt: 'asc' },
-        });
+                orderBy: { createdAt: 'asc' },
+            });
+        } catch (prismaErr) {
+            // Table may not exist yet in DB — return empty result gracefully
+            console.warn('Liquidation table query failed, returning empty:', prismaErr.message);
+        }
 
         // Calculate totals
-        const totals = {
-            totalGross: 0,
-            totalLabCost: 0,
-            totalCommission: 0,
-            totalToPay: 0,
-        };
-
+        const totals = { totalGross: 0, totalLabCost: 0, totalCommission: 0, totalToPay: 0 };
         liquidations.forEach(liq => {
-            totals.totalGross += liq.grossAmount || 0;
-            totals.totalLabCost += liq.labCost || 0;
-            totals.totalCommission += liq.finalAmount || 0;
-            totals.totalToPay += liq.finalAmount || 0;
+            totals.totalGross      += liq.grossAmount  || 0;
+            totals.totalLabCost    += liq.labCost      || 0;
+            totals.totalCommission += liq.finalAmount  || 0;
+            totals.totalToPay      += liq.finalAmount  || 0;
         });
 
-        const doctor = await prisma.doctor.findUnique({
-            where: { id: doctorId },
-        });
+        const MONTHS = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
         res.json({
-            doctor: {
-                id: doctor.id,
-                name: doctor.name,
-                specialization: doctor.specialization,
-            },
-            period: `${['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][month]} ${year}`,
+            doctor: { id: doctor.id, name: doctor.name, specialization: doctor.specialization },
+            period: `${MONTHS[monthInt]} ${yearInt}`,
             treatments: liquidations,
             totals,
             count: liquidations.length,
