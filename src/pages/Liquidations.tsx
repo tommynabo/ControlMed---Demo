@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
 interface Doctor {
@@ -24,6 +24,8 @@ export const Liquidations: React.FC = () => {
     // State
     const [doctors, setDoctors] = useState<Doctor[]>([]);
     const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+    const [isDoctorDropdownOpen, setIsDoctorDropdownOpen] = useState(false);
+    const doctorDropdownRef = useRef<HTMLDivElement>(null);
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
     const [records, setRecords] = useState<LiquidationRecord[]>([]);
@@ -38,6 +40,17 @@ export const Liquidations: React.FC = () => {
         const now = new Date();
         setDateFrom(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
         setDateTo(now.toISOString().split('T')[0]);
+    }, []);
+
+    // Close doctor dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(e.target as Node)) {
+                setIsDoctorDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const loadDoctors = async () => {
@@ -171,22 +184,48 @@ export const Liquidations: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {/* Doctor Selector */}
+                        {/* Doctor Selector - custom dropdown to avoid OS dark-mode overrides */}
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2 block">Doctor</label>
-                            <select
-                                value={selectedDoctorId}
-                                onChange={(e) => setSelectedDoctorId(e.target.value)}
-                                className="w-full bg-white border border-slate-300 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
-                                style={{ color: '#111827', backgroundColor: '#ffffff' }}
-                            >
-                                <option value="" style={{ color: '#111827', backgroundColor: '#ffffff' }}>-- Seleccionar Doctor --</option>
-                                {doctors.map(d => (
-                                    <option key={d.id} value={d.id} style={{ color: '#111827', backgroundColor: '#ffffff' }}>
-                                        {d.nombre} {d.apellido || ''}
-                                    </option>
-                                ))}
-                            </select>
+                            <div ref={doctorDropdownRef} className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsDoctorDropdownOpen(o => !o)}
+                                    className="w-full flex items-center justify-between bg-white border border-slate-300 rounded-lg px-4 py-3 font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 hover:border-slate-400 transition-colors"
+                                    style={{ color: selectedDoctorId ? '#111827' : '#6b7280' }}
+                                >
+                                    <span className="truncate">
+                                        {selectedDoctorId
+                                            ? (() => { const d = doctors.find(x => x.id === selectedDoctorId); return d ? `${d.nombre} ${d.apellido || ''}` : '-- Seleccionar Doctor --'; })()
+                                            : '-- Seleccionar Doctor --'
+                                        }
+                                    </span>
+                                    <ChevronDown size={16} className={`flex-shrink-0 ml-2 transition-transform ${isDoctorDropdownOpen ? 'rotate-180' : ''}`} style={{ color: '#6b7280' }} />
+                                </button>
+                                {isDoctorDropdownOpen && (
+                                    <div className="absolute top-full left-0 right-0 mt-1 rounded-lg shadow-xl z-50 max-h-60 overflow-y-auto" style={{ backgroundColor: '#ffffff', border: '1px solid #d1d5db' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setSelectedDoctorId(''); setIsDoctorDropdownOpen(false); }}
+                                            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 border-b border-slate-100"
+                                            style={{ color: '#6b7280', backgroundColor: 'transparent' }}
+                                        >
+                                            -- Seleccionar Doctor --
+                                        </button>
+                                        {doctors.map(d => (
+                                            <button
+                                                key={d.id}
+                                                type="button"
+                                                onClick={() => { setSelectedDoctorId(d.id); setIsDoctorDropdownOpen(false); }}
+                                                className="w-full text-left px-4 py-2.5 text-sm font-semibold hover:bg-emerald-50 border-b border-slate-100 last:border-0"
+                                                style={{ color: '#111827', backgroundColor: selectedDoctorId === d.id ? '#ecfdf5' : 'transparent' }}
+                                            >
+                                                {d.nombre} {d.apellido || ''}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Date From */}
