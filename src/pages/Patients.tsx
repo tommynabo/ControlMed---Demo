@@ -19,6 +19,7 @@ import { BudgetModal } from '../components/BudgetModal';
 import { PrescriptionModal } from '../components/PrescriptionModal';
 import { ConsentmentModal } from '../components/ConsentmentModal';
 import { DocumentsManager } from '../components/DocumentsManager';
+import { PatientBalance } from '../components/PatientBalance';
 import { DOCTORS, DENTAL_SERVICES } from '../constants';
 import { PlanTratamientoTab } from '../components/PlanTratamientoTab';
 
@@ -947,6 +948,13 @@ const Patients: React.FC = () => {
                                         </button>
                                     )}
                                 </div>
+
+                                {/* PATIENT BALANCE COMPONENT */}
+                                <PatientBalance
+                                    patientId={selectedPatient.id}
+                                    onAddBalance={() => setIsPaymentModalOpen(true)}
+                                    onUseBalance={() => setPatientTab('billing')}
+                                />
 
                                 {/* MEDICAL ALERTS BANNER (FRANKEN LOGIC) */}
                                 {(selectedPatient.allergies || selectedPatient.medications || (selectedPatient.medicalHistory && selectedPatient.medicalHistory.length > 0)) && (

@@ -9,6 +9,7 @@ import Billing from './src/pages/Billing';
 import Stock from './src/pages/Stock';
 import AI from './src/pages/AI';
 import Payroll from './src/pages/Payroll';
+import { Liquidations } from './src/pages/Liquidations';
 import CashRegister from './src/pages/CashRegister';
 import Settings from './src/pages/Settings';
 import Login from './src/pages/Login';
@@ -35,6 +36,7 @@ const App: React.FC = () => {
             <Route path="billing" element={<ProtectedRoute pageId="billing"><Billing /></ProtectedRoute>} />
             <Route path="stock" element={<ProtectedRoute pageId="stock"><Stock /></ProtectedRoute>} />
             <Route path="ai" element={<ProtectedRoute pageId="ai"><AI /></ProtectedRoute>} />
+            <Route path="liquidations" element={<ProtectedRoute pageId="liquidations"><Liquidations /></ProtectedRoute>} />
             <Route path="payroll" element={<ProtectedRoute pageId="payroll"><Payroll /></ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute pageId="settings"><Settings /></ProtectedRoute>} />
             <Route path="users" element={<ProtectedRoute pageId="users"><UserManagement /></ProtectedRoute>} />
