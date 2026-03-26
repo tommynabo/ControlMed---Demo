@@ -53,7 +53,7 @@ const Billing: React.FC = () => {
         setActiveSuggestionIdx(idx);
         if (query.length >= 2) {
             try {
-                const results = await apiService.services.search(query);
+                const results = await apiService.services.getAll({ search: query });
                 setTreatmentSuggestions(results || []);
             } catch { setTreatmentSuggestions([]); }
         } else {
@@ -639,7 +639,7 @@ const Billing: React.FC = () => {
                                                         value={item.name}
                                                         onChange={(e) => handleTreatmentSearch(idx, e.target.value)}
                                                         onFocus={() => { setActiveSuggestionIdx(idx); if (item.name.length >= 2) handleTreatmentSearch(idx, item.name); }}
-                                                        onBlur={() => setTimeout(() => setActiveSuggestionIdx(null), 200)}
+                                                        onBlur={() => setTimeout(() => setActiveSuggestionIdx(null), 300)}
                                                     />
                                                     {activeSuggestionIdx === idx && treatmentSuggestions.length > 0 && (
                                                         <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto mt-1">

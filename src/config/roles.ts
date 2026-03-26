@@ -21,10 +21,10 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export const ROLE_ALLOWED_PAGES: Record<UserRole, string[]> = {
     ADMIN: [
         'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'billing',
-        'stock', 'ai', 'payroll', 'settings', 'users', 'attendance',
+        'stock', 'ai', 'liquidations', 'payroll', 'settings', 'users', 'attendance',
     ],
     RECEPTION: [
-        'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'billing', 'stock', 'attendance', 'settings',
+        'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'billing', 'stock', 'liquidations', 'attendance', 'settings',
     ],
     AUXILIAR: [
         'dashboard', 'patients', 'agenda', 'attendance',
@@ -44,6 +44,7 @@ export const ROUTE_TO_PAGE: Record<string, string> = {
     '/billing': 'billing',
     '/stock': 'stock',
     '/ai': 'ai',
+    '/liquidations': 'liquidations',
     '/payroll': 'payroll',
     '/settings': 'settings',
     '/users': 'users',
