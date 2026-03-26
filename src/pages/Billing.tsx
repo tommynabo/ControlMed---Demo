@@ -53,7 +53,7 @@ const Billing: React.FC = () => {
         setActiveSuggestionIdx(idx);
         if (query.length >= 2) {
             try {
-                const results = await apiService.services.getAll({ search: query });
+                const results = await apiService.services.search(query);
                 setTreatmentSuggestions(results || []);
             } catch { setTreatmentSuggestions([]); }
         } else {
@@ -63,8 +63,8 @@ const Billing: React.FC = () => {
 
     const selectTreatmentSuggestion = (idx: number, service: any) => {
         const newItems = [...invoiceItems];
-        newItems[idx].name = service.name;
-        newItems[idx].price = service.final_price || 0;
+        newItems[idx].name = service.label || service.name;
+        newItems[idx].price = service.price || service.final_price || 0;
         setInvoiceItems(newItems);
         setTreatmentSuggestions([]);
         setActiveSuggestionIdx(null);

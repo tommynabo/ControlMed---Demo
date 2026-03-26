@@ -1,0 +1,28 @@
+USUARIO;TIPO;ESTADO;NIVEL;DETALLES;FECHA;"FECHA CREACION";PRIVADO;"RELACIONADO CON";PROPIETARIO
+Almudena;CONTACTO;Programada;3;"LLAMAR PARA REVISION DRA CONCEJERO";"2026-02-04 10:00:00";"2025-06-06 13:07:08";SI;"13. MARIA TERESA ROVIRALTA SALCEDA [696004557]";Almudena
+Almudena;CONTACTO;Finalizada;3;"Llamar para ver si se ha hecho la tele y si sigue interesada en ortodoncia";"2025-08-18 10:00:00";"2025-07-10 16:57:57";NO;"71. JIAYI GUO [642155027]";Almudena
+Almudena;CONTACTO;Programada;2;"REV LIMPIEZA 6 MESES";"2026-03-12 19:09:00";"2025-09-12 19:10:52";NO;"141.MARCELO MONTORI ARBUES [669621210]";Almudena
+Almudena;CONTACTO;Programada;2;"REV 6 MESES CON DR PABLO";"2026-03-16 17:09:00";"2025-09-16 17:10:17";NO;"95. DANIEL JORGE BLANCO [699671000]";Almudena
+Almudena;CONTACTO;Finalizada;2;"llamar Recall de Higiene.";"2025-11-10 12:30:00";"2025-10-06 13:09:36";NO;"29.MATEO YAACOUB [654404250]";Almudena
+"CHC Clinica Dental";CONTACTO;Finalizada;2;"llamar para Control después de 6 meses. Claudia";"2025-12-01 10:00:00";"2025-10-07 12:49:53";NO;"47. NICOLAS FERNANDEZ ROMAN [933327130]";"CHC Clinica Dental"
+Almudena;CONTACTO;Programada;2;"LLAMAR Y CITAR PARA REV IOI, Y TOMAR MEDIDAS PARA CORONAS S/I CON DR KEVIN";"2026-02-02 16:46:00";"2025-10-09 16:48:06";SI;"93. TEODOSIA PEREZ IGLESIAS [699820217]";Almudena
+Almudena;CONTACTO;Programada;2;"Llamar y citar con Dr Kevin para coronas s/i";"2026-02-02 13:39:00";"2025-10-09 19:40:49";SI;"50. AGUSTIN PASAMAR BERMEJO [679163444]";Almudena
+Almudena;CONTACTO;Programada;2;"REV 6 MESES Y LIMPIEZA CON DR KEVIN";"2026-02-02 10:03:00";"2025-10-13 20:04:01";SI;"75. ION CUCOS [687157492]";Almudena
+Almudena;CONTACTO;Programada;2;"LLAMARA PARA REV Y MEDIDAS PARA SOBREDENTADURA S/I";"2026-01-08 15:33:00";"2025-10-16 15:34:33";SI;"46. FRANCISCO ORTEGA [655828266]";Almudena
+Almudena;CONTACTO;Programada;2;"REV CON DR KEVIN";"2026-01-12 17:23:00";"2025-10-17 17:23:56";NO;"29. MATEO YAACOUB [654404250]";Almudena
+"CHC Clinica Dental";CONTACTO;Finalizada;2;"llamar paciente para recaptar y enviar presupuestos ajustado, para esta fecha debe estar devuelta de su viaje. clau";"2025-11-24 09:30:00";"2025-10-22 17:35:11";NO;"107. DIEGO SAGRA SANCHEZ [682140101]";CLAUDIA
+Almudena;CONTACTO;Programada;2;"llamar para programar cita, Se le dio en oct presus de ioi";"2026-01-12 10:00:00";"2025-10-30 13:42:36";SI;"197. REMEDIOS ESCALANTE CANTARERO [934318180]";Almudena
+Almudena;CONTACTO;Finalizada;2;"LLAMAR PARA AGENDAR CON DR KEVIN PARA PROVIS";"2025-11-24 17:34:00";"2025-11-06 16:02:38";SI;"138. MARTIN NAVARRO VALLECILLO [645923882]";Almudena
+Almudena;CONTACTO;Programada;2;"rev limpieza con Dr Alvaro cada 6 meses ir programando";"2026-01-13 18:17:00";"2025-11-06 18:19:31";SI;"201. ELISABETH JODOROVICH [656412059]";Almudena
+"CHC Clinica Dental";CONTACTO;Finalizada;2;"Recall despues de 6 meses para higiene.clau";"2025-11-28 10:30:00";"2025-11-20 12:44:43";NO;"45. MILAGROS QUINTERO MENDOZA [645406743]";"CHC Clinica Dental"
+"CHC Clinica Dental";CONTACTO;Finalizada;2;"he llamado el 20/11, volver a llamar para hacer higiene despues de 6 meses.clau";"2025-11-28 16:00:00";"2025-11-20 12:49:35";NO;"8. JORDI FERNANDO MEJIA LARA [631746978]";"CHC Clinica Dental"
+"CHC Clinica Dental";CONTACTO;Finalizada;2;"recall despues de 6 meses higiene. clau";"2025-12-04 16:00:00";"2025-11-20 13:14:36";NO;"46. FRANCISCO ORTEGA [655828266]";"CHC Clinica Dental"
+Almudena;CONTACTO;Programada;2;"rev y limpieza de 6 meses con Dr Kevin";"2026-03-02 16:56:00";"2025-11-21 16:57:11";SI;"118. HELENA CAPDEVILA RODRIGUEZ [637911415]";Almudena
+Almudena;CONTACTO;Programada;2;"RECORDATORIO DE OPG Y PLANIFICAR IOI (ALMU 28/11)";"2026-02-13 15:30:00";"2025-11-28 16:53:33";SI;"261. ANTONIA GONZALEZ SERENO [663346906]";Almudena
+Almudena;CONTACTO;Anulada;2;"LLAMAR Y CITAR PARA CORONA S/I 47 CIRU EL 4/12 (ALMU)";"2026-03-04 18:04:00";"2025-12-04 18:05:20";SI;"182. JAVIER OLIVA MARTINEZ [625062338]";Almudena
+Almudena;CONTACTO;Programada;2;"CITAR CON DRA CASTAY PARA REV HAWLEY 10/12(ALMU)";"2026-03-02 12:50:00";"2025-12-10 19:51:52";SI;"258. SUNDARI TURPIN BADIA [635917267]";Almudena
+"CHC Clinica Dental";CONTACTO;Programada;2;"llamar para revisar encias e higiene con Dr Kevin (almu)";"2026-03-02 10:55:00";"2025-12-12 19:00:13";SI;"284. Hsiaowen Feng [699337552]";"CHC Clinica Dental"
+Almudena;CONTACTO;Programada;2;"llamar y citar con Dr Kevin para ver si hacemos el ioi 15/12 almu";"2026-02-02 11:30:00";"2025-12-15 18:30:04";SI;"263. LADISLAO AVILERO  ALTAMIRANO [629748011]";Almudena
+Almudena;CONTACTO;Programada;2;"llamar y citar con Dr Kevin para hacer las coronas s/i almu 15/12";"2026-03-11 12:30:00";"2025-12-15 18:31:02";SI;"263. LADISLAO AVILERO  ALTAMIRANO [629748011]";Almudena
+Almudena;CONTACTO;Programada;2;"LLAMAR PARA REVISAR Y EVALUAR MAS LIMPIEZAS CON DR KEVIN";"2026-02-12 16:30:00";"2026-01-12 16:31:18";SI;"312. ALAN SANCHES ESPIGA [670227104]";Almudena
+"CHC Clinica Dental";CONTACTO;Programada;2;"LLAMAR PARA HIGIENE CON DR KEVIN";"2026-02-13 18:01:00";"2026-01-13 18:02:07";SI;"153. ELENA DEMENTIEVA [662371015]";"CHC Clinica Dental"

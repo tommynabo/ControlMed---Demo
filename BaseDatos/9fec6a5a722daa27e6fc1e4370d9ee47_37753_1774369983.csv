@@ -1,0 +1,23 @@
+PROVEEDOR;PRODUCTO;CODIGO;"CODIGO DE BARRAS";DESCRIPCION;ESTADO;VENTA;TIPO;UNIDADES;"PRECIO COSTO";"PRECIO PUBLICO";IVA;DESCUENTO;"PRECIO FINAL";"AVISO 1";"AVISO 2"
+Anthogyr;Implante;001;;;Baja;NO;Unitario;1;120.00;0;0%;0%;0%;50;20
+LABORDENT;"RES012 REBASADO";002;2025061116252;REBASADO;Baja;NO;Unitario;1;45.00;0;0%;0%;0%;;
+STRAUMANN;"BLT Implante Straumann 3,3 x 10";002;;"REF: 021.3510  LOT: MNYZ9";Alta;SI;Unitario;2;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 3,3 x 10";003;;"REF: 021.3510  LOT: MNYZ9";Baja;NO;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 3,3 x 8";004;;"REF: 021.3508  LOT: MKXH2";Alta;SI;Unitario;2;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 3,3 x 8";005;;"REF: 021.3508  LOT: MKXH2";Baja;NO;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4,1 x 10";007;;"REF: 021.5510  LOT: MAFC6";Alta;SI;Unitario;3;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4,1 x 10";008;;"REF: 021.5510  LOT: MAFC6";Baja;NO;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4,1 x 10";009;;"REF: 021.5510  LOT: MAFC6";Baja;NO;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4,1 x 12";006;;"REF: 021.5512  LOT: MFEC9";Alta;SI;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4,1 x 8";010;;"REF: 021.5508  LOT: MHTL7";Alta;SI;Unitario;2;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4,1 x 8";011;;"REF: 021.5508  LOT: MHTL7";Baja;NO;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4.8 x 10";012;;"REF: 021.7510  LOT: MFZZ4";Alta;SI;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"BLT Implante Straumann 4.8 x 8";013;;"REF: 021.7508  LOT: MANX5";Alta;SI;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"Multiunit IBO (Straumann 3.3  ALT: 1.5)";019;;"REF: HI-33801  LOT: IB2500006";Alta;SI;Unitario;2;0;0;0%;0%;0%;;
+STRAUMANN;"Multiunit IBO (Straumann 3.3  ALT: 2.5)";020;;"REF: HI-33802  LOT: IB2400477";Alta;SI;Unitario;2;0;0;0%;0%;0%;;
+STRAUMANN;"Multiunit IBO (Straumann 3.3  ALT: 3.5)";021;;"REF: HI-33803  LOT: IB2400530";Alta;SI;Unitario;1;0;0;0%;0%;0%;;
+STRAUMANN;"Multiunit IBO (Straumann 4.1 ALT: 1.5)";016;;"REF: HI-41801  LOT: IB2500166";Alta;SI;Unitario;2;0;0;0%;0%;0%;;
+STRAUMANN;"Multiunit IBO (Straumann 4.1 ALT: 2.5)";017;;"REF: 41802  LOT: IB2401328";Alta;SI;Unitario;2;0;0;0%;0%;0%;;
+STRAUMANN;"Multiunit IBO (Straumann 4.1 ALT: 3.5)";018;;"REF: HI-41803  LOT: IB2400148";Alta;SI;Unitario;2;0;0;0%;0%;0%;;
+STRAUMANN;"TL Implante Straumann 4.1 x 10";015;;"REF:043.157S  LOT: KXLR5";Alta;SI;Unitario;1;150.00;150.00;10%;0%;165.00;;
+STRAUMANN;"TL Implante Straumann 4.8 x 10";014;;"REF: 043.063S  LOT: ALZA5";Alta;SI;Unitario;1;150.00;150.00;10%;0%;165.00;;

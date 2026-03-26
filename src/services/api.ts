@@ -398,6 +398,15 @@ export const api = {
         delete: async (id: string): Promise<void> => {
             const res = await fetch(`${API_URL}/clinical-records/${id}`, { method: 'DELETE', headers });
             if (!res.ok) throw new Error('Failed to delete clinical record');
+        },
+        reassignDoctor: async (recordId: string, doctorId: string): Promise<any> => {
+            const res = await fetch(`${API_URL}/clinical-records/${recordId}/reassign-doctor`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ doctorId })
+            });
+            if (!res.ok) throw new Error('Failed to reassign doctor');
+            return res.json();
         }
     },
 
@@ -1160,7 +1169,100 @@ export const api = {
             const res = await fetch(`${API_URL}/agenda-closures/${id}`, { method: 'DELETE', headers });
             if (!res.ok) throw new Error('Failed to delete closure');
         }
+    },
+
+    // Liquidations (BLOQUE 2.1)
+    liquidations: {
+        getSummary: async (doctorId: string, month: number, year: number) => {
+            const res = await fetch(
+                `${API_URL}/liquidations/summary?doctorId=${doctorId}&month=${month}&year=${year}`,
+                { headers }
+            );
+            if (!res.ok) throw new Error('Failed to fetch liquidation summary');
+            return res.json();
+        }
+    },
+
+    // Services (BLOQUE 2.2)
+    services: {
+        search: async (query: string) => {
+            const params = new URLSearchParams({ query });
+            const res = await fetch(`${API_URL}/services/search?${params.toString()}`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        getAll: async (filters?: { search?: string }) => {
+            const params = new URLSearchParams(filters || {});
+            const res = await fetch(`${API_URL}/services/search?${params.toString()}`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        }
+    },
+
+    // Consents (BLOQUE 4.1)
+    consents: {
+        getAll: async (patientId: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/consents`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        create: async (patientId: string, templateId: string, isSigned: boolean = false) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/consents`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ templateId, isSigned })
+            });
+            if (!res.ok) throw new Error('Failed to create consent');
+            return res.json();
+        },
+        update: async (patientId: string, consentId: string, isSigned: boolean) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/consents/${consentId}`, {
+                method: 'PATCH',
+                headers,
+                body: JSON.stringify({ isSigned })
+            });
+            if (!res.ok) throw new Error('Failed to update consent');
+            return res.json();
+        },
+        delete: async (patientId: string, consentId: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/consents/${consentId}`, {
+                method: 'DELETE',
+                headers
+            });
+            if (!res.ok) throw new Error('Failed to delete consent');
+        }
+    },
+
+    // Documents (BLOQUE 4.2)
+    documents: {
+        getAll: async (patientId: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/documents`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
+        create: async (patientId: string, fileName: string, documentType: string, description?: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/documents`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ fileName, documentType, description })
+            });
+            if (!res.ok) throw new Error('Failed to upload document');
+            return res.json();
+        },
+        delete: async (patientId: string, documentId: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/documents/${documentId}`, {
+                method: 'DELETE',
+                headers
+            });
+            if (!res.ok) throw new Error('Failed to delete document');
+        },
+        download: async (patientId: string, documentId: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/documents/${documentId}/download`, { headers });
+            if (!res.ok) throw new Error('Failed to download document');
+            return res.json();
+        }
     }
 };
+
 
 

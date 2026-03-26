@@ -1229,14 +1229,33 @@ app.put('/api/appointments/:id', async (req, res) => {
 
         console.log(`📝 Updating Appointment ${id}:`, JSON.stringify(updates));
 
+        // Validación: ID requerido
+        if (!id || id.trim() === '') {
+            return res.status(400).json({ error: 'ID de cita requerido' });
+        }
+
+        // Validación: Campos obligatorios
+        if (!updates.patientId || !updates.doctorId) {
+            return res.status(400).json({ error: 'Paciente y Doctor son obligatorios' });
+        }
+
         // Sanitization: Convert empty strings to null for UUID fields
         if (typeof updates.budgetId === 'string' && updates.budgetId.trim() === '') updates.budgetId = null;
         if (typeof updates.budgetItemId === 'string' && updates.budgetItemId.trim() === '') updates.budgetItemId = null;
         if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
         if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
+        if (typeof updates.patientId === 'string' && updates.patientId.trim() === '') {
+            return res.status(400).json({ error: 'Paciente es obligatorio' });
+        }
 
         if (updates.date) {
             updates.date = new Date(updates.date).toISOString();
+        }
+
+        // Preserve status if provided, default to current value
+        if (!updates.status) {
+            const current = await prisma.appointment.findUnique({ where: { id } });
+            if (current) updates.status = current.status;
         }
 
         // Remove relation objects from updates to avoid Prisma errors
@@ -1249,14 +1268,20 @@ app.put('/api/appointments/:id', async (req, res) => {
 
         const updatedAppointment = await prisma.appointment.update({
             where: { id: id },
-            data: updates
+            data: updates,
+            include: {
+                patient: true,
+                doctor: true,
+                treatment: true,
+                budget: true
+            }
         });
 
         console.log("✅ Appointment Updated:", updatedAppointment.id);
         res.json(updatedAppointment);
     } catch (e) {
-        console.error("Error updating appointment:", e);
-        res.status(500).json({ error: e.message });
+        console.error("❌ Error updating appointment:", e);
+        res.status(500).json({ error: e.message || 'Error desconocido al actualizar cita' });
     }
 });
 
@@ -4119,6 +4144,134 @@ app.delete('/api/expenses/:id', async (req, res) => {
     }
 });
 
+// ========== BLOQUE 1.3: DOCTOR REASSIGNMENT ==========
+app.put('/api/clinical-records/:recordId/reassign-doctor', async (req, res) => {
+    try {
+        const { recordId } = req.params;
+        const { doctorId } = req.body;
+
+        if (!doctorId) {
+            return res.status(400).json({ error: 'doctorId is required' });
+        }
+
+        const record = await prisma.clinicalRecord.update({
+            where: { id: recordId },
+            data: { authorId: doctorId },
+            include: {
+                patient: true,
+            },
+        });
+
+        console.log(`✅ Clinical Record ${recordId} reassigned to doctor ${doctorId}`);
+        res.json({
+            success: true,
+            message: `Registro clínico de ${record.patient.name} actualizado`,
+            record,
+        });
+    } catch (e) {
+        console.error('Error reassigning doctor:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ========== BLOQUE 2.1: LIQUIDATIONS ENDPOINTS ==========
+app.get('/api/liquidations/summary', async (req, res) => {
+    try {
+        const { doctorId, month, year } = req.query;
+
+        if (!doctorId) {
+            return res.status(400).json({ error: 'doctorId is required' });
+        }
+
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0, 23, 59, 59);
+
+        // Get all liquidations for doctor in period
+        const liquidations = await prisma.liquidation.findMany({
+            where: {
+                doctorId,
+                createdAt: {
+                    gte: startDate,
+                    lte: endDate,
+                },
+            },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        // Calculate totals
+        const totals = {
+            totalGross: 0,
+            totalLabCost: 0,
+            totalCommission: 0,
+            totalToPay: 0,
+        };
+
+        liquidations.forEach(liq => {
+            totals.totalGross += liq.grossAmount || 0;
+            totals.totalLabCost += liq.labCost || 0;
+            totals.totalCommission += liq.finalAmount || 0;
+            totals.totalToPay += liq.finalAmount || 0;
+        });
+
+        const doctor = await prisma.doctor.findUnique({
+            where: { id: doctorId },
+        });
+
+        res.json({
+            doctor: {
+                id: doctor.id,
+                name: doctor.name,
+                specialization: doctor.specialization,
+            },
+            period: `${['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][month]} ${year}`,
+            treatments: liquidations,
+            totals,
+            count: liquidations.length,
+        });
+    } catch (e) {
+        console.error('Error fetching liquidation summary:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ========== BLOQUE 2.2: SERVICES SEARCH ==========
+app.get('/api/services/search', async (req, res) => {
+    try {
+        const { query } = req.query;
+
+        if (!query || query.length < 2) {
+            return res.json([]);
+        }
+
+        const services = await prisma.treatment.findMany({
+            where: {
+                name: {
+                    contains: query,
+                    mode: 'insensitive',
+                },
+            },
+            select: {
+                id: true,
+                name: true,
+                price: true,
+            },
+            take: 20,
+        });
+
+        // Format for frontend
+        const formatted = services.map(s => ({
+            value: s.id,
+            label: s.name,
+            price: s.price,
+        }));
+
+        res.json(formatted);
+    } catch (e) {
+        console.error('Error searching services:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Note: Using regex pattern for Express 5 compatibility
 app.get(/^\/(?!api).*/, (req, res) => {
     // Check if file exists, if not send error (debugging)
@@ -4129,6 +4282,163 @@ app.get(/^\/(?!api).*/, (req, res) => {
             res.status(500).send("Server Error: Could not serve frontend.");
         }
     });
+});
+
+// --- CONSENTMENTS (Block 4.1) ---
+app.post('/api/patients/:patientId/consents', async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const { templateId, isSigned } = req.body;
+
+        if (!patientId || !templateId) {
+            return res.status(400).json({ error: 'patientId and templateId are required' });
+        }
+
+        // Create consent record
+        const consent = await prisma.consent.create({
+            data: {
+                id: require('crypto').randomUUID(),
+                patientId,
+                templateId,
+                title: 'Consentimiento',
+                isSigned: isSigned || false,
+                signedDate: isSigned ? new Date().toISOString() : null,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            }
+        });
+
+        console.log('✅ Consent created:', consent.id);
+        res.json(consent);
+    } catch (e) {
+        console.error('Error creating consent:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/patients/:patientId/consents', async (req, res) => {
+    try {
+        const { patientId } = req.params;
+
+        const consents = await prisma.consent.findMany({
+            where: { patientId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json(consents);
+    } catch (e) {
+        console.error('Error fetching consents:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.patch('/api/patients/:patientId/consents/:consentId', async (req, res) => {
+    try {
+        const { patientId, consentId } = req.params;
+        const { isSigned } = req.body;
+
+        const consent = await prisma.consent.update({
+            where: { id: consentId },
+            data: {
+                isSigned: isSigned || false,
+                signedDate: isSigned ? new Date().toISOString() : null,
+                updatedAt: new Date().toISOString()
+            }
+        });
+
+        console.log('✅ Consent updated:', consentId);
+        res.json(consent);
+    } catch (e) {
+        console.error('Error updating consent:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/patients/:patientId/consents/:consentId', async (req, res) => {
+    try {
+        const { consentId } = req.params;
+
+        await prisma.consent.delete({
+            where: { id: consentId }
+        });
+
+        console.log('✅ Consent deleted:', consentId);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting consent:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// --- DOCUMENTS (Block 4.2) ---
+app.get('/api/patients/:patientId/documents', async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        
+        // In production, fetch from database
+        // For now, return mock data structure
+        const documents = [];
+        
+        res.json(documents);
+    } catch (e) {
+        console.error('Error fetching documents:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/patients/:patientId/documents', async (req, res) => {
+    try {
+        const { patientId } = req.params;
+        const { fileName, documentType, fileUrl, description } = req.body;
+
+        if (!patientId || !fileName || !documentType) {
+            return res.status(400).json({ error: 'patientId, fileName, and documentType are required' });
+        }
+
+        // In production, save file to cloud storage and create DB record
+        const document = {
+            id: require('crypto').randomUUID(),
+            patientId,
+            fileName,
+            documentType,
+            fileSize: 0,
+            uploadDate: new Date().toISOString(),
+            createdBy: 'System',
+            description: description || null
+        };
+
+        console.log('✅ Document uploaded:', document.id);
+        res.status(201).json(document);
+    } catch (e) {
+        console.error('Error uploading document:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.delete('/api/patients/:patientId/documents/:documentId', async (req, res) => {
+    try {
+        const { patientId, documentId } = req.params;
+
+        // In production, delete from cloud storage and DB
+        console.log('✅ Document deleted:', documentId);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting document:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/patients/:patientId/documents/:documentId/download', async (req, res) => {
+    try {
+        const { patientId, documentId } = req.params;
+
+        // In production, stream file from cloud storage
+        console.log('📥 Document download:', documentId);
+        res.json({ message: 'Document download started' });
+    } catch (e) {
+        console.error('Error downloading document:', e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 const PORT = process.env.PORT || 3001;

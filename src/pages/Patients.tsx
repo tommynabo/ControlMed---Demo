@@ -13,9 +13,12 @@ import { PaymentModal } from '../components/PaymentModal';
 import { TransferBalanceModal } from '../components/TransferBalanceModal';
 import { TreatmentsList } from '../components/TreatmentsList';
 import { PaymentsList } from '../components/PaymentsList';
+import ReassignDoctorModal from '../components/ReassignDoctorModal';
 import { FinanceModal } from '../../components/FinanceModal';
 import { BudgetModal } from '../components/BudgetModal';
 import { PrescriptionModal } from '../components/PrescriptionModal';
+import { ConsentmentModal } from '../components/ConsentmentModal';
+import { DocumentsManager } from '../components/DocumentsManager';
 import { DOCTORS, DENTAL_SERVICES } from '../constants';
 import { PlanTratamientoTab } from '../components/PlanTratamientoTab';
 
@@ -118,6 +121,11 @@ const Patients: React.FC = () => {
     const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<ClinicalRecord | null>(null);
     const [newEntryForm, setNewEntryForm] = useState({ treatment: '', price: '', observation: '', specialization: 'General' });
+    
+    // Reassign Doctor Modal
+    const [isReassignDoctorModalOpen, setIsReassignDoctorModalOpen] = useState(false);
+    const [recordToReassign, setRecordToReassign] = useState<any>(null);
+    
     // Templates State
     const [isDocModalOpen, setIsDocModalOpen] = useState(false);
     const [selectedDocTemplate, setSelectedDocTemplate] = useState('');
@@ -589,6 +597,12 @@ const Patients: React.FC = () => {
     const [whatsappTemplates, setWhatsappTemplates] = useState<any[]>([]);
     const [whatsappLogs, setWhatsappLogs] = useState<any[]>([]);
     const [isGeneratingAI, setIsGeneratingAI] = useState(false); // New AI State // New state for history
+
+    // Consentments State (BLOQUE 4.1)
+    const [isConsentmentModalOpen, setIsConsentmentModalOpen] = useState(false);
+
+    // Documents State (BLOQUE 4.2)
+    const [isDocumentsModalOpen, setIsDocumentsModalOpen] = useState(false);
 
     // Fetch templates and logs when modal or tab opens
     React.useEffect(() => {
@@ -1443,6 +1457,7 @@ const Patients: React.FC = () => {
                                                     <div className="flex items-center gap-4">
                                                         <p className="text-[10px] font-bold text-slate-400">{new Date(r.date).toLocaleDateString()}</p>
                                                         <div className="flex gap-2">
+                                                            <button onClick={() => { setRecordToReassign(r); setIsReassignDoctorModalOpen(true); }} className="text-slate-400 hover:text-green-500 transition-colors" title="Reasignar Doctor"><UserCheck size={16} /></button>
                                                             <button onClick={() => { setEditingRecord(r); setIsEditEntryModalOpen(true); }} className="text-slate-400 hover:text-blue-500 transition-colors"><Edit3 size={16} /></button>
                                                             <button onClick={() => handleDeleteRecord(r.id)} className="text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
                                                         </div>
@@ -1716,7 +1731,23 @@ const Patients: React.FC = () => {
                         {
                             patientTab === 'docs' && (
                                 <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
-                                    <h3 className="text-3xl font-black text-slate-900 tracking-tight">Documentos y Plantillas</h3>
+                                    <div className="flex items-center justify-between gap-4">
+                                        <h3 className="text-3xl font-black text-slate-900 tracking-tight">Documentos y Plantillas</h3>
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => setIsDocumentsModalOpen(true)}
+                                                className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase flex items-center gap-2 hover:shadow-lg transition-all"
+                                            >
+                                                <FileText size={18} /> Documentos
+                                            </button>
+                                            <button
+                                                onClick={() => setIsConsentmentModalOpen(true)}
+                                                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl text-sm font-bold uppercase flex items-center gap-2 hover:shadow-lg transition-all"
+                                            >
+                                                <FileText size={18} /> Consentimientos
+                                            </button>
+                                        </div>
+                                    </div>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         {[
                                             { title: 'Consentimiento Informado', icon: <FileText size={24} />, text: 'YO, {{PACIENTE}}, CON DNI {{DNI}}, DOY MI CONSENTIMIENTO PARA EL TRATAMIENTO DE ...' },
@@ -2485,6 +2516,56 @@ const Patients: React.FC = () => {
                     budget={selectedBudgetForFinance}
                     onClose={() => setIsFinanceModalOpen(false)}
                     onSave={handleSaveFinancing}
+                />
+            )}
+
+            {/* Reassign Doctor Modal */}
+            {recordToReassign && (
+                <ReassignDoctorModal
+                    isOpen={isReassignDoctorModalOpen}
+                    onClose={() => {
+                        setIsReassignDoctorModalOpen(false);
+                        setRecordToReassign(null);
+                    }}
+                    recordId={recordToReassign.id}
+                    patientName={selectedPatient?.name || 'Paciente'}
+                    currentDoctorId={recordToReassign.authorId}
+                    dateText={new Date(recordToReassign.date).toLocaleDateString()}
+                    onSuccess={() => {
+                        // Refresh clinical records
+                        if (selectedPatient) {
+                            api.clinicalRecords.getByPatient(selectedPatient.id)
+                                .then(setClinicalRecords)
+                                .catch(e => console.error("Error refreshing records", e));
+                        }
+                    }}
+                />
+            )}
+
+            {/* Consentment Modal (BLOQUE 4.1) */}
+            {selectedPatient && (
+                <ConsentmentModal
+                    isOpen={isConsentmentModalOpen}
+                    onClose={() => setIsConsentmentModalOpen(false)}
+                    patientName={selectedPatient.name}
+                    patientId={selectedPatient.id}
+                    onSaveConsent={async (patientId, templateId, isSigned) => {
+                        try {
+                            await api.consents.create(patientId, templateId, isSigned);
+                        } catch (e) {
+                            throw e;
+                        }
+                    }}
+                />
+            )}
+
+            {/* Documents Modal (BLOQUE 4.2) */}
+            {selectedPatient && (
+                <DocumentsManager
+                    isOpen={isDocumentsModalOpen}
+                    onClose={() => setIsDocumentsModalOpen(false)}
+                    patientName={selectedPatient.name}
+                    patientId={selectedPatient.id}
                 />
             )}
         </div>

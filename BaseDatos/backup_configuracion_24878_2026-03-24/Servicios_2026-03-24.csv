@@ -1,0 +1,106 @@
+SERVICIO;TIPO;IMPORTE;"ES BONO";"NUM. CITAS";ESTADO;COLOR;DURACION;ODONTOGRAMA;DESCRIPCION;"PRECIO COSTE";"PRECIO PUBLICO";IVA;DESCUENTO;RETENCION;"MARGEN CADUCIDAD";MUTUA;ONLINE
+"Primera Visita";Odontología;50;No;1;Activo;18;30;TRATAMIENTO;;0;50;0;0;0;0;;No
+"Extracción Simple";"Cirugía Oral y Maxilofacial";60;No;1;Activo;2;30;EXTRACCIÓN;;0;60;0;0;0;0;;No
+OPG;Odontología;40;No;1;Activo;18;15;TRATAMIENTO;;0;40;0;0;0;0;;No
+"Estudio Implantologico";"Cirugía Oral y Maxilofacial";100;No;1;Activo;2;30;TRATAMIENTO;;0;100;0;0;0;0;;No
+CBCT;Odontología;80;No;1;Activo;18;15;TRATAMIENTO;;0;80;0;0;0;0;;No
+"Obturacion CLASE I";RESTAURADORA;60;No;1;Activo;20;45;TRATAMIENTO;;0;60;0;0;0;0;;No
+"Obturacion CLASE II (OM o OD)";RESTAURADORA;80;No;1;Activo;20;40;TRATAMIENTO;;0;80;0;0;0;0;;No
+"Obturacion CLASE II (MOD)";RESTAURADORA;100;No;1;Activo;20;40;TRATAMIENTO;;0;100;0;0;0;0;;No
+"Obturacion CLASE III";RESTAURADORA;100;No;1;Activo;20;45;TRATAMIENTO;;0;100;0;0;0;0;;No
+"Obturacion CLASE IV";RESTAURADORA;150;No;1;Activo;20;60;TRATAMIENTO;;0;150;0;0;0;0;;No
+"Obturacion CLASE V";RESTAURADORA;80;No;1;Activo;20;30;TRATAMIENTO;;0;80;0;0;0;0;;No
+"Raspado y alisado radicular";PERIODONCIA;100;No;1;Activo;12;30;TRATAMIENTO;;0;100;0;0;0;0;;No
+Tartrectomia;Odontología;60;No;1;Activo;18;30;TRATAMIENTO;;0;60;0;0;0;0;;No
+Mantenemiento;Odontología;95;No;1;Activo;18;45;TRATAMIENTO;;0;95;0;0;0;0;;No
+"Reconstruccion sin poste";RESTAURADORA;80;No;1;Activo;20;40;TRATAMIENTO;;0;80;0;0;0;0;;No
+"Reconstruccion con poste";RESTAURADORA;120;No;1;Activo;20;60;TRATAMIENTO;;0;120;0;0;0;0;;No
+"Extraccion compleja";"Cirugía Oral y Maxilofacial";100;No;1;Activo;2;40;TRATAMIENTO;;0;100;0;0;0;0;;No
+"Carilla de composite";Estetica;200;No;1;Activo;21;60;TRATAMIENTO;;0;200;0;0;0;0;;No
+"Carilla de disilicato o feldespato ";Protesis;400;No;1;Activo;10;60;TRATAMIENTO;;0;400;0;0;0;0;;No
+"Incrusta (Inlay, Onlay, Overlay, Xlay)";Protesis;350;No;1;Activo;10;30;TRATAMIENTO;;0;350;0;0;0;0;;No
+"Corona S/Diente (Zirconia o Metal-Ceramica)";Protesis;450;No;1;Activo;10;40;TRATAMIENTO;;0;450;0;0;0;0;;No
+"Corona S/Implante";Protesis;700;No;1;Activo;10;30;TRATAMIENTO;;0;700;0;0;0;0;;No
+"Provisional S/Diente";Protesis;80;No;1;Activo;10;30;TRATAMIENTO;;0;80;0;0;0;0;;No
+"Provisional S/Implante";Protesis;150;No;1;Activo;10;30;TRATAMIENTO;;0;150;0;0;0;0;;No
+"Extraccion Cordal Quirurgica ";"Cirugía Oral y Maxilofacial";250;No;1;Activo;2;60;TRATAMIENTO;;0;250;0;0;0;0;;No
+"Endodoncia Monoradicular";ENDODONCIA;180;No;1;Activo;24;40;TRATAMIENTO;;0;180;0;0;0;0;;No
+"Endodoncia Biradicular";ENDODONCIA;220;No;1;Activo;24;60;TRATAMIENTO;;0;220;0;0;0;0;;No
+"Endodoncia Multiradicular";ENDODONCIA;260;No;1;Activo;24;90;TRATAMIENTO;;0;260;0;0;0;0;;No
+"ReEndodoncia Monoradicular";ENDODONCIA;180;No;1;Activo;24;60;TRATAMIENTO;;0;180;0;0;0;0;;No
+"ReEndodoncia Biradicular";ENDODONCIA;240;No;1;Activo;24;90;TRATAMIENTO;;0;240;0;0;0;0;;No
+"ReEndodoncia Multiradicular";ENDODONCIA;310;No;1;Activo;24;120;TRATAMIENTO;;0;310;0;0;0;0;;No
+"Protesis Completa Removible";Protesis;750;No;1;Activo;10;30;TRATAMIENTO;;0;750;0;0;0;0;;No
+"Implante Straumann®";"Cirugía Oral y Maxilofacial";700;No;1;Activo;2;45;TRATAMIENTO;;0;700;0;0;0;0;;No
+"Blanqueamiento Domiciliario";Estetica;350;No;1;Activo;21;30;TRATAMIENTO;;0;350;0;0;0;0;;No
+"Blanqueamiento en Clinica";Estetica;450;No;1;Activo;21;75;TRATAMIENTO;;0;450;0;0;0;0;;No
+"Mantenimiento Blanqueamiento ";Estetica;50;No;1;Activo;21;15;TRATAMIENTO;"1 Jeringa";0;50;0;0;0;0;;No
+"Blanqueamiento Interno";Estetica;150;No;1;Activo;21;45;TRATAMIENTO;"Por dientes endodonciados";0;150;0;0;0;0;;No
+Mantenimiento;PERIODONCIA;95;No;1;Activo;12;45;TRATAMIENTO;"Seguir protocolo";0;95;0;0;0;0;;No
+"Ferula de descarga";Odontología;250;No;1;Activo;18;30;TRATAMIENTO;;0;250;0;0;0;0;;No
+Revision;Odontología;;No;1;Activo;18;30;TRATAMIENTO;;0;0;0;0;0;0;;No
+"Re-Cementacion de Corona";Odontología;40;No;1;Activo;18;30;TRATAMIENTO;"Si es menos de 1 año de colocación seria gratis";0;40;0;0;0;0;;No
+"Ajuste de prótesis ";Protesis;200;No;1;Activo;10;30;TRATAMIENTO;"Pulido y rebase blando";0;200;0;0;0;0;;No
+"Deflex de 1 a 3 PIEZAS";Protesis;700;No;1;Activo;10;30;TRATAMIENTO;;0;700;0;0;0;0;;No
+"Deflex de 4 a 6 PIEZAS";Protesis;900;No;1;Activo;10;30;TRATAMIENTO;;0;900;0;0;0;0;;No
+"Deflex mas de 6 PIEZAS";Protesis;1300;No;1;Activo;10;30;TRATAMIENTO;;0;1300;0;0;0;0;;No
+"Esqueletico de 1 a 3 PIEZAS";Protesis;500;No;1;Activo;10;30;TRATAMIENTO;;0;500;0;0;0;0;;No
+"Esqueletico de 4 a 6 PIEZAS";Protesis;750;No;1;Activo;10;30;TRATAMIENTO;;0;750;0;0;0;0;;No
+"Esqueletico mas de 6 PIEZAS";Protesis;1000;No;1;Activo;10;30;TRATAMIENTO;;0;1000;0;0;0;0;;No
+PV+OPG;ORTODONCIA;45;No;1;Activo;32;45;TRATAMIENTO;;0;45;0;0;0;0;;No
+"ESTUDIO ORTODONTICO";ORTODONCIA;150;No;1;Activo;32;45;TRATAMIENTO;;0;150;0;0;0;0;;No
+"Sellador de fosas y fisuras";ODP;60;No;1;Activo;7;45;TRATAMIENTO;;0;60;0;0;0;0;;No
+"Tapar Chimenea";Protesis;25;No;1;Activo;10;15;TRATAMIENTO;;0;25;0;0;0;0;;No
+"Periodontograma + Seriada";PERIODONCIA;60;No;1;Activo;12;30;TRATAMIENTO;;0;60;0;0;0;0;;No
+Fluorizacion;ODP;50;No;1;Activo;7;15;TRATAMIENTO;;0;50;0;0;0;0;;No
+"SOBREDENTADURA HIBRIDA";Protesis;2800;No;1;Activo;10;45;TRATAMIENTO;;0;2800;0;0;0;0;;No
+"SOBREDENTADURA CON 2 LOCATORS";Protesis;1800;No;1;Activo;10;45;TRATAMIENTO;;0;1800;0;0;0;0;;No
+"Injerto de tejido conectivo (1 a 3 piezas)";PERIODONCIA;450;No;1;Activo;12;90;TRATAMIENTO;;0;450;0;0;0;0;;No
+"Injerto de tejido conectivo (>3 piezas)";PERIODONCIA;600;No;1;Activo;12;45;TRATAMIENTO;;0;600;0;0;0;0;;No
+"Injerto libre (para implantes)";PERIODONCIA;360;No;1;Activo;12;90;TRATAMIENTO;;0;360;0;0;0;0;;No
+ADITAMIENTO;Protesis;60;No;1;Activo;10;15;TRATAMIENTO;;0;60;0;0;0;0;;No
+Locators;Protesis;120;No;1;Activo;10;15;TRATAMIENTO;;0;120;0;0;0;0;;No
+Pulpotomia;ODP;80;No;1;Activo;7;45;TRATAMIENTO;;0;80;0;0;0;0;;No
+Pulpectomia;ODP;110;No;1;Activo;7;45;TRATAMIENTO;;0;110;0;0;0;0;;No
+"Profilaxis con fluor para Niños";ODP;80;No;1;Activo;7;45;TRATAMIENTO;;0;80;0;0;0;0;;No
+"Gingivoplastia ";PERIODONCIA;450;No;1;Activo;12;30;TRATAMIENTO;;0;450;0;0;0;0;;No
+"Alargamiento de Corona (por cuadrante)";PERIODONCIA;450;No;1;Activo;12;90;TRATAMIENTO;;0;450;0;0;0;0;;No
+"Ortodoncia Invisible (hasta 6 aliñadores)";ORTODONCIA;1200;No;1;Activo;32;30;TRATAMIENTO;;0;1200;0;0;0;0;;No
+"Ortodoncia Invisible (de 7 a 14 aliñadores)";ORTODONCIA;2000;No;1;Activo;32;30;TRATAMIENTO;;0;2000;0;0;0;0;;No
+"Ortodoncia Invisible (de 15 a 28 aliñadores)";ORTODONCIA;2500;No;1;Activo;32;30;TRATAMIENTO;;0;2500;0;0;0;0;;No
+"Ortodoncia Invisible (de 29 a 42 aliñadores)";ORTODONCIA;3250;No;1;Activo;32;45;TRATAMIENTO;;0;3250;0;0;0;0;;No
+"Ortodoncia Invisible (de 43 a 56 aliñadores)";ORTODONCIA;4000;No;1;Activo;32;30;TRATAMIENTO;;0;4000;0;0;0;0;;No
+"Retención ortodontica";ORTODONCIA;150;No;1;Activo;32;30;TRATAMIENTO;;0;150;0;0;0;0;;No
+"Tratamiento de Ortodoncia (12 meses)";ORTODONCIA;2100;No;1;Activo;32;30;TRATAMIENTO;;0;2100;0;0;0;0;;No
+Bio-Oss;"Cirugía Oral y Maxilofacial";180;No;1;Activo;;45;TRATAMIENTO;;0;180;0;0;0;0;;No
+"Membrana de colageno";"Cirugía Oral y Maxilofacial";180;No;1;Activo;;45;TRATAMIENTO;;0;180;0;0;0;0;;No
+"Preservación alveolar";PERIODONCIA;400;No;1;Activo;12;45;TRATAMIENTO;;0;400;0;0;0;0;;No
+"Quitar ataches de alineadores ";ORTODONCIA;200;No;1;Activo;32;45;TRATAMIENTO;;0;200;0;0;0;0;;No
+"Extracción Cordal NO Quirúrgica ";"Cirugía Oral y Maxilofacial";150;No;1;Activo;;45;TRATAMIENTO;;0;150;0;0;0;0;;No
+"Mensualidad Tratamiento de Ortodoncia";ORTODONCIA;100;No;1;Activo;32;30;TRATAMIENTO;;0;100;0;0;0;0;;No
+"Microtornillos Ortodoncia";ORTODONCIA;120;No;1;Activo;32;15;TRATAMIENTO;;0;120;0;0;0;0;;No
+"Colocación de Brackets (Por Arcada) ";ORTODONCIA;450;No;1;Activo;32;60;TRATAMIENTO;;0;450;0;0;0;0;;No
+"SOBREDENTADURA CON 4 LOCATORS";Protesis;2200;No;1;Activo;10;45;TRATAMIENTO;;0;2200;0;0;0;0;;No
+"FULL ARCH ZIRCONIA MONOLITICA (6 Implantes) + Provisional";Protesis;8000;No;1;Activo;10;45;TRATAMIENTO;;0;8000;0;0;0;0;;No
+EXPLANTACION;"Cirugía Oral y Maxilofacial";120;No;1;Activo;;30;TRATAMIENTO;;0;120;0;0;0;0;;No
+"Colgajo Exploratorio";Odontología;150;No;1;Activo;18;45;TRATAMIENTO;;0;150;0;0;0;0;;No
+"Ferulización 2-3 piezas (por motivos periodontales) ";PERIODONCIA;60;No;1;Activo;12;45;TRATAMIENTO;;0;60;0;0;0;0;;No
+"Cirugia Resectiva (por Cuadrante)";PERIODONCIA;400;No;1;Activo;12;75;TRATAMIENTO;;0;400;0;0;0;0;;No
+"Recubrimiento pulpar (Biodentine)";RESTAURADORA;80;No;1;Activo;20;30;TRATAMIENTO;;0;80;0;0;0;0;;No
+Explantacion;"Cirugía Oral y Maxilofacial";100;No;1;Activo;;45;TRATAMIENTO;;0;100;0;0;0;0;;No
+"Elevación de seno";"Cirugía Oral y Maxilofacial";200;No;1;Activo;;45;TRATAMIENTO;;0;200;0;0;0;0;;No
+"Disyuntor HYRAX";ORTODONCIA;400;No;1;Activo;32;45;TRATAMIENTO;;0;400;0;0;0;0;;No
+"Placa de Expansion (inferior)";ORTODONCIA;250;No;1;Activo;32;45;TRATAMIENTO;;0;250;0;0;0;0;;No
+"Tratamiento ortodóntico interceptivo parcial (2x4)";ORTODONCIA;120;No;1;Activo;32;45;TRATAMIENTO;;0;120;0;0;0;0;;No
+"Compostura de 1 Pieza";Protesis;50;No;1;Activo;10;45;TRATAMIENTO;;0;50;0;0;0;0;;No
+"Alargamiento de Corona (por diente)";PERIODONCIA;200;No;1;Activo;12;45;TRATAMIENTO;;0;200;0;0;0;0;;No
+"Retenedor Hawley";ORTODONCIA;240;No;1;Activo;32;45;TRATAMIENTO;;0;240;0;0;0;0;;No
+"Twin Block";ORTODONCIA;500;No;1;Activo;32;45;TRATAMIENTO;;0;500;0;0;0;0;;No
+KID1;ORTODONCIA;1400;No;1;Activo;32;45;TRATAMIENTO;;0;1400;0;0;0;0;;No
+"Mensualidad Alineadores";ORTODONCIA;140;No;1;Activo;32;30;TRATAMIENTO;;0;140;0;0;0;0;;No
+"Colocación de Alineadores";ORTODONCIA;1400;No;1;Activo;32;45;TRATAMIENTO;;0;1400;0;0;0;0;;No
+"Añadir atache Teflon ";Protesis;160;No;1;Activo;10;15;TRATAMIENTO;;0;160;0;0;0;0;;No
+Mockup;Protesis;60;No;1;Activo;10;45;TRATAMIENTO;;0;60;0;0;0;0;;No
+"Protesis Provisional Removible Parcial de Resina";Protesis;460;No;1;Activo;10;30;TRATAMIENTO;;0;460;0;0;0;0;;No
+"Fenestracion canino incluido";"Cirugía Oral y Maxilofacial";350;No;1;Activo;;45;TRATAMIENTO;;0;350;0;0;0;0;;No
+"Acceso quirúrgico al seno maxilar vía intraoral";"Cirugía Oral y Maxilofacial";1200;No;1;Activo;;90;TRATAMIENTO;;0;1200;0;0;0;0;;No

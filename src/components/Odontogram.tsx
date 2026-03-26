@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2, FileText, Plus, X, Save, Users, Baby } from 'lucide-react';
+import { Search, Trash2, FileText, Plus, X, Save, Users, Baby, Info } from 'lucide-react';
 import { PatientTreatment } from '../../types';
 import { useAppContext } from '../context/AppContext';
 
@@ -9,7 +9,7 @@ interface OdontogramProps {
     onTreatmentsChange?: (treatments: PatientTreatment[]) => void;
 }
 
-// SVG PATHS para dientes
+// SVG PATHS para dientes - Mejorado
 const PATHS = {
     incisor: "M10,5 L20,5 L22,30 L15,45 L8,30 Z",
     canine: "M15,2 L25,10 L22,35 L15,50 L8,35 L5,10 Z",
@@ -70,6 +70,8 @@ export const Odontogram: React.FC<OdontogramProps> = ({
     const [loadingServices, setLoadingServices] = useState(true);
     const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
     const [isSaving, setIsSaving] = useState(false);
+    const [dentitionMode, setDentitionMode] = useState<DentitionMode>('adult');
+    const [showInfo, setShowInfo] = useState(false);
 
     // Fetch services from API
     useEffect(() => {
@@ -99,6 +101,384 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                 .catch(err => console.error("Error cargando tratamientos:", err));
         }
     }, [patientId, api]);
+
+    const filteredServices = services.filter(service => 
+        service.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const getToothTreatments = (toothId: number): PatientTreatment[] => {
+        return treatments.filter(t => t.toothId === toothId);
+    };
+
+    const handleToothClick = (toothId: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!isEditable) return;
+        
+        setSelectedTeeth(prev => 
+            prev.includes(toothId)
+                ? prev.filter(t => t !== toothId)
+                : [...prev, toothId]
+        );
+    };
+
+    const handleAddTreatment = (service: Service) => {
+        if (selectedTeeth.length === 0) return;
+
+        const newTreatments = selectedTeeth.map(toothId => ({
+            id: `temp-${Date.now()}-${toothId}`,
+            patientId,
+            serviceId: service.id,
+            serviceName: service.name,
+            toothId,
+            price: service.final_price,
+            status: 'PENDIENTE' as const
+        }));
+
+        setTreatments([...treatments, ...newTreatments]);
+        onTreatmentsChange?.([...treatments, ...newTreatments]);
+        setSelectedTeeth([]);
+        setSearchTerm('');
+    };
+
+    const handleDeleteTreatment = (treatmentId: string) => {
+        const updated = treatments.filter(t => t.id !== treatmentId);
+        setTreatments(updated);
+        onTreatmentsChange?.(updated);
+    };
+
+    const handleCreateBudget = async () => {
+        if (selectedTreatmentsForBudget.length === 0) return;
+
+        try {
+            setIsSaving(true);
+            const budgetItems = selectedTreatmentsForBudget
+                .map(id => treatments.find(t => t.id === id))
+                .filter(Boolean) as PatientTreatment[];
+
+            await api.budgets.create({
+                patientId,
+                items: budgetItems
+            });
+
+            alert('✅ Presupuesto creado correctamente');
+            setSelectedTreatmentsForBudget([]);
+        } catch (error) {
+            console.error(error);
+            alert("Error: " + (error.message || error));
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSaveTreatments = async () => {
+        if (treatments.filter(t => t.id.startsWith('temp-')).length === 0) return;
+
+        try {
+            setIsSaving(true);
+            await api.treatments.create(treatments.filter(t => t.id.startsWith('temp-')));
+            alert('✅ Tratamientos guardados');
+        } catch (error) {
+            console.error(error);
+            alert("Error: " + (error.message || error));
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="w-full space-y-6">
+            <div className="bg-gradient-to-br from-slate-50 via-white to-violet-50/30 rounded-2xl p-8 border border-slate-200/80 shadow-lg">
+
+                {/* Info Panel */}
+                {showInfo && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start gap-3">
+                        <Info size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-blue-700">
+                            <p className="font-bold mb-1">Cómo usar el odontograma:</p>
+                            <ul className="space-y-1 text-xs">
+                                <li>• Haz clic en los dientes para seleccionarlos</li>
+                                <li>• Busca un tratamiento abajo</li>
+                                <li>• Haz clic en el tratamiento para agregarlo a los dientes seleccionados</li>
+                                <li>• Puedes crear un presupuesto con los tratamientos</li>
+                            </ul>
+                        </div>
+                        <button onClick={() => setShowInfo(false)} className="text-blue-400 hover:text-blue-600">
+                            <X size={16} />
+                        </button>
+                    </div>
+                )}
+
+                {/* Header with Controls */}
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-black uppercase text-slate-500">Dentición:</span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setDentitionMode('adult')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${dentitionMode === 'adult' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                                Adulto
+                            </button>
+                            <button
+                                onClick={() => setDentitionMode('child')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${dentitionMode === 'child' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                                <Baby size={14} className="inline mr-1" /> Infantil
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setShowInfo(!showInfo)}
+                            className="p-2 hover:bg-slate-200 rounded-lg transition-colors text-slate-400 hover:text-slate-600"
+                        >
+                            <Info size={18} />
+                        </button>
+                        <button
+                            onClick={handleSaveTreatments}
+                            disabled={isSaving || !treatments.some(t => t.id.startsWith('temp-'))}
+                            className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-3 rounded-xl text-sm font-black uppercase flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                        >
+                            <Save size={18} />
+                            {isSaving ? 'Guardando...' : 'Guardar'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Odontogram Visual - Mejorado */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 border border-slate-100 shadow-inner overflow-x-auto custom-scrollbar">
+
+                    {/* Adulto Dentition */}
+                    {dentitionMode === 'adult' && (
+                        <div className="flex flex-col items-center gap-6">
+                            {/* Upper Quadrants */}
+                            <div className="flex items-center justify-center gap-8">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q1</p>
+                                    <div className="flex items-center gap-1">
+                                        {ADULT_QUADRANTS.Q1.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q2</p>
+                                    <div className="flex items-center gap-1">
+                                        {ADULT_QUADRANTS.Q2.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Separator */}
+                            <div className="w-full max-w-2xl h-1 bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
+
+                            {/* Lower Quadrants */}
+                            <div className="flex items-center justify-center gap-8">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q4</p>
+                                    <div className="flex items-center gap-1">
+                                        {ADULT_QUADRANTS.Q4.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q3</p>
+                                    <div className="flex items-center gap-1">
+                                        {ADULT_QUADRANTS.Q3.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Child Dentition - Improved Layout */}
+                    {dentitionMode === 'child' && (
+                        <div className="flex flex-col items-center gap-6">
+                            <div className="text-xs font-bold text-violet-600 bg-violet-50 px-4 py-2 rounded-lg">
+                                Dentición Temporal (Infantil)
+                            </div>
+
+                            {/* Upper Child */}
+                            <div className="flex items-center justify-center gap-8 px-12">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q5</p>
+                                    <div className="flex items-center gap-1">
+                                        {CHILD_QUADRANTS.Q5.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} isChild />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q6</p>
+                                    <div className="flex items-center gap-1">
+                                        {CHILD_QUADRANTS.Q6.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} isChild />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="w-full max-w-lg h-1 bg-gradient-to-r from-transparent via-slate-200 to-transparent"></div>
+
+                            {/* Lower Child */}
+                            <div className="flex items-center justify-center gap-8 px-12">
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q8</p>
+                                    <div className="flex items-center gap-1">
+                                        {CHILD_QUADRANTS.Q8.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} isChild />
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-slate-400 text-center mb-2">Q7</p>
+                                    <div className="flex items-center gap-1">
+                                        {CHILD_QUADRANTS.Q7.map(toothId => (
+                                            <Tooth key={toothId} id={toothId} treatments={getToothTreatments(toothId)} isSelected={selectedTeeth.includes(toothId)} onClick={(e) => handleToothClick(toothId, e)} isEditable={isEditable} isChild />
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Selected Teeth Info */}
+                {isEditable && selectedTeeth.length > 0 && (
+                    <div className="mt-6 p-4 bg-violet-50 border border-violet-200 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-black text-violet-900">
+                                Dientes seleccionados: <span className="text-violet-600">{selectedTeeth.join(', ')}</span>
+                            </p>
+                            <button onClick={() => setSelectedTeeth([])} className="text-xs font-bold text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                                <X size={14} /> Limpiar
+                            </button>
+                        </div>
+                        <p className="text-xs text-violet-700">👇 Busca un tratamiento abajo y haz clic para agregarlo</p>
+                    </div>
+                )}
+
+                {/* Search and Services */}
+                {isEditable && (
+                    <div className="mt-8 pt-6 border-t border-slate-200/50">
+                        <label className="text-xs font-black uppercase text-slate-400 mb-3 block">🔍 Buscar Tratamiento</label>
+                        <div className="relative mb-4">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                            <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Ej: Limpieza, Extracción..."
+                                className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all" />
+                        </div>
+                        {searchTerm.length > 0 && (
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {filteredServices.length === 0 ? (
+                                    <div className="col-span-full text-center p-6 text-slate-400 text-sm">No encontrado</div>
+                                ) : (
+                                    filteredServices.map(service => (
+                                        <button key={service.id} onClick={() => handleAddTreatment(service)} disabled={selectedTeeth.length === 0 || !isEditable}
+                                            className="group p-4 bg-white border-2 border-slate-200 rounded-xl hover:border-violet-400 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-left">
+                                            <p className="text-sm font-black text-slate-900 mb-1">{service.name}</p>
+                                            <p className="text-xs font-bold text-violet-600">{service.final_price}€</p>
+                                            <div className="mt-2 flex items-center gap-1 text-xs text-slate-500 group-hover:text-violet-600"><Plus size={12} /><span>Añadir</span></div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Treatments Table */}
+            <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-lg">
+                <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+                    <h4 className="text-lg font-black text-slate-900">📋 Tratamientos ({treatments.length})</h4>
+                    <button onClick={handleCreateBudget} disabled={treatments.length === 0 || !isEditable}
+                        className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-6 py-3 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                        <FileText size={16} /> Presupuestar ({selectedTreatmentsForBudget.length})
+                    </button>
+                </div>
+                <div className="w-full overflow-x-auto">
+                    <div className="min-w-[600px] space-y-2">
+                        <div className="grid grid-cols-12 gap-4 pb-3 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400">
+                            <div className="col-span-1"><input type="checkbox" checked={selectedTreatmentsForBudget.length === treatments.length && treatments.length > 0} onChange={(e) => { e.target.checked ? setSelectedTreatmentsForBudget(treatments.map(t => t.id)) : setSelectedTreatmentsForBudget([]); }} className="w-4 h-4 rounded cursor-pointer" /></div>
+                            <div className="col-span-1">Diente</div><div className="col-span-5">Tratamiento</div><div className="col-span-2">Precio</div><div className="col-span-2">Estado</div><div className="col-span-1 text-right">-</div>
+                        </div>
+                        <div className="space-y-2 mt-4">
+                            {treatments.length === 0 ? (
+                                <div className="text-center py-12 text-slate-400"><p className="text-sm font-bold mb-2">No hay tratamientos</p><p className="text-xs">Selecciona dientes arriba</p></div>
+                            ) : (
+                                treatments.map((treatment) => (
+                                    <div key={treatment.id} className="grid grid-cols-12 gap-4 items-center p-4 bg-slate-50 rounded-xl text-sm border border-slate-100 hover:border-violet-200 transition-colors">
+                                        <div className="col-span-1"><input type="checkbox" checked={selectedTreatmentsForBudget.includes(treatment.id)} onChange={(e) => { e.target.checked ? setSelectedTreatmentsForBudget(prev => [...prev, treatment.id]) : setSelectedTreatmentsForBudget(prev => prev.filter(id => id !== treatment.id)); }} className="w-4 h-4 rounded cursor-pointer" /></div>
+                                        <div className="col-span-1 font-black text-violet-600 text-center text-lg">{treatment.toothId}</div>
+                                        <div className="col-span-5 font-bold text-slate-900">{treatment.serviceName}</div>
+                                        <div className="col-span-2 font-black text-slate-900">{treatment.price}€</div>
+                                        <div className="col-span-2"><span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${treatment.status === 'COMPLETADO' ? 'bg-green-100 text-green-600' : treatment.status === 'EN_PROCESO' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}`}>{treatment.status}</span></div>
+                                        {isEditable && (
+                                            <div className="col-span-1 flex justify-end"><button onClick={() => handleDeleteTreatment(treatment.id)} className="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button></div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                        {treatments.length > 0 && (
+                            <div className="mt-6 pt-6 border-t border-slate-200 flex justify-between items-center">
+                                <p className="text-sm font-bold text-slate-600">Total:</p>
+                                <p className="text-2xl font-black text-slate-900">{treatments.reduce((sum, t) => sum + t.price, 0)}€</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Tooth Component - Mejorado
+const Tooth: React.FC<{
+    id: number;
+    treatments: PatientTreatment[];
+    isSelected: boolean;
+    onClick: (e: React.MouseEvent) => void;
+    isEditable: boolean;
+    isChild?: boolean;
+}> = ({ id, treatments, isSelected, onClick, isEditable, isChild }) => {
+    const shape = getToothShape(id);
+    const hasTreatment = treatments.length > 0;
+
+    return (
+        <div 
+            className={`relative flex flex-col items-center group ${isEditable ? 'cursor-pointer' : 'cursor-default'} ${isChild ? 'w-[36px] md:w-[48px]' : 'w-[40px] md:w-[52px]'}`} 
+            onClick={isEditable ? onClick : undefined}
+        >
+            <div className={`relative transition-all duration-200 ${isSelected ? 'scale-110 -translate-y-1' : isEditable && 'hover:scale-105'}`}>
+                <svg width={isChild ? "36" : "44"} height={isChild ? "50" : "60"} viewBox="0 0 30 50" className="overflow-visible drop-shadow-sm">
+                    <defs>
+                        <linearGradient id={`toothGrad-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor={isSelected ? '#ede9fe' : '#ffffff'} />
+                            <stop offset="100%" stopColor={isSelected ? '#ddd6fe' : '#f1f5f9'} />
+                        </linearGradient>
+                    </defs>
+                    <path d={shape} fill={`url(#toothGrad-${id})`} stroke={isSelected ? '#8b5cf6' : (hasTreatment ? '#f59e0b' : '#cbd5e1')} strokeWidth={isSelected ? 2.5 : 1.5} className="transition-all duration-200" />
+                </svg>
+                {hasTreatment && (
+                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white shadow-sm animate-pulse"></div>
+                )}
+            </div>
+            <span className={`mt-1 text-[9px] font-black transition-colors ${isSelected ? 'text-violet-700' : 'text-slate-500'}`}>{id}</span>
+            {isSelected && isEditable && (
+                <div className="absolute -top-8 bg-violet-600 text-white text-[10px] font-black px-2 py-1 rounded-lg whitespace-nowrap">
+                    Seleccionado
+                </div>
+            )}
+        </div>
+    );
+};
 
     const getToothTreatments = (toothId: number) => treatments.filter(t => t.toothId === toothId);
 

@@ -1647,7 +1647,13 @@ const Agenda: React.FC = () => {
                                 <button
                                     onClick={async () => {
                                         try {
-                                            await api.appointments.update(selectedAppt.id, {
+                                            // Validación: Campos requeridos
+                                            if (!bookingPatientId || !bookingDoctorId || !bookingDate || !bookingTime) {
+                                                alert('❌ Error: Completa todos los campos obligatorios (Paciente, Doctor, Fecha, Hora)');
+                                                return;
+                                            }
+
+                                            const updatePayload = {
                                                 date: `${bookingDate}T00:00:00.000Z`,
                                                 time: bookingTime,
                                                 patientId: bookingPatientId,
@@ -1655,11 +1661,16 @@ const Agenda: React.FC = () => {
                                                 treatmentName: bookingTreatment || null,
                                                 amount: bookingPrice || null,
                                                 duration: bookingDuration,
-                                                observations: bookingObservation,
-                                                visitDetails: bookingVisitDetails,
+                                                observations: bookingObservation || null,
+                                                visitDetails: bookingVisitDetails || null,
                                                 budgetId: bookingBudgetId || null,
-                                                budgetItemId: bookingBudgetItemId || null
-                                            });
+                                                budgetItemId: bookingBudgetItemId || null,
+                                                status: (selectedAppt as any).status || 'Scheduled'
+                                            };
+
+                                            console.log('📝 Updating appointment:', updatePayload);
+                                            const result = await api.appointments.update(selectedAppt.id, updatePayload);
+                                            
                                             // Refresh appointments via context
                                             await refreshAppointments();
                                             setIsAppointmentModalOpen(false);
@@ -1667,10 +1678,11 @@ const Agenda: React.FC = () => {
                                             setSelectedAppt(null);
                                             alert("✅ Cita actualizada con éxito.");
                                         } catch (e: any) {
-                                            alert('Error al actualizar: ' + (e.message || e));
+                                            console.error('❌ Update appointment error:', e);
+                                            alert('❌ Error al actualizar: ' + (e.response?.data?.error || e.message || JSON.stringify(e)));
                                         }
                                     }}
-                                    className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2"
+                                    className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50"
                                 >
                                     <Save size={16} /> Guardar Cambios
                                 </button>

@@ -1,39 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign } from 'lucide-react';
+import { DollarSign, Download, Calendar } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Expense, Doctor, Specialization } from '../../types';
 
 const Payroll: React.FC = () => {
     const { api, setExpenses, doctors } = useAppContext();
-    const [payrollViewMode, setPayrollViewMode] = useState<string>('general');
-    const [liquidations, setLiquidations] = useState<{ records: any[], totalToPay: number } | null>(null);
+    const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
+    const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+    const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+    const [liquidations, setLiquidations] = useState<any>(null);
     const [editedRecords, setEditedRecords] = useState<Record<string, { grossAmount?: number, labCost?: number, commissionRate?: number }>>({});
     const [manualAdjustment, setManualAdjustment] = useState<string>('');
+    const [isLoading, setIsLoading] = useState(false);
 
-    // Fetch Liquidations when view mode changes
+    // Fetch Liquidations when filters change
     useEffect(() => {
         const fetchLiquidations = async () => {
-            if (payrollViewMode === 'general') {
-                setLiquidations(null); // Or fetch global summary
-            } else {
-                try {
-                    // This function is defined in api services but expects arguments
-                    const data = await api.getLiquidations(payrollViewMode);
-                    setLiquidations(data);
-                } catch (e) {
-                    console.error("Error fetching liquidations", e);
-                }
+            if (!selectedDoctorId) return;
+            
+            setIsLoading(true);
+            try {
+                const data = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                setLiquidations(data);
+            } catch (e) {
+                console.error("Error fetching liquidations", e);
+            } finally {
+                setIsLoading(false);
             }
         };
         fetchLiquidations();
-    }, [payrollViewMode, api]);
+    }, [selectedDoctorId, selectedMonth, selectedYear, api]);
 
     const getEffectiveTotal = () => {
         if (manualAdjustment) return parseFloat(manualAdjustment);
-        if (!liquidations) return 0;
+        if (!liquidations || !liquidations.treatments) return 0;
 
         let total = 0;
-        liquidations.records.forEach(r => {
+        liquidations.treatments.forEach((r: any) => {
             const edit = editedRecords[r.id] || {};
             const gross = edit.grossAmount !== undefined ? edit.grossAmount : r.grossAmount;
             const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
@@ -44,13 +47,13 @@ const Payroll: React.FC = () => {
     };
 
     const handleCreateInvoice = async () => {
-        const doc = doctors.find(d => d.id === payrollViewMode);
+        const doc = doctors.find(d => d.id === selectedDoctorId);
         if (doc) {
             const total = getEffectiveTotal();
             try {
                 const res = await api.generateInvoice({
                     patient: { id: doc.id, name: doc.name, dni: 'DOC-NIF', email: 'doctor@medicore.cloud', birthDate: '01/01/1980' } as any,
-                    items: [{ name: `Liquidación Comisiones ${new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`, price: total }],
+                    items: [{ name: `Liquidación Comisiones ${new Date(selectedYear, selectedMonth - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`, price: total }],
                     paymentMethod: 'cash',
                     type: 'rectificative'
                 });
@@ -73,7 +76,6 @@ const Payroll: React.FC = () => {
         }
     }
 
-
     const updateRecord = (id: string, field: keyof typeof editedRecords[string], val: number) => {
         setEditedRecords(prev => ({
             ...prev,
@@ -81,134 +83,208 @@ const Payroll: React.FC = () => {
         }));
     };
 
+    const handleDownloadPDF = async () => {
+        if (!selectedDoctorId || !liquidations) return;
+        alert('⏳ Función de PDF en desarrollo. Use "Registrar Factura Dr." para generar reporte.');
+    };
+
     return (
-        <div className="p-10 h-full flex gap-8 overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="w-64 shrink-0 space-y-2">
-                <button onClick={() => setPayrollViewMode('general')} className={`w-full text-left px-5 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${payrollViewMode === 'general' ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'text-slate-400 hover:bg-slate-50'}`}>Vista General</button>
-                <p className="px-5 pt-4 pb-2 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Doctores</p>
-                {doctors.map(d => (
-                    <button key={d.id} onClick={() => setPayrollViewMode(d.id)} className={`w-full text-left px-5 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${payrollViewMode === d.id ? 'bg-blue-50 text-blue-600 border border-blue-100' : 'text-slate-500 hover:bg-slate-50'}`}>
-                        {d.name}
-                    </button>
-                ))}
-            </div>
-
-            <div className="flex-1 space-y-8">
-                <div className="flex flex-wrap justify-between items-start mb-10 gap-6">
-                    <div>
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Liquidaciones y Comisiones</h3>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">
-                            {payrollViewMode === 'general' ? 'Resumen Global' : `Detalle: ${doctors.find(d => d.id === payrollViewMode)?.name}`}
-                        </p>
-                    </div>
-
-                    {payrollViewMode !== 'general' && (
-                        <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-xl flex flex-col gap-4 min-w-[300px]">
-                            <div className="flex justify-between items-center py-4 border-b border-slate-50">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total a Pagar</span>
-                                <span className="text-2xl font-black text-blue-600">{getEffectiveTotal().toFixed(2)}€</span>
-                            </div>
-
-                            <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 mb-2">
-                                <p className="text-[10px] font-bold text-amber-600 uppercase mb-2">Ajuste Manual (€)</p>
-                                <input
-                                    type="number"
-                                    value={manualAdjustment}
-                                    onChange={(e) => setManualAdjustment(e.target.value)}
-                                    className="w-full bg-white border border-amber-200 rounded-lg px-2 py-1 text-right font-bold"
-                                    placeholder="Sobreescribir Cantidad"
-                                />
-                            </div>
-
-                            <button
-                                onClick={handleCreateInvoice}
-                                className="w-full bg-slate-900 text-white py-3 rounded-xl text-[10px] font-bold uppercase hover:bg-black transition shadow-lg flex justify-center items-center gap-2"
-                            >
-                                <DollarSign size={14} /> Registrar Factura Dr.
-                            </button>
-                        </div>
-                    )}
+        <div className="p-10 h-full overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-7xl mx-auto space-y-6">
+                {/* Header */}
+                <div>
+                    <h1 className="text-4xl font-black text-slate-900">Liquidaciones Mensuales</h1>
+                    <p className="text-slate-500 font-bold mt-2">Gestiona comisiones y pagos a doctores</p>
                 </div>
 
-                {liquidations && liquidations.records && (
+                {/* Filters */}
+                <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* Doctor Selection */}
+                    <div>
+                        <label className="text-[11px] font-bold uppercase text-slate-400 block mb-2">Doctor</label>
+                        <select
+                            value={selectedDoctorId}
+                            onChange={(e) => setSelectedDoctorId(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">-- Selecciona Doctor --</option>
+                            {doctors.map(d => (
+                                <option key={d.id} value={d.id}>
+                                    {d.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Month Selection */}
+                    <div>
+                        <label className="text-[11px] font-bold uppercase text-slate-400 block mb-2">Mes</label>
+                        <select
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            {[
+                                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+                            ].map((m, idx) => (
+                                <option key={idx} value={idx + 1}>{m}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Year Selection */}
+                    <div>
+                        <label className="text-[11px] font-bold uppercase text-slate-400 block mb-2">Año</label>
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            {[2024, 2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-end gap-2">
+                        <button
+                            onClick={handleDownloadPDF}
+                            disabled={!selectedDoctorId || isLoading}
+                            className="flex-1 bg-amber-50 border border-amber-200 text-amber-700 px-3 py-2 rounded-lg font-bold text-xs uppercase hover:bg-amber-100 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            <Download size={14} /> PDF
+                        </button>
+                    </div>
+                </div>
+
+                {/* Summary Card */}
+                {liquidations && (
+                    <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-8 rounded-2xl shadow-lg">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            <div>
+                                <p className="text-blue-100 text-xs font-bold uppercase">Doctor</p>
+                                <p className="text-2xl font-black mt-1">{liquidations.doctor?.name || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p className="text-blue-100 text-xs font-bold uppercase">Período</p>
+                                <p className="text-lg font-black mt-1">{liquidations.period}</p>
+                            </div>
+                            <div>
+                                <p className="text-blue-100 text-xs font-bold uppercase">Total Bruto</p>
+                                <p className="text-2xl font-black text-white mt-1">{liquidations.totals?.totalGross?.toFixed(2)}€</p>
+                            </div>
+                            <div>
+                                <p className="text-blue-100 text-xs font-bold uppercase">Coste Lab</p>
+                                <p className="text-lg font-black text-red-200 mt-1">-{liquidations.totals?.totalLabCost?.toFixed(2)}€</p>
+                            </div>
+                            <div className="bg-blue-500/30 p-4 rounded-xl">
+                                <p className="text-blue-100 text-xs font-bold uppercase">Comisión Final</p>
+                                <p className="text-3xl font-black text-white mt-1">{liquidations.totals?.totalToPay?.toFixed(2)}€</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Table */}
+                {liquidations && liquidations.treatments && liquidations.treatments.length > 0 ? (
                     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                         <div className="w-full overflow-x-auto">
-                            <table className="w-full min-w-max text-left">
-                                <thead className="bg-slate-50 text-[9px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
+                            <table className="w-full min-w-max text-left text-sm">
+                                <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
                                     <tr>
-                                        <th className="p-4">Paciente</th>
-                                        <th className="p-4">Tratamiento</th>
-                                        <th className="p-4">Pago</th>
-                                        <th className="p-4">Fecha</th>
-                                        <th className="p-4 text-right">Importe Bruto</th>
-                                        <th className="p-4 text-right">Coste Lab</th>
-                                        <th className="p-4 text-right">% Comisión</th>
-                                        <th className="p-4 text-right">Neto Dr.</th>
+                                        <th className="px-6 py-4">Paciente</th>
+                                        <th className="px-6 py-4">Tratamiento</th>
+                                        <th className="px-6 py-4">Fecha</th>
+                                        <th className="px-6 py-4 text-right">Importe Bruto</th>
+                                        <th className="px-6 py-4 text-right">Coste Lab</th>
+                                        <th className="px-6 py-4 text-right">% Comisión</th>
+                                        <th className="px-6 py-4 text-right">Neto Dr.</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {liquidations.records.map((r: any) => {
+                                <tbody className="divide-y divide-slate-100">
+                                    {liquidations.treatments.map((r: any) => {
                                         const edit = editedRecords[r.id] || {};
                                         const gross = edit.grossAmount !== undefined ? edit.grossAmount : r.grossAmount;
                                         const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
                                         const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
                                         const final = (gross - lab) * (rate / 100);
 
-                                        // Payment method badge
-                                        const getPaymentBadge = (method: string) => {
-                                            switch (method?.toLowerCase()) {
-                                                case 'wallet': return { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Saldo' };
-                                                case 'cash': return { bg: 'bg-green-100', text: 'text-green-700', label: 'Efectivo' };
-                                                case 'card': return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Tarjeta' };
-                                                case 'transfer': return { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Transf.' };
-                                                default: return { bg: 'bg-slate-100', text: 'text-slate-600', label: method || '-' };
-                                            }
-                                        };
-                                        const paymentBadge = getPaymentBadge(r.paymentMethod);
-
                                         return (
-                                            <tr key={r.id} className="text-xs font-medium text-slate-600 hover:bg-slate-50">
-                                                <td className="p-4 font-bold text-slate-900">{r.patientName || 'Paciente'}</td>
-                                                <td className="p-4 font-medium">{r.treatmentName || 'Tratamiento'}</td>
-                                                <td className="p-4">
-                                                    <span className={`px-2 py-1 rounded-lg text-[9px] font-bold ${paymentBadge.bg} ${paymentBadge.text}`}>
-                                                        {paymentBadge.label}
-                                                    </span>
-                                                </td>
-                                                <td className="p-4">{r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : 'N/A'}</td>
-                                                <td className="p-4 text-right">
+                                            <tr key={r.id} className="hover:bg-slate-50 transition">
+                                                <td className="px-6 py-4 font-bold text-slate-900">{r.patientName || '-'}</td>
+                                                <td className="px-6 py-4 font-medium text-slate-700">{r.treatmentName || '-'}</td>
+                                                <td className="px-6 py-4 text-slate-600">{r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : '-'}</td>
+                                                <td className="px-6 py-4 text-right">
                                                     <input
                                                         type="number"
-                                                        className="w-20 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none transition-all"
+                                                        className="w-24 text-right bg-transparent hover:bg-slate-50 border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none rounded px-1 font-bold transition-all"
                                                         value={gross}
                                                         onChange={e => updateRecord(r.id, 'grossAmount', Number(e.target.value))}
                                                     />€
                                                 </td>
-                                                <td className="p-4 text-right text-rose-400">
+                                                <td className="px-6 py-4 text-right text-red-500 font-bold">
                                                     -<input
                                                         type="number"
-                                                        className="w-16 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-rose-300 focus:border-rose-500 outline-none transition-all text-rose-500"
+                                                        className="w-20 text-right bg-transparent hover:bg-slate-50 border-b border-transparent hover:border-red-300 focus:border-red-500 outline-none rounded px-1 transition-all"
                                                         value={lab}
                                                         onChange={e => updateRecord(r.id, 'labCost', Number(e.target.value))}
                                                     />€
                                                 </td>
-                                                <td className="p-4 text-right text-blue-600">
+                                                <td className="px-6 py-4 text-right">
                                                     <input
                                                         type="number"
-                                                        className="w-12 text-right bg-transparent hover:bg-white border-b border-transparent hover:border-blue-300 focus:border-blue-500 outline-none transition-all text-blue-600 font-bold"
+                                                        className="w-16 text-right bg-transparent hover:bg-slate-50 border-b border-transparent hover:border-blue-300 focus:border-blue-500 outline-none rounded px-1 font-bold transition-all"
                                                         value={rate}
                                                         onChange={e => updateRecord(r.id, 'commissionRate', Number(e.target.value))}
                                                     />%
                                                 </td>
-                                                <td className="p-4 text-right font-bold text-emerald-600 text-sm bg-emerald-50/30">
-                                                    {final.toFixed(2)}€
-                                                </td>
+                                                <td className="px-6 py-4 text-right font-black text-emerald-600 text-base bg-emerald-50">{final.toFixed(2)}€</td>
                                             </tr>
                                         );
                                     })}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Footer with totals */}
+                        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200">
+                            <div className="flex justify-end gap-12">
+                                <div className="text-right">
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Manual Override</p>
+                                    <input
+                                        type="number"
+                                        value={manualAdjustment}
+                                        onChange={(e) => setManualAdjustment(e.target.value)}
+                                        placeholder="Monto personalizado"
+                                        className="mt-1 w-32 text-right bg-white border border-amber-200 rounded-lg px-2 py-1 font-bold text-amber-700"
+                                    />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Total a Pagar</p>
+                                    <p className="text-3xl font-black text-blue-600 mt-1">{getEffectiveTotal().toFixed(2)}€</p>
+                                </div>
+                                <button
+                                    onClick={handleCreateInvoice}
+                                    className="bg-slate-900 hover:bg-black text-white px-6 py-3 rounded-lg font-bold text-xs uppercase transition flex items-center gap-2 self-end shadow-lg"
+                                >
+                                    <DollarSign size={16} /> Registrar Factura
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ) : selectedDoctorId && !isLoading && (
+                    <div className="text-center p-12 text-slate-400">
+                        <Calendar size={32} className="mx-auto mb-2 opacity-50" />
+                        <p className="font-bold">No hay liquidaciones para {liquidations?.period || 'este período'}</p>
+                    </div>
+                )}
+
+                {isLoading && (
+                    <div className="text-center p-12">
+                        <div className="inline-block w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                        <p className="mt-4 text-slate-500 font-bold">Cargando liquidaciones...</p>
                     </div>
                 )}
             </div>

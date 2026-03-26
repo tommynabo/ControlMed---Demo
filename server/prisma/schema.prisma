@@ -102,6 +102,21 @@ model Patient {
   createdAt       DateTime         @default(now())
   payments        Payment[]
   whatsAppLogs    WhatsAppLog[]
+  consents        Consent[]
+}
+
+model Consent {
+  id          String    @id @default(uuid())
+  patientId   String
+  patient     Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  templateId  String
+  title       String
+  isSigned    Boolean   @default(false)
+  signedDate  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([patientId])
 }
 
 model Specialty {
