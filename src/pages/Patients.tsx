@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
-import { Odontogram } from '../components/Odontogram';
+import { Odontogram } from '../components/OdontogramEnhanced';
 import { PaymentModal } from '../components/PaymentModal';
 import { TransferBalanceModal } from '../components/TransferBalanceModal';
 import { TreatmentsList } from '../components/TreatmentsList';

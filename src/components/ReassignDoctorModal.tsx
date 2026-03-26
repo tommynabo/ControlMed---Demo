@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, X, Check, AlertCircle } from 'lucide-react';
+import { User, X, Check, AlertCircle, Users } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { api } from '../services/api';
 
@@ -57,25 +57,32 @@ const ReassignDoctorModal: React.FC<ReassignDoctorModalProps> = ({
         }
     };
 
+    const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
+
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in slide-in-from-bottom-4">
                 {/* Header */}
-                <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+                <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-6 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <User size={20} />
-                        <h2 className="font-bold text-lg">Reasignar Doctor</h2>
+                        <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                            <Users size={20} />
+                        </div>
+                        <div>
+                            <h2 className="font-bold text-lg">Reasignar Doctor</h2>
+                            <p className="text-sm text-purple-100">Cambiar responsable de la entrada</p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="text-blue-200 hover:text-white transition-colors">
+                    <button onClick={onClose} className="text-white/80 hover:text-white transition-colors p-1">
                         <X size={20} />
                     </button>
                 </div>
 
                 {/* Body */}
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-6">
                     {success && (
-                        <div className="bg-green-50 text-green-700 px-4 py-3 rounded-xl text-sm font-bold border border-green-200 flex items-center gap-2">
-                            <Check size={16} /> Doctor actualizado correctamente
+                        <div className="bg-green-50 text-green-700 px-4 py-3 rounded-xl text-sm font-bold border border-green-200 flex items-center gap-2 animate-in slide-in-from-top-2">
+                            <Check size={16} /> ¡Doctor actualizado correctamente!
                         </div>
                     )}
 
@@ -85,54 +92,65 @@ const ReassignDoctorModal: React.FC<ReassignDoctorModalProps> = ({
                         </div>
                     )}
 
-                    {/* Info */}
-                    <div className="bg-slate-50 px-4 py-3 rounded-lg text-sm space-y-2 border border-slate-200">
-                        <p>
-                            <span className="text-slate-500 font-semibold">Paciente:</span>
-                            <span className="text-slate-900 ml-2">{patientName}</span>
-                        </p>
-                        <p>
-                            <span className="text-slate-500 font-semibold">Fecha:</span>
-                            <span className="text-slate-900 ml-2">{dateText}</span>
-                        </p>
-                        <p>
-                            <span className="text-slate-500 font-semibold">Doctor Actual:</span>
-                            <span className="text-slate-900 ml-2">{currentDoctorName}</span>
-                        </p>
+                    {/* Current Doctor Info */}
+                    <div className="bg-gradient-to-br from-slate-50 to-slate-100 px-4 py-4 rounded-xl border border-slate-200 space-y-3">
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wide">Información Actual</p>
+                        <div className="space-y- 2">
+                            <div className="flex justify-between items-start">
+                                <span className="text-slate-600 font-semibold text-sm">Paciente:</span>
+                                <span className="text-slate-900 font-black text-sm">{patientName}</span>
+                            </div>
+                            <div className="flex justify-between items-start">
+                                <span className="text-slate-600 font-semibold text-sm">Fecha:</span>
+                                <span className="text-slate-900 font-black text-sm">{dateText}</span>
+                            </div>
+                            <div className="flex justify-between items-start">
+                                <span className="text-slate-600 font-semibold text-sm">Doctor Actual:</span>
+                                <span className="text-slate-900 font-black text-sm">Dr. {currentDoctorName}</span>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Doctor Selection */}
                     <div>
-                        <label className="text-xs font-bold uppercase text-slate-400 mb-2 block">
-                            Nuevo Doctor
+                        <label className="text-xs font-bold uppercase text-purple-600 mb-3 block tracking-wide flex items-center gap-2">
+                            <Users size={14} /> Nuevo Doctor Responsable
                         </label>
                         <select
                             value={selectedDoctorId}
                             onChange={(e) => setSelectedDoctorId(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                            className="w-full bg-white border-2 border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-400 focus:border-purple-400 transition-all"
                         >
                             <option value="">-- Selecciona un doctor --</option>
                             {doctors.map(d => (
                                 <option key={d.id} value={d.id}>
-                                    {d.name} ({d.specialization})
+                                    {d.name} — {d.specialization}
                                 </option>
                             ))}
                         </select>
+
+                        {selectedDoctor && selectedDoctorId !== currentDoctorId && (
+                            <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                                <p className="text-xs font-semibold text-indigo-700">
+                                    <strong>{selectedDoctor.name}</strong> ({selectedDoctor.specialization}) será asignado como responsable.
+                                </p>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Buttons */}
-                    <div className="flex gap-3 pt-4">
+                    {/* Action Buttons */}
+                    <div className="flex gap-3 pt-4 border-t border-slate-100">
                         <button
                             onClick={onClose}
                             disabled={loading}
-                            className="flex-1 py-2 px-4 bg-slate-200 text-slate-700 font-bold rounded-lg hover:bg-slate-300 transition-colors disabled:opacity-50"
+                            className="flex-1 py-2 px-4 bg-slate-100 text-slate-700 font-bold rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 text-sm"
                         >
                             Cancelar
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={loading || !selectedDoctorId}
-                            className="flex-1 py-2 px-4 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            disabled={loading || !selectedDoctorId || selectedDoctorId === currentDoctorId}
+                            className="flex-1 py-2 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <>

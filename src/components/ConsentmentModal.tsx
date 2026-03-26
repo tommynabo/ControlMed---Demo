@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, FileText, Download, Check } from 'lucide-react';
+import { X, FileText, Download, Check, Printer } from 'lucide-react';
+import { pdfService } from '../services/pdfService';
 
 interface ConsentTemplate {
     id: string;
@@ -182,20 +183,57 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     };
 
     const handleDownloadPDF = (template: ConsentTemplate) => {
-        const content = template.content
+        const formattedContent = template.content
             .replace(/{{PATIENT_NAME}}/g, patientName)
             .replace(/{{TODAY}}/g, new Date().toLocaleDateString('es-ES'))
             .replace(/{{PATIENT_DNI}}/g, 'DNI/Pasaporte')
             .replace(/{{CLINIC_NAME}}/g, 'CHC Clínica Dental')
             .replace(/{{DOCTOR_NAME}}/g, 'Dr. General');
 
-        const element = document.createElement('a');
-        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
-        element.setAttribute('download', `${template.title}_${patientName}.txt`);
-        element.style.display = 'none';
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
+        // Convertir formato de texto a HTML mejorado
+        const htmlContent = `
+            <h2>${template.title}</h2>
+            <div style="white-space: pre-wrap; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.8;">
+                ${formattedContent
+                    .split('\n')
+                    .filter((line: string) => line.trim())
+                    .map((line: string) => {
+                        // Detectar títulos (líneas en mayúsculas)
+                        if (line.match(/^[A-Z][A-Z\s\-:]+$/)) {
+                            return `<h3 style="color: #1e293b; margin-top: 15px; margin-bottom: 8px; font-weight: 600;">${line}</h3>`;
+                        }
+                        // Detectar líneas de firma
+                        if (line.includes('_____') || line.includes('FIRMA')) {
+                            return `<div style="margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                                ${line.split('FIRMA DEL').length > 1 ? 
+                                    `<div style="text-align: center;">
+                                        <div style="border-top: 1px solid #000; margin-bottom: 8px; width: 100%; height: 50px;"></div>
+                                        <span style="font-size: 10pt; color: #666;">FIRMA DEL PACIENTE</span>
+                                    </div>
+                                    <div style="text-align: center;">
+                                        <div style="border-top: 1px solid #000; margin-bottom: 8px; width: 100%; height: 50px;"></div>
+                                        <span style="font-size: 10pt; color: #666;">FIRMA DOCTOR</span>
+                                    </div>`
+                                    : `<div style="text-align: center;">
+                                        <div style="border-top: 1px solid #000; margin-bottom: 8px; width: 100%;"></div>
+                                    </div>`
+                                }
+                            </div>`;
+                        }
+                        // Líneas normales
+                        return `<p style="margin: 6px 0; text-align: justify;">${line}</p>`;
+                    })
+                    .join('')}
+            </div>
+        `;
+
+        pdfService.generatePDFFromHTML({
+            title: template.title,
+            content: htmlContent,
+            patientName,
+            doctorName: 'Dr. General',
+            fileName: `${template.title.replace(/\s+/g, '_')}_${patientName.replace(/\s+/g, '_')}.pdf`
+        });
     };
 
     return (
@@ -277,7 +315,8 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                                 </button>
                                                 <button
                                                     onClick={() => handleDownloadPDF(template)}
-                                                    className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-600 font-bold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1"
+                                                    className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-600 font-bold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1"
+                                                    title="Descargar como PDF"
                                                 >
                                                     <Download size={14} /> PDF
                                                 </button>
@@ -319,9 +358,17 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                 <div className="flex gap-3 pt-4">
                                     <button
                                         onClick={() => handleDownloadPDF(selectedTemplate)}
-                                        className="flex-1 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors"
+                                        className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:shadow-lg hover:scale-[1.02] transition-all"
+                                        title="Descargar como PDF formateado profesionalmente"
                                     >
-                                        <Download size={16} /> Descargar PDF
+                                        <Download size={18} /> Descargar PDF
+                                    </button>
+                                    <button
+                                        onClick={() => window.print()}
+                                        className="flex-1 bg-gradient-to-r from-slate-400 to-slate-500 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:shadow-lg hover:scale-[1.02] transition-all"
+                                        title="Imprimir documento"
+                                    >
+                                        <Printer size={18} /> Imprimir
                                     </button>
                                     {!isSigned(selectedTemplate.id) && (
                                         <button
@@ -329,9 +376,9 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                                 handleSignConsent(selectedTemplate);
                                                 setSelectedTemplate(null);
                                             }}
-                                            className="flex-1 bg-green-600 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-700 transition-colors"
+                                            className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:shadow-lg hover:scale-[1.02] transition-all"
                                         >
-                                            <Check size={16} /> Registrar Firma
+                                            <Check size={18} /> Registrar Firma
                                         </button>
                                     )}
                                 </div>
