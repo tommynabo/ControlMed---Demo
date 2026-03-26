@@ -4,8 +4,9 @@ import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye
+    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X
 } from 'lucide-react';
+import { pdfService } from '../services/pdfService';
 import { useAppContext } from '../context/AppContext';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
 import { Odontogram } from '../components/OdontogramEnhanced';
@@ -132,6 +133,7 @@ const Patients: React.FC = () => {
     const [isDocModalOpen, setIsDocModalOpen] = useState(false);
     const [selectedDocTemplate, setSelectedDocTemplate] = useState('');
     const [docContent, setDocContent] = useState('');
+    const [docViewMode, setDocViewMode] = useState<'edit' | 'preview'>('edit');
 
     // Treatments
     const [isFinanceModalOpen, setIsFinanceModalOpen] = useState(false);
@@ -2236,40 +2238,115 @@ const Patients: React.FC = () => {
             {
                 isDocModalOpen && (
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
-                        <div className="bg-white max-w-2xl w-full rounded-[2rem] p-8 shadow-2xl h-[80vh] flex flex-col">
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-2xl font-black text-slate-900">{selectedDocTemplate}</h3>
-                                <button onClick={() => setIsDocModalOpen(false)} className="text-slate-400 hover:text-slate-600">✕</button>
-                            </div>
+                        <div className="bg-white max-w-3xl w-full rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
 
-                            <div className="flex-1 overflow-hidden flex flex-col gap-4">
-                                <div className="bg-blue-50 p-4 rounded-xl text-xs text-blue-700 font-bold flex gap-2 items-center">
-                                    ℹ️ Puedes editar el contenido antes de descargar.
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 flex justify-between items-center rounded-t-[2rem]">
+                                <div>
+                                    <h3 className="text-xl font-black text-white">{selectedDocTemplate}</h3>
+                                    <p className="text-xs text-slate-400 mt-0.5">{selectedPatient?.name}</p>
                                 </div>
-                                <textarea
-                                    className="flex-1 w-full bg-slate-50 border border-slate-200 p-6 rounded-xl font-mono text-sm leading-relaxed outline-none resize-none focus:ring-2 focus:ring-blue-100"
-                                    value={docContent}
-                                    onChange={(e) => setDocContent(e.target.value)}
-                                />
+                                <button
+                                    onClick={() => { setIsDocModalOpen(false); setDocViewMode('edit'); }}
+                                    className="text-white/60 hover:text-white p-2 hover:bg-white/10 rounded-xl transition-colors"
+                                >
+                                    <X size={22} />
+                                </button>
                             </div>
 
-                            <div className="flex gap-4 mt-6 pt-6 border-t border-slate-100">
-                                <button onClick={() => setIsDocModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
+                            {/* Mode toggle */}
+                            <div className="flex gap-2 p-4 border-b border-slate-100 bg-slate-50">
+                                <button
+                                    onClick={() => setDocViewMode('edit')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                        docViewMode === 'edit'
+                                            ? 'bg-slate-900 text-white shadow'
+                                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                >
+                                    <Edit3 size={13} /> Editar
+                                </button>
+                                <button
+                                    onClick={() => setDocViewMode('preview')}
+                                    className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                        docViewMode === 'preview'
+                                            ? 'bg-blue-600 text-white shadow'
+                                            : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                    }`}
+                                >
+                                    <Eye size={13} /> Vista Previa
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-auto p-6">
+                                {docViewMode === 'edit' ? (
+                                    <textarea
+                                        className="w-full min-h-[380px] bg-slate-50 border border-slate-200 p-5 rounded-xl font-mono text-sm leading-relaxed outline-none resize-none focus:ring-2 focus:ring-blue-100"
+                                        value={docContent}
+                                        onChange={(e) => setDocContent(e.target.value)}
+                                    />
+                                ) : (
+                                    <div className="bg-white border border-slate-200 rounded-xl overflow-y-auto p-10 min-h-[380px] shadow-inner">
+                                        <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-6">
+                                            <div>
+                                                <div className="text-[9pt] font-bold uppercase text-slate-500 tracking-wider mb-1">Clínica Dental</div>
+                                                <div className="text-base font-black text-slate-900 uppercase">{selectedDocTemplate}</div>
+                                                <div className="text-xs text-slate-400 mt-1">{new Date().toLocaleDateString('es-ES')}</div>
+                                            </div>
+                                            <img
+                                                src="/logo.jpeg"
+                                                alt="Logo"
+                                                className="h-14 object-contain"
+                                                onError={(e) => (e.currentTarget.style.display = 'none')}
+                                            />
+                                        </div>
+                                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-800">{docContent}</pre>
+                                        <div className="mt-12 pt-6 border-t border-slate-200 grid grid-cols-2 gap-10">
+                                            <div className="text-center">
+                                                <div className="border-t border-slate-400 pt-2 text-xs text-slate-500 font-semibold">Firma del Paciente</div>
+                                            </div>
+                                            <div className="text-center">
+                                                <div className="border-t border-slate-400 pt-2 text-xs text-slate-500 font-semibold">Firma del Profesional</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="flex gap-3 p-6 border-t border-slate-100 bg-slate-50 rounded-b-[2rem]">
+                                <button
+                                    onClick={() => { setIsDocModalOpen(false); setDocViewMode('edit'); }}
+                                    className="py-3 px-5 font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                                >
+                                    Cancelar
+                                </button>
                                 <button
                                     onClick={() => {
-                                        // Simulated Download
-                                        const element = document.createElement("a");
-                                        const file = new Blob([docContent], { type: 'text/plain' });
-                                        element.href = URL.createObjectURL(file);
-                                        element.download = `${selectedDocTemplate.replace(/\s+/g, '_')}_${selectedPatient?.name}.txt`;
-                                        document.body.appendChild(element); // Required for this to work in FireFox
-                                        element.click();
-                                        alert("✅ Documento descargado (Simulación PDF)");
-                                        setIsDocModalOpen(false);
+                                        const win = window.open('', '_blank')!;
+                                        win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${selectedDocTemplate}</title><style>body{font-family:Arial,sans-serif;padding:50px;font-size:11pt;line-height:1.7;color:#1e293b}h1{font-size:14pt;font-weight:800;text-transform:uppercase;padding-bottom:12px;border-bottom:3px solid #1e293b;margin-bottom:24px}.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:60px;padding-top:20px;border-top:1px solid #cbd5e1}.sig-box{text-align:center;border-top:1px solid #000;padding-top:8px;font-size:9pt;color:#64748b}@media print{body{margin:0}}</style></head><body><h1>${selectedDocTemplate}</h1><pre style="white-space:pre-wrap;font-family:inherit;font-size:11pt">${docContent}</pre><div class="sig"><div class="sig-box">Firma del Paciente</div><div class="sig-box">Firma del Profesional</div></div></body></html>`);
+                                        win.document.close();
+                                        setTimeout(() => win.print(), 400);
                                     }}
-                                    className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2"
+                                    className="py-3 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors"
                                 >
-                                    <Download size={18} /> Descargar PDF
+                                    <Printer size={16} /> Imprimir
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        const htmlContent = `<div style="white-space:pre-wrap;font-family:Arial,sans-serif;line-height:1.8;font-size:11pt;">${docContent.split('\n').map(l => `<p style="margin:5px 0">${l || '&nbsp;'}</p>`).join('')}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:60px;padding-top:20px;border-top:1px solid #cbd5e1"><div style="text-align:center;border-top:1px solid #000;padding-top:8px;font-size:9pt;color:#64748b">Firma del Paciente</div><div style="text-align:center;border-top:1px solid #000;padding-top:8px;font-size:9pt;color:#64748b">Firma del Profesional</div></div>`;
+                                        await pdfService.generatePDFFromHTML({
+                                            title: selectedDocTemplate,
+                                            content: htmlContent,
+                                            patientName: selectedPatient?.name || '',
+                                            logo: `${window.location.origin}/logo.jpeg`,
+                                            fileName: `${selectedDocTemplate.replace(/\s+/g, '_')}_${(selectedPatient?.name || 'paciente').replace(/\s+/g, '_')}.pdf`
+                                        });
+                                    }}
+                                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-3 rounded-xl font-bold text-sm uppercase shadow-lg flex items-center justify-center gap-2 hover:shadow-xl transition-all"
+                                >
+                                    <Download size={16} /> Descargar PDF
                                 </button>
                             </div>
                         </div>

@@ -5,7 +5,7 @@ import { pdfService } from '../services/pdfService';
 interface ConsentTemplate {
     id: string;
     title: string;
-    category: 'Medical' | 'Privacy' | 'Financial';
+    category: 'Médico' | 'Privacidad' | 'Financiero';
     content: string;
 }
 
@@ -31,7 +31,7 @@ const CONSENT_TEMPLATES: ConsentTemplate[] = [
     {
         id: 'template-1',
         title: 'Consentimiento Informado General',
-        category: 'Medical',
+        category: 'Médico',
         content: `CONSENTIMIENTO INFORMADO - TRATAMIENTO DENTAL
 
 PACIENTE: {{PATIENT_NAME}} | DNI: {{PATIENT_DNI}} | FECHA: {{TODAY}}
@@ -50,7 +50,7 @@ FIRMA DEL PACIENTE: ________________________  FIRMA DEL DOCTOR: ________________
     {
         id: 'template-2',
         title: 'Consentimiento para Anestesia',
-        category: 'Medical',
+        category: 'Médico',
         content: `CONSENTIMIENTO INFORMADO PARA ANESTESIA
 
 PACIENTE: {{PATIENT_NAME}} | DNI: {{PATIENT_DNI}} | FECHA: {{TODAY}}
@@ -72,7 +72,7 @@ FIRMA DEL PACIENTE: ________________________  FIRMA DEL ANESTESIÓLOGO: ________
     {
         id: 'template-3',
         title: 'Protección de Datos RGPD',
-        category: 'Privacy',
+        category: 'Privacidad',
         content: `CONSENTIMIENTO PARA TRATAMIENTO DE DATOS - RGPD
 
 En conformidad con el Reglamento (UE) 2016/679 (RGPD):
@@ -98,7 +98,7 @@ FIRMA DEL PACIENTE: ________________________  FECHA: {{TODAY}}`
     {
         id: 'template-4',
         title: 'Procedimientos Quirúrgicos',
-        category: 'Medical',
+        category: 'Médico',
         content: `CONSENTIMIENTO PARA CIRUGÍA ORAL
 
 PACIENTE: {{PATIENT_NAME}} | PROCEDIMIENTO: {{PROCEDURE}} | FECHA: {{TODAY}}
@@ -123,7 +123,7 @@ FIRMA DEL PACIENTE: ________________________  FIRMA DEL CIRUJANO: ______________
     {
         id: 'template-5',
         title: 'Responsabilidad Financiera',
-        category: 'Financial',
+        category: 'Financiero',
         content: `ACUERDO DE RESPONSABILIDAD FINANCIERA
 
 PACIENTE: {{PATIENT_NAME}} | FECHA: {{TODAY}}
@@ -159,11 +159,11 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     onSaveConsent
 }) => {
     const [selectedTemplate, setSelectedTemplate] = useState<ConsentTemplate | null>(null);
-    const [filter, setFilter] = useState<'All' | 'Medical' | 'Privacy' | 'Financial'>('All');
+    const [filter, setFilter] = useState<'Todos' | 'Médico' | 'Privacidad' | 'Financiero'>('Todos');
 
     if (!isOpen) return null;
 
-    const filteredTemplates = filter === 'All' 
+    const filteredTemplates = filter === 'Todos' 
         ? CONSENT_TEMPLATES 
         : CONSENT_TEMPLATES.filter(t => t.category === filter);
 
@@ -262,7 +262,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
 
                             {/* Filter Tabs */}
                             <div className="flex gap-2 flex-wrap">
-                                {['All', 'Medical', 'Privacy', 'Financial'].map(cat => (
+                                {['Todos', 'Médico', 'Privacidad', 'Financiero'].map(cat => (
                                     <button
                                         key={cat}
                                         onClick={() => setFilter(cat as any)}
