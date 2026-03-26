@@ -177,11 +177,12 @@ export const Liquidations: React.FC = () => {
                             <select
                                 value={selectedDoctorId}
                                 onChange={(e) => setSelectedDoctorId(e.target.value)}
-                                className="w-full bg-white border border-slate-300 text-slate-900 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                className="w-full bg-white border border-slate-300 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                                style={{ color: '#111827', backgroundColor: '#ffffff' }}
                             >
-                                <option value="">-- Seleccionar Doctor --</option>
+                                <option value="" style={{ color: '#111827', backgroundColor: '#ffffff' }}>-- Seleccionar Doctor --</option>
                                 {doctors.map(d => (
-                                    <option key={d.id} value={d.id}>
+                                    <option key={d.id} value={d.id} style={{ color: '#111827', backgroundColor: '#ffffff' }}>
                                         {d.nombre} {d.apellido || ''}
                                     </option>
                                 ))}
