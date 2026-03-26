@@ -1183,22 +1183,6 @@ export const api = {
         }
     },
 
-    // Services (BLOQUE 2.2)
-    services: {
-        search: async (query: string) => {
-            const params = new URLSearchParams({ query });
-            const res = await fetch(`${API_URL}/services/search?${params.toString()}`, { headers });
-            if (!res.ok) return [];
-            return res.json();
-        },
-        getAll: async (filters?: { search?: string }) => {
-            const params = new URLSearchParams(filters || {});
-            const res = await fetch(`${API_URL}/services/search?${params.toString()}`, { headers });
-            if (!res.ok) return [];
-            return res.json();
-        }
-    },
-
     // Consents (BLOQUE 4.1)
     consents: {
         getAll: async (patientId: string) => {
