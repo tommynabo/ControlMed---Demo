@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { api as apiService } from '../services/api'; // Direct import to avoid context issues
+import { SearchableSelect } from '../components/SearchableSelect';
 import { Invoice, Expense } from '../../types';
 
 const Billing: React.FC = () => {
@@ -652,20 +653,25 @@ const Billing: React.FC = () => {
                                     <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
                                         {invoiceItems.map((item, idx) => (
                                             <div key={idx} className="flex gap-2 items-center">
-                                                <div className="flex-1 relative">
-                                                    <select
-                                                        className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
+                                                <div className="flex-1">
+                                                    <SearchableSelect
+                                                        options={treatmentSuggestions.map((svc: any) => ({
+                                                            id: svc.id,
+                                                            label: svc.name || svc.label,
+                                                            value: svc.name || svc.label,
+                                                            price: svc.final_price || svc.price || 0
+                                                        }))}
+                                                        placeholder="-- Seleccionar Servicio --"
                                                         value={item.name}
-                                                        onChange={(e) => { const selectedService = treatmentSuggestions.find(s => s.name === e.target.value || s.label === e.target.value); if (selectedService) selectTreatmentSuggestion(idx, selectedService); else handleItemChange(idx, 'name', e.target.value); }}
-                                                        onFocus={() => { setActiveSuggestionIdx(idx); handleTreatmentSearch(idx, ''); }}
-                                                    >
-                                                        <option value="">-- Seleccionar Servicio --</option>
-                                                        {treatmentSuggestions && treatmentSuggestions.length > 0 && treatmentSuggestions.map((svc: any) => (
-                                                            <option key={svc.id} value={svc.name || svc.label}>
-                                                                {svc.name || svc.label} - {svc.final_price || svc.price}€
-                                                            </option>
-                                                        ))}
-                                                    </select>
+                                                        onChange={(value, option) => {
+                                                            handleItemChange(idx, 'name', value);
+                                                            if (option && option.price) {
+                                                                handleItemChange(idx, 'price', option.price);
+                                                            }
+                                                        }}
+                                                        onSearch={(query) => handleTreatmentSearch(idx, query)}
+                                                        showPrice={true}
+                                                    />
                                                 </div>
                                                 <input
                                                     type="number"

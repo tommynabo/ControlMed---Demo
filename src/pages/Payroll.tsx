@@ -101,15 +101,15 @@ const Payroll: React.FC = () => {
                 <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
                     {/* Doctor Selection */}
                     <div>
-                        <label className="text-[11px] font-bold uppercase text-slate-400 block mb-2">Doctor</label>
+                        <label className="text-[11px] font-bold uppercase text-slate-600 block mb-2">Doctor</label>
                         <select
                             value={selectedDoctorId}
                             onChange={(e) => setSelectedDoctorId(e.target.value)}
                             className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
                         >
-                            <option value="">-- Selecciona Doctor --</option>
+                            <option value="" className="text-slate-900 bg-white">-- Selecciona Doctor --</option>
                             {doctors.map(d => (
-                                <option key={d.id} value={d.id}>
+                                <option key={d.id} value={d.id} className="text-slate-900 bg-white">
                                     {d.name}
                                 </option>
                             ))}
@@ -118,7 +118,7 @@ const Payroll: React.FC = () => {
 
                     {/* Month Selection */}
                     <div>
-                        <label className="text-[11px] font-bold uppercase text-slate-400 block mb-2">Mes</label>
+                        <label className="text-[11px] font-bold uppercase text-slate-600 block mb-2">Mes</label>
                         <select
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(Number(e.target.value))}
@@ -128,21 +128,21 @@ const Payroll: React.FC = () => {
                                 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
                                 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
                             ].map((m, idx) => (
-                                <option key={idx} value={idx + 1}>{m}</option>
+                                <option key={idx} value={idx + 1} className="text-slate-900 bg-white">{m}</option>
                             ))}
                         </select>
                     </div>
 
                     {/* Year Selection */}
                     <div>
-                        <label className="text-[11px] font-bold uppercase text-slate-400 block mb-2">Año</label>
+                        <label className="text-[11px] font-bold uppercase text-slate-600 block mb-2">Año</label>
                         <select
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(Number(e.target.value))}
                             className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
                         >
                             {[2024, 2025, 2026, 2027].map(y => (
-                                <option key={y} value={y}>{y}</option>
+                                <option key={y} value={y} className="text-slate-900 bg-white">{y}</option>
                             ))}
                         </select>
                     </div>
