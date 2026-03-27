@@ -4220,12 +4220,62 @@ app.put('/api/clinical-records/:recordId/reassign-doctor', async (req, res) => {
 // ========== BLOQUE 2.1: LIQUIDATIONS ENDPOINTS ==========
 app.get('/api/liquidations/summary', async (req, res) => {
     try {
-        const { doctorId, month, year } = req.query;
+        const { doctorId, month, year, dateFrom, dateTo } = req.query;
 
         if (!doctorId) {
             return res.status(400).json({ error: 'doctorId is required' });
         }
 
+        // --- NEW: dateFrom/dateTo format (used by Liquidations.tsx) ---
+        if (dateFrom && dateTo) {
+            let supabase;
+            try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+            const startISO = new Date(dateFrom).toISOString();
+            const endDate = new Date(dateTo);
+            endDate.setHours(23, 59, 59, 999);
+            const endISO = endDate.toISOString();
+
+            // Fetch payments for doctor in date range
+            const { data: payments, error: pmtError } = await supabase
+                .from('Payment')
+                .select('*')
+                .eq('doctorId', doctorId)
+                .gte('createdAt', startISO)
+                .lte('createdAt', endISO)
+                .order('createdAt', { ascending: true });
+
+            if (pmtError) throw pmtError;
+
+            // Fetch patient names for the payment set
+            const patientIds = [...new Set((payments || []).map(p => p.patientId).filter(Boolean))];
+            const patientMap = {};
+            if (patientIds.length > 0) {
+                const { data: patients } = await supabase
+                    .from('Patient')
+                    .select('id, name, historyNumber')
+                    .in('id', patientIds);
+                (patients || []).forEach(pt => { patientMap[pt.id] = pt; });
+            }
+
+            const records = (payments || []).map(p => {
+                const patient = patientMap[p.patientId] || {};
+                return {
+                    id: p.id,
+                    fecha: p.createdAt,
+                    concepto: p.notes || (p.treatmentId ? `Tratamiento ${p.treatmentId}` : 'Pago'),
+                    importeCobrado: p.amount || 0,
+                    nombrePaciente: patient.name || 'Paciente desconocido',
+                    numeroHistoria: patient.historyNumber || '-',
+                    doctorId: p.doctorId,
+                };
+            });
+
+            const total = records.reduce((sum, r) => sum + r.importeCobrado, 0);
+            return res.json({ records, dateFrom, dateTo, doctorId, total });
+        }
+
+        // --- EXISTING: month/year format (backward compatibility) ---
         const monthInt = parseInt(month, 10) || new Date().getMonth() + 1;
         const yearInt  = parseInt(year,  10) || new Date().getFullYear();
 

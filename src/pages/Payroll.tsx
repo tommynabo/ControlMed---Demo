@@ -55,19 +55,19 @@ const Payroll: React.FC = () => {
                 await api.expenses.create({
                     date: new Date().toISOString().split('T')[0],
                     description: `Liquidación Comisiones - ${doc.name} - ${period}`,
-                    category: 'Comision Doctor',
+                    category: 'Comision',
                     amount: total,
-                    paymentMethod: 'bank_transfer'
+                    paymentMethod: 'transfer'
                 });
 
                 const newExpense: Expense = {
                     id: `exp-${Date.now()}`,
                     description: `Liquidación Comisiones - ${doc.name}`,
-                    category: 'Comision Doctor',
+                    category: 'Comision',
                     amount: total,
                     date: new Date().toLocaleDateString(),
                     receiver: doc.name,
-                    paymentMethod: 'bank_transfer'
+                    paymentMethod: 'transfer'
                 };
                 setExpenses(prev => [...prev, newExpense]);
                 alert(`✅ Gasto de Liquidación Registrado.\nDoctor: ${doc.name}\nPeriodo: ${period}\nImporte: ${total.toFixed(2)} €`);

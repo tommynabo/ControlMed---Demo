@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
 
 interface Doctor {
@@ -89,7 +90,7 @@ export const Liquidations: React.FC = () => {
         }
     };
 
-    const handleExportPDF = async () => {
+    const handleExportPDF = () => {
         if (records.length === 0) {
             setError('No hay datos para exportar');
             return;
@@ -97,29 +98,66 @@ export const Liquidations: React.FC = () => {
 
         setExporting(true);
         try {
-            const response = await fetch('/api/liquidations/export-pdf', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    doctorId: selectedDoctorId,
-                    dateFrom,
-                    dateTo,
-                    records
-                })
+            const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+            const doctorName = selectedDoctor ? selectedDoctor.name : selectedDoctorId;
+
+            // Header
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Liquidaciones Doctores', 14, 20);
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Doctor: ${doctorName}`, 14, 30);
+            doc.text(`Período: ${dateFrom}  –  ${dateTo}`, 14, 36);
+            doc.text(`Total: ${totalImporte.toFixed(2)} €`, 14, 42);
+
+            // Table header
+            const colX = [14, 50, 120, 185, 225, 260];
+            const headerY = 52;
+            doc.setFillColor(226, 232, 240);
+            doc.rect(14, headerY - 5, 269, 8, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8);
+            doc.text('FECHA', colX[0], headerY);
+            doc.text('CONCEPTO', colX[1], headerY);
+            doc.text('PACIENTE', colX[2], headerY);
+            doc.text('NUM. HISTORIA', colX[3], headerY);
+            doc.text('IMPORTE', colX[4], headerY);
+
+            // Table rows
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            let y = headerY + 8;
+            records.forEach((r, i) => {
+                if (y > 185) { doc.addPage(); y = 20; }
+                if (i % 2 === 0) {
+                    doc.setFillColor(248, 250, 252);
+                    doc.rect(14, y - 4, 269, 7, 'F');
+                }
+                doc.setTextColor(30, 41, 59);
+                const fecha = r.fecha ? r.fecha.substring(0, 10) : '-';
+                doc.text(fecha, colX[0], y);
+                doc.text(doc.splitTextToSize(r.concepto || '-', 68)[0], colX[1], y);
+                doc.text(doc.splitTextToSize(r.nombrePaciente || '-', 63)[0], colX[2], y);
+                doc.text(r.numeroHistoria || '-', colX[3], y);
+                doc.text(`${r.importeCobrado.toFixed(2)} €`, colX[4], y);
+                y += 7;
             });
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `liquidaciones-${selectedDoctorId}-${dateFrom}-${dateTo}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(link);
+            // Total row
+            doc.setFillColor(209, 250, 229);
+            doc.rect(14, y - 4, 269, 8, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.setTextColor(4, 120, 87);
+            doc.text('TOTAL', colX[3], y);
+            doc.text(`${totalImporte.toFixed(2)} €`, colX[4], y);
+
+            doc.save(`liquidaciones-${doctorName}-${dateFrom}-${dateTo}.pdf`);
         } catch (err) {
-            console.error('Error exporting PDF:', err);
-            setError('Error al exportar PDF');
+            console.error('Error generating PDF:', err);
+            setError('Error al generar el PDF');
         } finally {
             setExporting(false);
         }

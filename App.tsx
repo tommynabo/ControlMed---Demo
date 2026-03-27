@@ -15,7 +15,7 @@ import Login from './src/pages/Login';
 import Attendance from './src/pages/Attendance';
 import UserManagement from './src/pages/UserManagement';
 import Gastos from './src/pages/Gastos';
-import ProtectedRoute from './src/components/ProtectedRoute';
+import { Liquidations } from './src/pages/Liquidations';import ProtectedRoute from './src/components/ProtectedRoute';
 
 import { AppointmentDetails } from './src/pages/AppointmentDetails';
 
@@ -40,6 +40,7 @@ const App: React.FC = () => {
             <Route path="users" element={<ProtectedRoute pageId="users"><UserManagement /></ProtectedRoute>} />
             <Route path="jornada" element={<ProtectedRoute pageId="attendance"><Attendance /></ProtectedRoute>} />
             <Route path="gastos" element={<ProtectedRoute pageId="gastos"><Gastos /></ProtectedRoute>} />
+            <Route path="liquidaciones" element={<ProtectedRoute pageId="liquidaciones"><Liquidations /></ProtectedRoute>} />
           </Route>
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
