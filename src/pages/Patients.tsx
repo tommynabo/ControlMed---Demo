@@ -43,7 +43,7 @@ const Patients: React.FC = () => {
     const {
         patients, setPatients, searchQuery, setSearchQuery,
         selectedPatient, setSelectedPatient, clinicalRecords, setClinicalRecords,
-        invoices, setInvoices, api
+        invoices, setInvoices, api, refreshAppointments
     } = useAppContext();
 
 
@@ -1290,7 +1290,8 @@ const Patients: React.FC = () => {
                                                         const created = await api.appointments.create({
                                                             patientId: selectedPatient.id,
                                                             doctorId: newVisitForm.doctorId || undefined,
-                                                            date: newVisitForm.date,
+                                                            // Force date to be treated as UTC midnight of the selected day to avoid timezone shifts
+                                                            date: `${newVisitForm.date}T00:00:00.000Z`,
                                                             time: newVisitForm.time,
                                                             treatmentId: newVisitForm.treatmentId,
                                                             treatmentName: newVisitForm.treatmentName,
@@ -1301,6 +1302,10 @@ const Patients: React.FC = () => {
                                                         // Enrich the returned object with treatmentName so the list renders immediately
                                                         const enriched = { ...created, treatmentName: newVisitForm.treatmentName };
                                                         setPatientAppointments(prev => [enriched, ...prev]);
+
+                                                        // Refresh global appointments state so that the Agenda picks up the new visit!
+                                                        await refreshAppointments();
+
                                                         setIsNewVisitModalOpen(false);
                                                         setNewVisitForm({ date: new Date().toISOString().split('T')[0], time: '09:00', treatmentId: '', treatmentName: '', doctorId: '', observations: '', duration: 60 });
                                                         alert('✅ Visita creada correctamente');
