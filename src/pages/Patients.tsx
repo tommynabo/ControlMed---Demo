@@ -684,13 +684,7 @@ const Patients: React.FC = () => {
             toast.success("Paciente creado correctamente");
         } catch (e: any) {
             console.error("Error creating patient:", e);
-            let errorMsg = "Error al crear paciente. Revise la consola.";
-            if (e.message?.includes('duplicate key value') || e.message?.includes('23505')) {
-                errorMsg = "Ya existe un paciente con ese DNI o Email.";
-            } else if (e.message) {
-                errorMsg = e.message;
-            }
-            toast.error(errorMsg);
+            toast.error(e.message || "Error al crear paciente");
         }
     };
 

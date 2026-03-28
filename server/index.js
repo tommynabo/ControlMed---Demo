@@ -988,6 +988,16 @@ app.post('/api/patients', async (req, res) => {
         res.json(normalizePatient(created));
     } catch (e) {
         console.error("Error creating patient:", e);
+        // Handle Prisma Unique Constraint error (P2002)
+        if (e.code === 'P2002') {
+            const target = e.meta?.target || [];
+            if (target.includes('dni')) {
+                return res.status(400).json({ error: "DNI ya existe." });
+            }
+            if (target.includes('historyNumber')) {
+                return res.status(400).json({ error: "Número de historial ya existe." });
+            }
+        }
         res.status(500).json({ error: e.message });
     }
 });
@@ -1060,6 +1070,13 @@ app.put('/api/patients/:id', async (req, res) => {
         res.json(normalizePatient(data));
     } catch (e) {
         console.error("Error updating patient:", e);
+        // Handle Prisma Unique Constraint error (P2002)
+        if (e.code === 'P2002') {
+            const target = e.meta?.target || [];
+            if (target.includes('dni')) {
+                return res.status(400).json({ error: "DNI ya existe." });
+            }
+        }
         res.status(500).json({ error: e.message });
     }
 });
