@@ -6,6 +6,7 @@ import {
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
     QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
 import { useAppContext } from '../context/AppContext';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
@@ -57,6 +58,54 @@ const Patients: React.FC = () => {
     // Ref so Effect B can read latest patientTab without being triggered by it
     const patientTabRef = React.useRef(patientTab);
     patientTabRef.current = patientTab;
+
+    const [doctorSchedules, setDoctorSchedules] = useState<any[]>([]);
+
+    // Fetch doctor schedules once on mount
+    React.useEffect(() => {
+        api.getDoctorSchedules().then(setDoctorSchedules).catch(err => console.error("Failed to load schedules", err));
+    }, []);
+
+    // Helper: Doctor availability check (Sync with Agenda.tsx)
+    const checkAvailability = (dateStr: string, time: string, doctorId: string) => {
+        if (!doctorId || doctorId === 'all') return true;
+        const doctor = doctors.find(d => d.id === doctorId);
+        if (!doctor) return true;
+
+        const date = new Date(dateStr);
+        const dayMap: Record<number, string> = { 
+            0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 
+            4: 'thursday', 5: 'friday', 6: 'saturday' 
+        };
+        const dayIndex = date.getDay();
+        const dayKey = dayMap[dayIndex];
+
+        const schedules = doctorSchedules.filter(s => s.doctor_id === doctorId);
+        if (schedules.length === 0) return true;
+
+        const activeSchedulesForDay = schedules.filter(s => !!s[dayKey]);
+        if (activeSchedulesForDay.length === 0) return false;
+
+        const [slotH, slotM] = time.split(':').map(Number);
+        const slotTimeValue = slotH + slotM / 60;
+
+        return activeSchedulesForDay.some(schedule => {
+            let inMorning = false;
+            let inAfternoon = false;
+
+            if (schedule.morning_start && schedule.morning_end) {
+                const [mStartH, mStartM] = schedule.morning_start.split(':').map(Number);
+                const [mEndH, mEndM] = schedule.morning_end.split(':').map(Number);
+                if (slotTimeValue >= (mStartH + mStartM/60) && slotTimeValue < (mEndH + mEndM/60)) inMorning = true;
+            }
+            if (schedule.afternoon_start && schedule.afternoon_end) {
+                const [aStartH, aStartM] = schedule.afternoon_start.split(':').map(Number);
+                const [aEndH, aEndM] = schedule.afternoon_end.split(':').map(Number);
+                if (slotTimeValue >= (aStartH + aStartM/60) && slotTimeValue < (aEndH + aEndM/60)) inAfternoon = true;
+            }
+            return inMorning || inAfternoon;
+        });
+    };
 
     // Local State for Budgets
     const [budgets, setBudgets] = useState<any[]>([]);
@@ -179,14 +228,13 @@ const Patients: React.FC = () => {
             }
 
             // Show success message
-            let msg = "✅ Financiación creada correctamente.";
+            let msg = "Financiación creada correctamente.";
             if (result.downPaymentInvoice) {
-                msg += `\n\n📄 Factura de entrada: ${result.downPaymentInvoice.number || 'Generada'}`;
+                msg += ` Factura: ${result.downPaymentInvoice.number || 'Generada'}`;
             }
-            msg += `\n\n📅 Cuotas: ${planData.months} x ${((selectedBudgetForFinance.totalAmount - planData.downPayment) / planData.months).toFixed(2)}€`;
-            alert(msg);
+            toast.success(msg);
         } catch (e: any) {
-            alert("Error guardando financiación: " + e.message);
+            toast.error("Error guardando financiación: " + e.message);
         }
     };
     const [isNewTreatmentModalOpen, setIsNewTreatmentModalOpen] = useState(false);
@@ -400,7 +448,7 @@ const Patients: React.FC = () => {
                 await api.treatments.delete(id);
                 setTreatments(prev => prev.filter(t => t.id !== id));
             } catch (e) {
-                alert("Error borrando el tratamiento.");
+                toast("Error borrando el tratamiento.");
                 console.error(e);
             }
         }
@@ -410,10 +458,10 @@ const Patients: React.FC = () => {
         try {
             const { url } = await (api.invoices as any).getDownloadUrl(invoiceId);
             if (url) window.open(url, '_blank');
-            else alert("No se pudo obtener el PDF. Intente más tarde.");
+            else toast("No se pudo obtener el PDF. Intente más tarde.");
         } catch (e) {
             console.error(e);
-            alert("Error al descargar factura.");
+            toast("Error al descargar factura.");
         }
     };
 
@@ -434,7 +482,7 @@ const Patients: React.FC = () => {
                     ...formData,
                     patientId: selectedPatient.id
                 });
-                alert("✅ Receta actualizada correctamente.");
+                toast("✅ Receta actualizada correctamente.");
             } else {
                 // CREATE
                 await api.prescriptions.create({
@@ -450,7 +498,7 @@ const Patients: React.FC = () => {
                     observation: `Pauta: ${formData.schedulePattern}. ${formData.patientInstructions || ''}`,
                     specialization: 'General'
                 });
-                alert("✅ Receta guardada y registrada en el historial.");
+                toast("✅ Receta guardada y registrada en el historial.");
             }
 
             // Refresh local list
@@ -468,7 +516,7 @@ const Patients: React.FC = () => {
             setIsPrescriptionOpen(false);
         } catch (e: any) {
             console.error(e);
-            alert("Error al guardar receta: " + (e.message || "Error desconocido"));
+            toast("Error al guardar receta: " + (e.message || "Error desconocido"));
         }
     };
 
@@ -479,16 +527,16 @@ const Patients: React.FC = () => {
         try {
             await (api as any).prescriptions.delete(id);
             setLocalPrescriptions(prev => prev.filter(p => p.id !== id));
-            alert("✅ Receta eliminada.");
+            toast("✅ Receta eliminada.");
         } catch (e: any) {
             console.error(e);
-            alert("Error borrando receta: " + e.message);
+            toast("Error borrando receta: " + e.message);
         }
     };
 
     const handlePrintPrescription = (text: string) => {
         const printWindow = window.open('', '_blank');
-        if (!printWindow) return alert("Habilite ventanas emergentes");
+        if (!printWindow) return toast("Habilite ventanas emergentes");
 
         const html = `
             <html>
@@ -633,11 +681,16 @@ const Patients: React.FC = () => {
                 name: '', firstName: '', lastName1: '', lastName2: '', dni: '', email: '', phone: '',
                 birthDate: '', smoker: false, diseases: '', allergies: '', medications: '', criticalAlerts: ''
             });
-            alert("✅ Paciente creado correctamente");
+            toast.success("Paciente creado correctamente");
         } catch (e: any) {
             console.error("Error creating patient:", e);
-            const errorMsg = e.message || "Error al crear paciente. Revise la consola.";
-            alert("⚠️ " + errorMsg);
+            let errorMsg = "Error al crear paciente. Revise la consola.";
+            if (e.message?.includes('duplicate key value') || e.message?.includes('23505')) {
+                errorMsg = "Ya existe un paciente con ese DNI o Email.";
+            } else if (e.message) {
+                errorMsg = e.message;
+            }
+            toast.error(errorMsg);
         }
     };
 
@@ -673,7 +726,7 @@ const Patients: React.FC = () => {
                 await api.clinicalRecords.delete(id);
                 setClinicalRecords(prev => prev.filter(r => r.id !== id));
             } catch (e) {
-                alert("Error borrando el registro.");
+                toast("Error borrando el registro.");
                 console.error(e);
             }
         }
@@ -716,8 +769,8 @@ const Patients: React.FC = () => {
     };
 
     const handleAddClinicalRecord = async () => {
-        if (!newEntryForm.treatment) return alert("Rellene el tratamiento");
-        if (!selectedPatient?.id) return alert("Error: Paciente no seleccionado.");
+        if (!newEntryForm.treatment) return toast("Rellene el tratamiento");
+        if (!selectedPatient?.id) return toast("Error: Paciente no seleccionado.");
 
         try {
             const payload = { ...newEntryForm, patientId: selectedPatient.id };
@@ -745,7 +798,7 @@ const Patients: React.FC = () => {
             setNewEntryForm({ treatment: '', observation: '', specialization: 'General', price: '' }); // Reset form
         } catch (e: any) {
             console.error(e);
-            alert("Error al guardar: " + e.message);
+            toast("Error al guardar: " + e.message);
         }
     };
 
@@ -760,7 +813,7 @@ const Patients: React.FC = () => {
             }
         } catch (e) {
             console.error(e);
-            alert("Error al borrar presupuesto");
+            toast("Error al borrar presupuesto");
         }
     };
 
@@ -768,7 +821,7 @@ const Patients: React.FC = () => {
     const handleConvertToInvoice = async (budget: any) => {
         if (!confirm("¿Convertir este presupuesto a factura?")) return;
         if (!selectedPatient) {
-            alert("Error: No hay paciente seleccionado");
+            toast("Error: No hay paciente seleccionado");
             return;
         }
         try {
@@ -791,7 +844,7 @@ const Patients: React.FC = () => {
             await api.budget.updateStatus(budget.id, 'CONVERTED');
 
             // 3. Notify and Switch Tab
-            alert("✅ Factura generada correctamente.");
+            toast("✅ Factura generada correctamente.");
 
             // Open PDF using download endpoint (ephemeral URLs expire quickly)
             if (result.id) {
@@ -817,7 +870,7 @@ const Patients: React.FC = () => {
 
         } catch (e: any) {
             console.error(e);
-            alert("Error al convertir a factura: " + (e.message || e));
+            toast("Error al convertir a factura: " + (e.message || e));
         }
     };
 
@@ -935,10 +988,10 @@ const Patients: React.FC = () => {
                                                     const updated = await api.updatePatient(selectedPatient.id, selectedPatient);
                                                     setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
                                                     setSelectedPatient(updated);
-                                                    alert("✅ Cambios guardados correctamente");
+                                                    toast("✅ Cambios guardados correctamente");
                                                 } catch (e) {
                                                     console.error(e);
-                                                    alert("Error al guardar cambios");
+                                                    toast("Error al guardar cambios");
                                                 }
                                             }
                                             setIsEditingPatient(!isEditingPatient);
@@ -1282,9 +1335,16 @@ const Patients: React.FC = () => {
                                             <button
                                                 onClick={async () => {
                                                     if (!newVisitForm.treatmentId) {
-                                                        alert('Selecciona un tratamiento de la lista');
+                                                        toast.error('Selecciona un tratamiento de la lista');
                                                         return;
                                                     }
+
+                                                    // Validation: Doctor schedule
+                                                    if (newVisitForm.doctorId && !checkAvailability(newVisitForm.date, newVisitForm.time, newVisitForm.doctorId)) {
+                                                        toast.error("El doctor seleccionado no trabaja en este horario.");
+                                                        return;
+                                                    }
+
                                                     setIsCreatingVisit(true);
                                                     try {
                                                         const created = await api.appointments.create({
@@ -1308,9 +1368,9 @@ const Patients: React.FC = () => {
 
                                                         setIsNewVisitModalOpen(false);
                                                         setNewVisitForm({ date: new Date().toISOString().split('T')[0], time: '09:00', treatmentId: '', treatmentName: '', doctorId: '', observations: '', duration: 60 });
-                                                        alert('✅ Visita creada correctamente');
+                                                        toast.success('Visita creada correctamente');
                                                     } catch (e: any) {
-                                                        alert('❌ Error al crear visita: ' + e.message);
+                                                        toast.error('Error al crear visita: ' + e.message);
                                                     } finally {
                                                         setIsCreatingVisit(false);
                                                     }
@@ -1709,7 +1769,7 @@ const Patients: React.FC = () => {
                                                                 </a >
                                                                 <button
                                                                     onClick={() => {
-                                                                        alert(`📧 Factura ${inv.invoiceNumber} enviada a ${selectedPatient.email || 'correo del paciente'}.`);
+                                                                        toast(`📧 Factura ${inv.invoiceNumber} enviada a ${selectedPatient.email || 'correo del paciente'}.`);
                                                                     }}
                                                                     className="p-2 bg-slate-50 text-slate-400 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition-colors"
                                                                     title="Enviar por Email al Paciente"
@@ -1856,7 +1916,7 @@ const Patients: React.FC = () => {
                                                                             await api.budget.deleteItem(item.id);
                                                                             const updated = await api.budget.getByPatient(selectedPatient!.id);
                                                                             setBudgets(updated);
-                                                                        } catch (e: any) { alert(e.message); }
+                                                                        } catch (e: any) { toast(e.message); }
                                                                     }} className="ml-2 text-slate-400 hover:text-red-500 p-1"><Trash2 size={14} /></button>
                                                                 )}
                                                             </div>
@@ -2205,16 +2265,16 @@ const Patients: React.FC = () => {
                                         <span>Detalles</span>
                                         <button
                                             onClick={async () => {
-                                                if (!newEntryForm.observation) return alert("Escribe algo primero...");
+                                                if (!newEntryForm.observation) return toast("Escribe algo primero...");
                                                 setIsProcessing(true);
                                                 try {
                                                     const improved = await api.ai.improveMessage(newEntryForm.observation, selectedPatient?.name, 'clinical_note');
                                                     if (improved) {
                                                         setNewEntryForm(prev => ({ ...prev, observation: improved }));
                                                     } else {
-                                                        alert("La IA no devolvió respuesta.");
+                                                        toast("La IA no devolvió respuesta.");
                                                     }
-                                                } catch (e) { console.error(e); alert("Error conectando con IA."); }
+                                                } catch (e) { console.error(e); toast("Error conectando con IA."); }
                                                 setIsProcessing(false);
                                             }}
                                             className="text-xs bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-200"
@@ -2390,7 +2450,7 @@ const Patients: React.FC = () => {
                                 <button onClick={() => setIsNewTreatmentModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
                                 <button
                                     onClick={async () => {
-                                        if (!treatmentForm.name) return alert("Nombre requerido");
+                                        if (!treatmentForm.name) return toast("Nombre requerido");
                                         try {
                                             // Save as Clinical Record primarily (as requested for history)
                                             const rec = await api.clinicalRecords.create({
@@ -2403,8 +2463,8 @@ const Patients: React.FC = () => {
                                             setClinicalRecords(prev => [rec, ...prev]);
                                             setIsNewTreatmentModalOpen(false);
                                             setTreatmentForm({ name: '', price: '', status: 'Pendiente' });
-                                            alert("Tratamiento guardado en historial");
-                                        } catch (e) { alert("Error: " + e.message); }
+                                            toast("Tratamiento guardado en historial");
+                                        } catch (e) { toast("Error: " + e.message); }
                                     }}
                                     className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg"
                                 >
@@ -2513,13 +2573,13 @@ const Patients: React.FC = () => {
                                     <label className="text-[10px] font-black uppercase text-slate-400">Contenido</label>
                                     <button
                                         onClick={async () => {
-                                            if (!whatsAppForm.content) return alert("Escribe algo primero (ej: 'recordatorio revisión').");
+                                            if (!whatsAppForm.content) return toast("Escribe algo primero (ej: 'recordatorio revisión').");
                                             setIsGeneratingAI(true);
                                             try {
                                                 const improved = await api.ai.improveMessage(whatsAppForm.content, selectedPatient?.name, 'whatsapp');
                                                 setWhatsAppForm(prev => ({ ...prev, content: improved }));
                                             } catch (e: any) {
-                                                alert("Error AI: " + e.message);
+                                                toast("Error AI: " + e.message);
                                             } finally {
                                                 setIsGeneratingAI(false);
                                             }
@@ -2541,19 +2601,19 @@ const Patients: React.FC = () => {
                                 <button onClick={() => setIsWhatsAppModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancelar</button>
                                 <button
                                     onClick={async () => {
-                                        if (!whatsAppForm.scheduledDate || !whatsAppForm.content) return alert("Falta fecha o contenido.");
+                                        if (!whatsAppForm.scheduledDate || !whatsAppForm.content) return toast("Falta fecha o contenido.");
                                         try {
                                             await api.whatsapp.scheduleMessage({
                                                 patientId: selectedPatient!.id,
                                                 scheduledDate: whatsAppForm.scheduledDate,
                                                 content: whatsAppForm.content
                                             });
-                                            alert('✅ Mensaje programado correctamente');
+                                            toast('✅ Mensaje programado correctamente');
                                             setIsWhatsAppModalOpen(false);
                                             // Refresh logs
                                             const logs = await api.whatsapp.getLogs(selectedPatient!.id);
                                             setWhatsappLogs(logs);
-                                        } catch (e: any) { alert('Error: ' + e.message); }
+                                        } catch (e: any) { toast('Error: ' + e.message); }
                                     }}
                                     className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold uppercase shadow-lg hover:bg-emerald-600 transition-colors"
                                 >

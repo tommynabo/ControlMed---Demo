@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AppProvider } from './src/context/AppContext';
 import Layout from './src/layouts/Layout';
 import Dashboard from './src/pages/Dashboard';
@@ -22,6 +23,7 @@ import { AppointmentDetails } from './src/pages/AppointmentDetails';
 const App: React.FC = () => {
   return (
     <AppProvider>
+      <Toaster position="top-right" reverseOrder={false} />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />

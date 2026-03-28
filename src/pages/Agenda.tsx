@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
 import { Appointment, Doctor, AgendaClosure } from '../../types';
+import toast from 'react-hot-toast';
 
 interface DoctorSchedule {
     id?: string;
@@ -476,7 +477,7 @@ const Agenda: React.FC = () => {
 
         const availableSlots = getAvailableTimeSlots(dateToSave, bookingDoctorId);
         if (!availableSlots.includes(bookingTime)) {
-            alert("❌ Este horario no está disponible para este doctor.\n\nVerifica la configuración de horarios en Configuración → Horarios Médicos.");
+            toast.error("Este horario no está disponible para este doctor. Verifica la configuración en Horarios Médicos.");
             return;
         }
 
@@ -523,10 +524,10 @@ const Agenda: React.FC = () => {
             setBookingVisitDetails('');
             setBookingPrice(0);
             setBookingDuration(30);
-            alert("✅ Cita guardada correctamente.");
+            toast.success("Cita guardada correctamente.");
         } catch (e: any) {
             console.error(e);
-            alert("Error al guardar la cita: " + (e.message || e));
+            toast.error("Error al guardar la cita: " + (e.message || e));
         }
     };
 
@@ -1669,6 +1670,15 @@ const Agenda: React.FC = () => {
                                             };
 
                                             console.log('📝 Updating appointment:', updatePayload);
+
+                                            // VALIDATION: Doctor availability
+                                            const checkDate = new Date(updatePayload.date);
+                                            const availSlots = getAvailableTimeSlots(checkDate, updatePayload.doctorId);
+                                            if (!availSlots.includes(updatePayload.time)) {
+                                                toast.error("El doctor no trabaja en este horario seleccionado.");
+                                                return;
+                                            }
+
                                             const result = await api.appointments.update(selectedAppt.id, updatePayload);
                                             
                                             // Refresh appointments via context
@@ -1676,10 +1686,10 @@ const Agenda: React.FC = () => {
                                             setIsAppointmentModalOpen(false);
                                             setIsEditingAppt(false);
                                             setSelectedAppt(null);
-                                            alert("✅ Cita actualizada con éxito.");
+                                            toast.success("Cita actualizada con éxito.");
                                         } catch (e: any) {
                                             console.error('❌ Update appointment error:', e);
-                                            alert('❌ Error al actualizar: ' + (e.response?.data?.error || e.message || JSON.stringify(e)));
+                                            toast.error('Error al actualizar: ' + (e.message || "Error desconocido"));
                                         }
                                     }}
                                     className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50"
