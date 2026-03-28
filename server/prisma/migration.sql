@@ -54,3 +54,9 @@ ALTER TABLE "Invoice" ADD COLUMN IF NOT EXISTS "relatedPaymentId" TEXT UNIQUE;
 -- =====================
 ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "notes" TEXT;
 ALTER TABLE "Payment" ADD COLUMN IF NOT EXISTS "invoiceId" TEXT UNIQUE;
+
+-- =====================
+-- WHATSAPP ENUM: ADD BIRTHDAY VALUE
+-- Run once on the database before deploying birthday cron endpoint.
+-- =====================
+ALTER TYPE "WhatsAppTriggerType" ADD VALUE IF NOT EXISTS 'BIRTHDAY';

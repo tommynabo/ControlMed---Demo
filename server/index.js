@@ -3338,135 +3338,464 @@ app.get('/api/whatsapp/logs', async (req, res) => {
 });
 
 // --- CRON ENGINE: AUTOMATIC REMINDERS ---
+// ─────────────────────────────────────────────────────────────────────────────
+// MASTER CRON — called daily by cron-job.org via POST /api/cron/whatsapp-reminders
+// Runs sequentially: 1) Appointment reminders  2) Birthdays  3) Follow-ups
+// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/cron/whatsapp-reminders', async (req, res) => {
     const authHeader = req.headers['authorization'] || req.headers['x-cron-secret'];
     const expectedSecret = process.env.CRON_SECRET;
 
-    console.log('[DEBUG] CRON_SECRET cargado en entorno:', !!expectedSecret);
+    console.log('[MASTER CRON] CRON_SECRET en entorno:', !!expectedSecret);
 
     if (!expectedSecret) {
-        console.error('[CRON ERROR] La variable CRON_SECRET no está definida en el entorno.');
+        console.error('[MASTER CRON] CRON_SECRET no definido.');
         return res.status(500).json({ error: 'Configuración del servidor incompleta' });
     }
 
-    // Normalización: Limpiar el token de posibles prefijos "Bearer " y espacios
     const providedToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
-
     if (!providedToken || providedToken !== expectedSecret.trim()) {
-        console.warn(`[CRON] Intento no autorizado. Token recibido: ${providedToken ? '***' : 'NULO'}`);
+        console.warn(`[MASTER CRON] Intento no autorizado. Token: ${providedToken ? '***' : 'NULO'}`);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const globalStats = {
+        reminders: { sent: 0, failed: 0, skipped: 0 },
+        birthdays:  { sent: 0, failed: 0, skipped: 0 },
+        followups:  { sent: 0, failed: 0, skipped: 0 }
+    };
+
+    // ── BLOQUE 1: Recordatorios de citas (mañana) ────────────────────────────
+    try {
+        console.log('[MASTER CRON] ▶️ Bloque 1 — Recordatorios de citas...');
+
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const startOfTomorrow = new Date(new Date(tomorrow).setHours(0, 0, 0, 0));
+        const endOfTomorrow   = new Date(new Date(tomorrow).setHours(23, 59, 59, 999));
+
+        const appointments = await prisma.appointment.findMany({
+            where: {
+                status: { in: ['Scheduled', 'Confirmed'] },
+                date: { gte: startOfTomorrow, lte: endOfTomorrow },
+                whatsappSent: false
+            },
+            include: { patient: true, treatment: true }
+        });
+
+        console.log(`[MASTER CRON] Citas encontradas: ${appointments.length}`);
+
+        const reminderTemplate = await prisma.whatsAppTemplate.findFirst({
+            where: { triggerType: 'APPOINTMENT_REMINDER' }
+        });
+
+        if (!reminderTemplate && appointments.length > 0) {
+            console.warn('[MASTER CRON] Sin plantilla APPOINTMENT_REMINDER. Saltando bloque 1.');
+        } else {
+            for (const appt of appointments) {
+                if (!appt.patient?.phone) { globalStats.reminders.skipped++; continue; }
+
+                const appointmentDate = new Date(appt.date);
+                const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const formattedTime = appt.time ? appt.time.substring(0, 5)
+                    : appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+                const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta General';
+
+                const message = reminderTemplate.content
+                    .replace(/{{nombre}}/g, appt.patient.name)
+                    .replace(/{{fecha}}/g, formattedDate)
+                    .replace(/{{hora}}/g, formattedTime)
+                    .replace(/{{tratamiento}}/g, treatmentName);
+
+                try {
+                    let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                    if (number.length === 9) number = '34' + number;
+
+                    await whatsappService.sendMessage(number, message);
+                    await prisma.appointment.update({ where: { id: appt.id }, data: { whatsappSent: true } });
+                    await prisma.whatsAppLog.create({
+                        data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'SENT', content: message, sentAt: new Date() }
+                    });
+                    globalStats.reminders.sent++;
+                } catch (err) {
+                    console.error(`[MASTER CRON] Recordatorio fallido (appt ${appt.id}):`, err.message);
+                    globalStats.reminders.failed++;
+                    await prisma.whatsAppLog.create({
+                        data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'FAILED', content: message, error: err.message, sentAt: new Date() }
+                    });
+                }
+            }
+        }
+
+        console.log('[MASTER CRON] ✅ Bloque 1 completado:', globalStats.reminders);
+    } catch (e) {
+        console.error('[MASTER CRON] ❌ Error en Bloque 1 (Recordatorios):', e.message);
+        // No return — continúa con los siguientes bloques
+    }
+
+    // ── BLOQUE 2: Cumpleaños ─────────────────────────────────────────────────
+    try {
+        console.log('[MASTER CRON] ▶️ Bloque 2 — Cumpleaños...');
+
+        const today = new Date();
+        const todayMonth = today.getMonth() + 1;
+        const todayDay   = today.getDate();
+        const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
+
+        const allPatients = await prisma.patient.findMany({
+            where: { phone: { not: null } },
+            select: { id: true, name: true, phone: true, birthDate: true }
+        });
+
+        const birthdayPatients = allPatients.filter(p => {
+            if (!p.birthDate) return false;
+            const bd = new Date(p.birthDate);
+            return bd.getMonth() + 1 === todayMonth && bd.getDate() === todayDay;
+        });
+
+        console.log(`[MASTER CRON] Pacientes con cumpleaños hoy: ${birthdayPatients.length}`);
+
+        const birthdayTemplate = await prisma.whatsAppTemplate.findFirst({
+            where: { triggerType: 'BIRTHDAY' }
+        });
+        const birthdayDefault = '¡Feliz cumpleaños, {{nombre}}! 🎉 Todo el equipo de la clínica te deseamos un día estupendo. ¡Muchas felicidades!';
+
+        for (const patient of birthdayPatients) {
+            if (!patient.phone) { globalStats.birthdays.skipped++; continue; }
+
+            const alreadySent = await prisma.whatsAppLog.findFirst({
+                where: { patientId: patient.id, type: 'BIRTHDAY', sentAt: { gte: startOfToday } }
+            });
+            if (alreadySent) { globalStats.birthdays.skipped++; continue; }
+
+            const content = (birthdayTemplate?.content || birthdayDefault)
+                .replace(/{{nombre}}/g, patient.name)
+                .replace(/{{PACIENTE}}/g, patient.name);
+
+            try {
+                let number = patient.phone.replace(/[^0-9]/g, '');
+                if (number.length === 9) number = '34' + number;
+
+                await whatsappService.sendMessage(number, content);
+                await prisma.whatsAppLog.create({
+                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'SENT', content, sentAt: new Date() }
+                });
+                globalStats.birthdays.sent++;
+                console.log(`[MASTER CRON] 🎂 Cumpleaños enviado a ${patient.name}`);
+            } catch (err) {
+                console.error(`[MASTER CRON] Error cumpleaños (${patient.name}):`, err.message);
+                await prisma.whatsAppLog.create({
+                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'FAILED', content, error: err.message, sentAt: new Date() }
+                });
+                globalStats.birthdays.failed++;
+            }
+        }
+
+        console.log('[MASTER CRON] ✅ Bloque 2 completado:', globalStats.birthdays);
+    } catch (e) {
+        console.error('[MASTER CRON] ❌ Error en Bloque 2 (Cumpleaños):', e.message);
+        // No return — continúa con el siguiente bloque
+    }
+
+    // ── BLOQUE 3: Seguimientos post-operatorios ──────────────────────────────
+    try {
+        console.log('[MASTER CRON] ▶️ Bloque 3 — Seguimientos post-operatorios...');
+
+        const followupTemplates = await prisma.whatsAppTemplate.findMany({
+            where: { triggerType: 'TREATMENT_FOLLOWUP' }
+        });
+
+        if (followupTemplates.length === 0) {
+            console.warn('[MASTER CRON] Sin plantillas TREATMENT_FOLLOWUP configuradas.');
+        } else {
+            for (const template of followupTemplates) {
+                const offsetDays = parseInt(template.triggerOffset, 10);
+                if (isNaN(offsetDays) || offsetDays <= 0) continue;
+
+                const target = new Date();
+                target.setDate(target.getDate() - offsetDays);
+                const startOfTarget = new Date(new Date(target).setHours(0, 0, 0, 0));
+                const endOfTarget   = new Date(new Date(target).setHours(23, 59, 59, 999));
+
+                const appts = await prisma.appointment.findMany({
+                    where: {
+                        status: { in: ['Completed', 'Attended'] },
+                        date: { gte: startOfTarget, lte: endOfTarget }
+                    },
+                    include: { patient: true, treatment: true }
+                });
+
+                console.log(`[MASTER CRON] Template "${template.name}" (offset ${offsetDays}d): ${appts.length} cita(s)`);
+
+                for (const appt of appts) {
+                    if (!appt.patient?.phone) { globalStats.followups.skipped++; continue; }
+
+                    const alreadySent = await prisma.whatsAppLog.findFirst({
+                        where: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', sentAt: { gte: startOfTarget } }
+                    });
+                    if (alreadySent) { globalStats.followups.skipped++; continue; }
+
+                    const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta';
+                    const content = template.content
+                        .replace(/{{nombre}}/g, appt.patient.name)
+                        .replace(/{{PACIENTE}}/g, appt.patient.name)
+                        .replace(/{{tratamiento}}/g, treatmentName)
+                        .replace(/{{TRATAMIENTO}}/g, treatmentName);
+
+                    try {
+                        let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                        if (number.length === 9) number = '34' + number;
+
+                        await whatsappService.sendMessage(number, content);
+                        await prisma.whatsAppLog.create({
+                            data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'SENT', content, sentAt: new Date() }
+                        });
+                        globalStats.followups.sent++;
+                        console.log(`[MASTER CRON] 📋 Seguimiento enviado a ${appt.patient.name}`);
+                    } catch (err) {
+                        console.error(`[MASTER CRON] Error seguimiento (${appt.patient.name}):`, err.message);
+                        await prisma.whatsAppLog.create({
+                            data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'FAILED', content, error: err.message, sentAt: new Date() }
+                        });
+                        globalStats.followups.failed++;
+                    }
+                }
+            }
+        }
+
+        console.log('[MASTER CRON] ✅ Bloque 3 completado:', globalStats.followups);
+    } catch (e) {
+        console.error('[MASTER CRON] ❌ Error en Bloque 3 (Seguimientos):', e.message);
+    }
+
+    // ── Respuesta final unificada ────────────────────────────────────────────
+    console.log('[MASTER CRON] 🏁 Todos los bloques ejecutados.', globalStats);
+    res.json({ message: 'Master Cron finished successfully', stats: globalStats });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CRON: Birthday greetings — called daily by cron-job.org at 10:00
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/cron/whatsapp-birthdays', async (req, res) => {
+    const authHeader = req.headers['authorization'] || req.headers['x-cron-secret'];
+    const expectedSecret = process.env.CRON_SECRET;
+
+    if (!expectedSecret) {
+        console.error('[CRON BIRTHDAYS] CRON_SECRET no definido en el entorno.');
+        return res.status(500).json({ error: 'Configuración del servidor incompleta' });
+    }
+
+    const providedToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+    if (!providedToken || providedToken !== expectedSecret.trim()) {
+        console.warn('[CRON BIRTHDAYS] Intento no autorizado.');
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
     try {
-        console.log('[CRON] Starting WhatsApp reminders processing...');
-        
-        // Calculate date for tomorrow
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        // Exact 24h range for tomorrow
-        const startOfTomorrow = new Date(tomorrow.setHours(0, 0, 0, 0));
-        const endOfTomorrow = new Date(tomorrow.setHours(23, 59, 59, 999));
+        console.log('[CRON BIRTHDAYS] Iniciando envío de felicitaciones...');
 
-        const appointments = await prisma.appointment.findMany({
-            where: {
-                status: 'Confirmed',
-                date: {
-                    gte: startOfTomorrow,
-                    lte: endOfTomorrow
-                },
-                whatsappSent: false
-            },
-            include: {
-                patient: true,
-                treatment: true
-            }
+        const today = new Date();
+        const todayMonth = today.getMonth() + 1; // 1-12
+        const todayDay = today.getDate();
+
+        // Fetch all patients and filter by birth day/month in JS
+        // (Prisma/PostgreSQL raw function needed for day/month comparison)
+        const allPatients = await prisma.patient.findMany({
+            where: { phone: { not: null } },
+            select: { id: true, name: true, phone: true, birthDate: true }
         });
 
-        console.log(`[CRON] Found ${appointments.length} appointments for ${startOfTomorrow.toLocaleDateString()} to remind.`);
-
-        const defaultTemplate = await prisma.whatsAppTemplate.findFirst({
-            where: { triggerType: 'APPOINTMENT_REMINDER' }
+        const birthdayPatients = allPatients.filter(p => {
+            if (!p.birthDate) return false;
+            const bd = new Date(p.birthDate);
+            return bd.getMonth() + 1 === todayMonth && bd.getDate() === todayDay;
         });
 
-        if (!defaultTemplate && appointments.length > 0) {
-            console.error('[CRON] No APPOINTMENT_REMINDER template found.');
-            return res.status(404).json({ error: 'Reminder template not found' });
+        console.log(`[CRON BIRTHDAYS] ${birthdayPatients.length} paciente(s) cumplen años hoy.`);
+
+        const template = await prisma.whatsAppTemplate.findFirst({
+            where: { triggerType: 'BIRTHDAY' }
+        });
+
+        if (!template && birthdayPatients.length > 0) {
+            console.warn('[CRON BIRTHDAYS] No se encontró plantilla BIRTHDAY. Usando mensaje por defecto.');
         }
+
+        const defaultMessage = '¡Feliz cumpleaños, {{nombre}}! 🎉 Todo el equipo de la clínica te deseamos un día estupendo. ¡Muchas felicidades!';
 
         const stats = { sent: 0, failed: 0, skipped: 0 };
 
-        for (const appt of appointments) {
-            if (!appt.patient?.phone) {
-                stats.skipped++;
-                continue;
-            }
+        for (const patient of birthdayPatients) {
+            if (!patient.phone) { stats.skipped++; continue; }
 
-            // Variable Replacement
-            const appointmentDate = new Date(appt.date);
-            const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            
-            // Format time: ensuring HH:mm
-            let formattedTime = '00:00';
-            if (appt.time) {
-                formattedTime = appt.time.substring(0, 5);
-            } else {
-                formattedTime = appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
-            }
+            // Avoid duplicate: check if already sent today
+            const alreadySent = await prisma.whatsAppLog.findFirst({
+                where: {
+                    patientId: patient.id,
+                    type: 'BIRTHDAY',
+                    sentAt: { gte: new Date(today.setHours(0, 0, 0, 0)) }
+                }
+            });
+            if (alreadySent) { stats.skipped++; continue; }
 
-            const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta General';
-
-            let message = defaultTemplate.content
-                .replace(/{{nombre}}/g, appt.patient.name)
-                .replace(/{{fecha}}/g, formattedDate)
-                .replace(/{{hora}}/g, formattedTime)
-                .replace(/{{tratamiento}}/g, treatmentName);
+            const content = (template?.content || defaultMessage)
+                .replace(/{{nombre}}/g, patient.name)
+                .replace(/{{PACIENTE}}/g, patient.name);
 
             try {
-                // Formatting number for Evolution API
-                let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                let number = patient.phone.replace(/[^0-9]/g, '');
                 if (number.length === 9) number = '34' + number;
 
-                await whatsappService.sendMessage(number, message);
-                
-                // Update DB
-                await prisma.appointment.update({
-                    where: { id: appt.id },
-                    data: { whatsappSent: true }
-                });
+                await whatsappService.sendMessage(number, content);
 
-                // Log it
                 await prisma.whatsAppLog.create({
                     data: {
-                        patientId: appt.patientId,
-                        type: 'APPOINTMENT_REMINDER',
+                        patientId: patient.id,
+                        type: 'BIRTHDAY',
                         status: 'SENT',
-                        content: message,
+                        content,
                         sentAt: new Date()
                     }
                 });
-
                 stats.sent++;
+                console.log(`[CRON BIRTHDAYS] ✅ Enviado a ${patient.name}`);
             } catch (err) {
-                console.error(`[CRON] Failed to send reminder for appt ${appt.id}:`, err.message);
-                stats.failed++;
-                
+                console.error(`[CRON BIRTHDAYS] ❌ Error enviando a ${patient.name}:`, err.message);
                 await prisma.whatsAppLog.create({
                     data: {
-                        patientId: appt.patientId,
-                        type: 'APPOINTMENT_REMINDER',
+                        patientId: patient.id,
+                        type: 'BIRTHDAY',
                         status: 'FAILED',
-                        content: message,
+                        content,
                         error: err.message,
                         sentAt: new Date()
                     }
                 });
+                stats.failed++;
             }
         }
 
-        res.json({ message: 'Cron finished', stats });
+        res.json({ message: 'Birthday cron finished', stats });
     } catch (e) {
-        console.error('[CRON] Error during reminders:', e);
+        console.error('[CRON BIRTHDAYS] Error general:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CRON: Post-op follow-ups — called daily by cron-job.org
+// Sends follow-up messages to patients whose completed appointment was N days ago
+// based on the triggerOffset defined in TREATMENT_FOLLOWUP templates.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/cron/whatsapp-followups', async (req, res) => {
+    const authHeader = req.headers['authorization'] || req.headers['x-cron-secret'];
+    const expectedSecret = process.env.CRON_SECRET;
+
+    if (!expectedSecret) {
+        console.error('[CRON FOLLOWUPS] CRON_SECRET no definido en el entorno.');
+        return res.status(500).json({ error: 'Configuración del servidor incompleta' });
+    }
+
+    const providedToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+    if (!providedToken || providedToken !== expectedSecret.trim()) {
+        console.warn('[CRON FOLLOWUPS] Intento no autorizado.');
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+        console.log('[CRON FOLLOWUPS] Iniciando check de seguimientos post-operatorios...');
+
+        // Load all TREATMENT_FOLLOWUP templates (each defines its own triggerOffset in days)
+        const templates = await prisma.whatsAppTemplate.findMany({
+            where: { triggerType: 'TREATMENT_FOLLOWUP' }
+        });
+
+        if (templates.length === 0) {
+            console.warn('[CRON FOLLOWUPS] No hay plantillas TREATMENT_FOLLOWUP configuradas.');
+            return res.json({ message: 'No followup templates found', stats: { sent: 0, failed: 0, skipped: 0 } });
+        }
+
+        const stats = { sent: 0, failed: 0, skipped: 0 };
+
+        for (const template of templates) {
+            // triggerOffset is stored as a string like "3" (days after appointment)
+            const offsetDays = parseInt(template.triggerOffset, 10);
+            if (isNaN(offsetDays) || offsetDays <= 0) continue;
+
+            // Target date: appointments completed exactly offsetDays ago
+            const targetDate = new Date();
+            targetDate.setDate(targetDate.getDate() - offsetDays);
+            const startOfTarget = new Date(targetDate.setHours(0, 0, 0, 0));
+            const endOfTarget = new Date(targetDate.setHours(23, 59, 59, 999));
+
+            const appointments = await prisma.appointment.findMany({
+                where: {
+                    status: { in: ['Completed', 'Attended'] },
+                    date: { gte: startOfTarget, lte: endOfTarget }
+                },
+                include: { patient: true, treatment: true }
+            });
+
+            console.log(`[CRON FOLLOWUPS] Template "${template.name}" (offset ${offsetDays}d): ${appointments.length} cita(s) candidatas.`);
+
+            for (const appt of appointments) {
+                if (!appt.patient?.phone) { stats.skipped++; continue; }
+
+                // Avoid duplicate follow-up for this patient & template combo
+                const alreadySent = await prisma.whatsAppLog.findFirst({
+                    where: {
+                        patientId: appt.patient.id,
+                        type: 'TREATMENT_FOLLOWUP',
+                        sentAt: { gte: startOfTarget }
+                    }
+                });
+                if (alreadySent) { stats.skipped++; continue; }
+
+                const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta';
+
+                const content = template.content
+                    .replace(/{{nombre}}/g, appt.patient.name)
+                    .replace(/{{PACIENTE}}/g, appt.patient.name)
+                    .replace(/{{tratamiento}}/g, treatmentName)
+                    .replace(/{{TRATAMIENTO}}/g, treatmentName);
+
+                try {
+                    let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                    if (number.length === 9) number = '34' + number;
+
+                    await whatsappService.sendMessage(number, content);
+
+                    await prisma.whatsAppLog.create({
+                        data: {
+                            patientId: appt.patient.id,
+                            type: 'TREATMENT_FOLLOWUP',
+                            status: 'SENT',
+                            content,
+                            sentAt: new Date()
+                        }
+                    });
+                    stats.sent++;
+                    console.log(`[CRON FOLLOWUPS] ✅ Seguimiento enviado a ${appt.patient.name}`);
+                } catch (err) {
+                    console.error(`[CRON FOLLOWUPS] ❌ Error enviando a ${appt.patient.name}:`, err.message);
+                    await prisma.whatsAppLog.create({
+                        data: {
+                            patientId: appt.patient.id,
+                            type: 'TREATMENT_FOLLOWUP',
+                            status: 'FAILED',
+                            content,
+                            error: err.message,
+                            sentAt: new Date()
+                        }
+                    });
+                    stats.failed++;
+                }
+            }
+        }
+
+        res.json({ message: 'Followup cron finished', stats });
+    } catch (e) {
+        console.error('[CRON FOLLOWUPS] Error general:', e);
         res.status(500).json({ error: e.message });
     }
 });

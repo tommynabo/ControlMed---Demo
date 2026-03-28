@@ -405,6 +405,7 @@ enum WhatsAppLogStatus {
 enum WhatsAppTriggerType {
   APPOINTMENT_REMINDER
   TREATMENT_FOLLOWUP
+  BIRTHDAY
 }
 
 model WhatsAppTemplate {
