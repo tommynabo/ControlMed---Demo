@@ -63,7 +63,7 @@ const Patients: React.FC = () => {
 
     // Fetch doctor schedules once on mount
     React.useEffect(() => {
-        api.getDoctorSchedules().then(setDoctorSchedules).catch(err => console.error("Failed to load schedules", err));
+        api.doctorSchedules.getAll().then(setDoctorSchedules).catch(err => console.error("Failed to load schedules", err));
     }, []);
 
     // Helper: Doctor availability check (Sync with Agenda.tsx)
