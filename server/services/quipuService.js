@@ -141,15 +141,17 @@ async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'c
     };
     const finalMethod = methodMap[paymentMethod] || 'cash';
 
-    // PASO 3: Map items to Quipu book_entry_items format
+    // PASO 3: Map items to Quipu book_entry_items format.
+    // Quipu JSON:API requires numeric fields as decimal strings ("100.00", "21.0").
+    // Items must live in the top-level `included` array, NOT inside relationships.
     const itemsData = items.map(item => ({
         type: 'book_entry_items',
         attributes: {
             concept:           item.name    || item.concept || 'Servicio médico',
-            unitary_amount:    parseFloat(item.price)    || 0,   // number, not string
+            unitary_amount:    parseFloat(item.price  || 0).toFixed(2),   // "100.00"
             quantity:          item.quantity || 1,
-            vat_percent:       item.tax !== undefined ? Number(item.tax) : 0, // 0 = exento médico
-            retention_percent: 0
+            vat_percent:       (item.tax !== undefined ? Number(item.tax) : 0).toFixed(1), // "0.0" = exento médico
+            retention_percent: '0.0'
         }
     }));
 
@@ -164,10 +166,11 @@ async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'c
                 payment_method: finalMethod
             },
             relationships: {
-                contact: { data: { id: String(contactId), type: 'contacts' } },
-                items:   { data: itemsData }
+                contact: { data: { id: String(contactId), type: 'contacts' } }
+                // NOTE: items are NOT a JSON:API relationship — they go in `included` below
             }
-        }
+        },
+        included: itemsData  // Quipu requires items at the top-level `included` array
     };
 
     console.log('📤 [Quipu] Creating invoice payload:', JSON.stringify(payload, null, 2));

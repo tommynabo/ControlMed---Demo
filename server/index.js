@@ -2025,12 +2025,17 @@ app.post('/api/finance/invoice', async (req, res) => {
         }
 
     } catch (e) {
-        // Log the full FacturaDirecta rejection body so we can see the exact field that failed
-        const fdError = e.response?.data;
-        console.error("❌ [Invoice Endpoint] FacturaDirecta Error Details:", JSON.stringify(fdError || e.message, null, 2));
-        res.status(500).json({
-            error: 'Failed to create invoice',
-            detail: fdError || e.message
+        // PASO 1: Bubble up the exact Quipu rejection body so the frontend can display the real reason.
+        const quipuError = e.response?.data;  // exact JSON from Quipu (e.g. { errors: [{ detail: "NIF is invalid" }] })
+        const statusCode = e.response?.status || 500;
+        console.error(
+            `❌ [Invoice Endpoint] Quipu rejected with HTTP ${statusCode}:`,
+            JSON.stringify(quipuError || e.message, null, 2)
+        );
+        res.status(statusCode < 400 ? 500 : statusCode).json({
+            error:      quipuError || e.message,
+            quipu_raw:  quipuError,
+            message:    e.message
         });
     }
 });
