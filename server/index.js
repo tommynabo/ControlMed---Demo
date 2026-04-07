@@ -1927,14 +1927,33 @@ app.post('/api/finance/invoice', async (req, res) => {
             return res.status(500).json({ error: "Error conectando con Quipu (Contacto)" });
         }
 
-        // 2. Create Invoice
+        // 2. Generate sequential filing_number from local DB (Quipu requires it when issue_date is set)
         const today = new Date().toISOString().split('T')[0];
+        let filingNumber;
+        try {
+            const supabaseForNum = getSupabase();
+            const year = new Date().getFullYear();
+            const { count } = await supabaseForNum
+                .from('Invoice')
+                .select('*', { count: 'exact', head: true })
+                .gte('date', `${year}-01-01T00:00:00.000Z`);
+            const seq = String((count || 0) + 1).padStart(4, '0');
+            filingNumber = `F-${year}-${seq}`;
+        } catch (numErr) {
+            // Fallback: use timestamp-based number to guarantee uniqueness
+            filingNumber = `F-${new Date().getFullYear()}-${Date.now()}`;
+            console.warn('⚠️ Could not get invoice count from DB, using timestamp filing_number:', filingNumber);
+        }
+        console.log(`📋 [Invoice] Generated filing_number: ${filingNumber}`);
+
+        // 3. Create Invoice in Quipu
         const result = await quipuService.createInvoice(
             contact.id,
             items,
             today,
             today,
-            paymentMethod || 'card'
+            paymentMethod || 'card',
+            filingNumber
         );
 
         // 3. Save to Local DB (Mirror)
