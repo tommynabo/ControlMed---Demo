@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppProvider } from './src/context/AppContext';
 import Layout from './src/layouts/Layout';
 import Dashboard from './src/pages/Dashboard';
@@ -20,8 +21,20 @@ import { Liquidations } from './src/pages/Liquidations';import ProtectedRoute fr
 
 import { AppointmentDetails } from './src/pages/AppointmentDetails';
 
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,     // 5 min before data is considered stale
+      gcTime: 1000 * 60 * 30,        // 30 min cache retention
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
 const App: React.FC = () => {
   return (
+    <QueryClientProvider client={queryClient}>
     <AppProvider>
       <Toaster position="top-right" reverseOrder={false} />
       <BrowserRouter>
@@ -49,6 +62,7 @@ const App: React.FC = () => {
         </Routes>
       </BrowserRouter>
     </AppProvider>
+    </QueryClientProvider>
   );
 };
 

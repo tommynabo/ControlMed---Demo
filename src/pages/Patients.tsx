@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X
+    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
@@ -58,6 +58,38 @@ const Patients: React.FC = () => {
     // Ref so Effect B can read latest patientTab without being triggered by it
     const patientTabRef = React.useRef(patientTab);
     patientTabRef.current = patientTab;
+
+    // ── Pagination & Server-side Search ──────────────────────────────────────
+    const PAGE_SIZE = 50;
+    const [localSearch, setLocalSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pagePatients, setPagePatients] = useState<Patient[]>([]);
+    const [totalPatients, setTotalPatients] = useState(0);
+    const [isLoadingList, setIsLoadingList] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    // Debounce: update debouncedSearch 300ms after localSearch changes and reset to page 1
+    React.useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(localSearch);
+            setCurrentPage(1);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [localSearch]);
+
+    // Fetch a page of patients whenever debouncedSearch, currentPage, or refreshKey changes
+    React.useEffect(() => {
+        setIsLoadingList(true);
+        api.getPatientsPage(currentPage, PAGE_SIZE, debouncedSearch || undefined)
+            .then(result => {
+                setPagePatients(result.data);
+                setTotalPatients(result.total);
+            })
+            .catch(err => console.error('Error fetching patients page:', err))
+            .finally(() => setIsLoadingList(false));
+    }, [debouncedSearch, currentPage, refreshKey]);
+    // ─────────────────────────────────────────────────────────────────────────
 
     const [doctorSchedules, setDoctorSchedules] = useState<any[]>([]);
 
@@ -132,14 +164,21 @@ const Patients: React.FC = () => {
     // reading a stale tabFromUrl and reverting the selection.
     React.useEffect(() => {
         if (patientIdFromUrl && (!selectedPatient || selectedPatient.id !== patientIdFromUrl)) {
-            const p = patients.find(p => p.id === patientIdFromUrl);
-            if (p) setSelectedPatient(p);
+            // Fast path: check current page first; fallback to direct API fetch
+            const p = pagePatients.find(p => p.id === patientIdFromUrl);
+            if (p) {
+                setSelectedPatient(p);
+            } else {
+                api.getPatientById(patientIdFromUrl)
+                    .then(setSelectedPatient)
+                    .catch(() => {}); // Patient not found — ignore silently
+            }
         }
         if (tabFromUrl && patientTabRef.current !== tabFromUrl) {
             setPatientTab(tabFromUrl);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [patientIdFromUrl, tabFromUrl, patients, selectedPatient, setSelectedPatient]);
+    }, [patientIdFromUrl, tabFromUrl]);
 
     // Fetch budgets and prescriptions when patient is selected or tab changes
     React.useEffect(() => {
@@ -656,6 +695,12 @@ const Patients: React.FC = () => {
     // Documents State (BLOQUE 4.2)
     const [isDocumentsModalOpen, setIsDocumentsModalOpen] = useState(false);
 
+    // Submit guards (Block 3)
+    const [isSubmittingPatient, setIsSubmittingPatient] = useState(false);
+    const [isSubmittingRecord, setIsSubmittingRecord] = useState(false);
+    const [isSubmittingTreatment, setIsSubmittingTreatment] = useState(false);
+    const [isSubmittingWhatsapp, setIsSubmittingWhatsapp] = useState(false);
+
     // Fetch templates and logs when modal or tab opens
     React.useEffect(() => {
         if (patientTab === 'whatsapp' && selectedPatient) {
@@ -673,6 +718,8 @@ const Patients: React.FC = () => {
     }, [isWhatsAppModalOpen, selectedPatient]);
 
     const handleCreatePatient = async () => {
+        if (isSubmittingPatient) return;
+        setIsSubmittingPatient(true);
         try {
             const created = await api.createPatient(newPatient);
             setPatients(prev => [...prev, created]);
@@ -681,37 +728,22 @@ const Patients: React.FC = () => {
                 name: '', firstName: '', lastName1: '', lastName2: '', dni: '', email: '', phone: '',
                 birthDate: '', smoker: false, diseases: '', allergies: '', medications: '', criticalAlerts: ''
             });
+            // Refresh the paginated list so the new patient appears
+            setLocalSearch('');
+            setDebouncedSearch('');
+            setCurrentPage(1);
+            setRefreshKey(k => k + 1);
             toast.success("Paciente creado correctamente");
         } catch (e: any) {
             console.error("Error creating patient:", e);
             toast.error(e.message || "Error al crear paciente");
+        } finally {
+            setIsSubmittingPatient(false);
         }
     };
 
-    // FORCE DATA LOAD if patients is empty (User Feedback Fix)
-    React.useEffect(() => {
-        if (patients.length === 0) {
-            console.log("Patients list empty, forcing refresh...");
-            api.getPatients()
-                .then(pts => {
-                    if (Array.isArray(pts)) {
-                        console.log(`Fetched ${pts.length} patients`);
-                        setPatients(pts);
-                    } else {
-                        console.error("API Error: Expected array of patients, got:", JSON.stringify(pts, null, 2));
-                    }
-                })
-                .catch(err => console.error("Error auto-fetching patients", err));
-        }
-    }, [patients.length]); // Add dep to ensure it runs if length causes issues
-
-    // Computed
-    const filteredPatients = useMemo(() => {
-        return patients.filter(p =>
-            p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.dni.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    }, [patients, searchQuery]);
+    // Computed — kept for backward compat with parts of the component that still use the global list
+    const filteredPatients = patients;
 
     // Handlers
     const handleDeleteRecord = async (id: string) => {
@@ -765,7 +797,8 @@ const Patients: React.FC = () => {
     const handleAddClinicalRecord = async () => {
         if (!newEntryForm.treatment) return toast("Rellene el tratamiento");
         if (!selectedPatient?.id) return toast("Error: Paciente no seleccionado.");
-
+        if (isSubmittingRecord) return;
+        setIsSubmittingRecord(true);
         try {
             const payload = { ...newEntryForm, patientId: selectedPatient.id };
             const rec = await api.clinicalRecords.create(payload);
@@ -793,6 +826,8 @@ const Patients: React.FC = () => {
         } catch (e: any) {
             console.error(e);
             toast("Error al guardar: " + e.message);
+        } finally {
+            setIsSubmittingRecord(false);
         }
     };
 
@@ -886,8 +921,8 @@ const Patients: React.FC = () => {
                     <div className="relative group flex-1 min-w-[280px]">
                         <Search className="absolute left-5 top-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
                         <input
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            value={localSearch}
+                            onChange={(e) => setLocalSearch(e.target.value)}
                             placeholder="Buscar por nombre, DNI..."
                             className="w-full bg-white border border-slate-200 p-5 pl-14 rounded-2xl text-sm font-bold shadow-sm outline-none focus:ring-4 focus:ring-blue-500/10 transition-all"
                         />
@@ -895,7 +930,11 @@ const Patients: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
-                    {filteredPatients.map(patient => (
+                    {isLoadingList ? (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+                        </div>
+                    ) : pagePatients.map(patient => (
                         <div
                             key={patient.id}
                             onClick={() => { setSelectedPatient(patient); setPatientTab('ficha'); }}
@@ -933,6 +972,30 @@ const Patients: React.FC = () => {
                         </div>
                     ))}
                 </div>
+                {/* Pagination controls */}
+                {totalPatients > PAGE_SIZE && (
+                    <div className="flex items-center justify-between pt-3 pb-1">
+                        <span className="text-xs font-bold text-slate-400">
+                            {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalPatients)} de {totalPatients}
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setCurrentPage(p => p - 1)}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-xl border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-colors"
+                            >
+                                <ChevronLeft size={16} />
+                            </button>
+                            <button
+                                onClick={() => setCurrentPage(p => p + 1)}
+                                disabled={currentPage * PAGE_SIZE >= totalPatients}
+                                className="p-2 rounded-xl border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-colors"
+                            >
+                                <ChevronRight size={16} />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* RIGHT COLUMN: DETAIL */}
@@ -981,6 +1044,7 @@ const Patients: React.FC = () => {
                                                     // SAVE CHANGES
                                                     const updated = await api.updatePatient(selectedPatient.id, selectedPatient);
                                                     setPatients(prev => prev.map(p => p.id === updated.id ? updated : p));
+                                                    setPagePatients(prev => prev.map(p => p.id === updated.id ? updated : p));
                                                     setSelectedPatient(updated);
                                                     toast("✅ Cambios guardados correctamente");
                                                 } catch (e) {
@@ -2231,7 +2295,7 @@ const Patients: React.FC = () => {
                             </div>{/* end scrollable area */}
                             <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                                 <button onClick={() => setIsNewPatientModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
-                                <button onClick={handleCreatePatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg">Guardar</button>
+                                <button onClick={handleCreatePatient} disabled={isSubmittingPatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">{isSubmittingPatient ? 'Guardando...' : 'Guardar'}</button>
                             </div>
                         </div>
                     </div>
@@ -2286,7 +2350,7 @@ const Patients: React.FC = () => {
                             </div>
                             <div className="flex gap-4 mt-6">
                                 <button onClick={() => setIsNewEntryModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
-                                <button onClick={handleAddClinicalRecord} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg">Guardar Entrada</button>
+                                <button onClick={handleAddClinicalRecord} disabled={isSubmittingRecord} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">{isSubmittingRecord ? 'Guardando...' : 'Guardar Entrada'}</button>
                             </div>
                         </div>
                     </div>
@@ -2443,8 +2507,11 @@ const Patients: React.FC = () => {
                             <div className="flex gap-4 mt-6">
                                 <button onClick={() => setIsNewTreatmentModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
                                 <button
+                                    disabled={isSubmittingTreatment}
                                     onClick={async () => {
                                         if (!treatmentForm.name) return toast("Nombre requerido");
+                                        if (isSubmittingTreatment) return;
+                                        setIsSubmittingTreatment(true);
                                         try {
                                             // Save as Clinical Record primarily (as requested for history)
                                             const rec = await api.clinicalRecords.create({
@@ -2459,10 +2526,11 @@ const Patients: React.FC = () => {
                                             setTreatmentForm({ name: '', price: '', status: 'Pendiente' });
                                             toast("Tratamiento guardado en historial");
                                         } catch (e) { toast("Error: " + e.message); }
+                                        finally { setIsSubmittingTreatment(false); }
                                     }}
-                                    className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg"
+                                    className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50"
                                 >
-                                    Guardar
+                                    {isSubmittingTreatment ? 'Guardando...' : 'Guardar'}
                                 </button>
                             </div>
                         </div>
@@ -2594,8 +2662,11 @@ const Patients: React.FC = () => {
                             <div className="flex gap-4 mt-6">
                                 <button onClick={() => setIsWhatsAppModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500 hover:bg-slate-50 rounded-xl">Cancelar</button>
                                 <button
+                                    disabled={isSubmittingWhatsapp}
                                     onClick={async () => {
                                         if (!whatsAppForm.scheduledDate || !whatsAppForm.content) return toast("Falta fecha o contenido.");
+                                        if (isSubmittingWhatsapp) return;
+                                        setIsSubmittingWhatsapp(true);
                                         try {
                                             await api.whatsapp.scheduleMessage({
                                                 patientId: selectedPatient!.id,
@@ -2608,10 +2679,11 @@ const Patients: React.FC = () => {
                                             const logs = await api.whatsapp.getLogs(selectedPatient!.id);
                                             setWhatsappLogs(logs);
                                         } catch (e: any) { toast('Error: ' + e.message); }
+                                        finally { setIsSubmittingWhatsapp(false); }
                                     }}
-                                    className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold uppercase shadow-lg hover:bg-emerald-600 transition-colors"
+                                    className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold uppercase shadow-lg hover:bg-emerald-600 transition-colors disabled:opacity-50"
                                 >
-                                    Programar
+                                    {isSubmittingWhatsapp ? 'Enviando...' : 'Programar'}
                                 </button>
                             </div>
                         </div>

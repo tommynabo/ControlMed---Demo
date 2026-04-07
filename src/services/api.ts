@@ -278,6 +278,20 @@ export const api = {
         return res.json();
     },
 
+    getPatientsPage: async (page: number, limit: number, search?: string): Promise<{ data: Patient[]; total: number }> => {
+        const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+        if (search) params.set('search', search);
+        const res = await fetch(`${API_URL}/patients?${params}`, { headers });
+        if (!res.ok) throw new Error('Failed to fetch patients page');
+        return res.json();
+    },
+
+    getPatientById: async (id: string): Promise<Patient> => {
+        const res = await fetch(`${API_URL}/patients/${encodeURIComponent(id)}`, { headers });
+        if (!res.ok) throw new Error('Failed to fetch patient');
+        return res.json();
+    },
+
     // Doctors
     getDoctors: async (): Promise<Doctor[]> => {
         try {

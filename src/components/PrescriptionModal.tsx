@@ -20,6 +20,7 @@ export const PrescriptionModal: React.FC<PrescriptionModalProps> = ({
 }) => {
     const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Initial State Helper
     const getInitialData = () => {
@@ -528,11 +529,18 @@ ${formData.prescriberName}
                             Generar e Imprimir
                         </button>
                         <button
-                            onClick={() => onSave(formData)}
-                            className="flex items-center gap-2 px-10 py-3 rounded-2xl font-black bg-emerald-500 text-white shadow-xl hover:bg-emerald-600 transition-all text-sm uppercase"
+                            onClick={async () => {
+                                if (isSubmitting) return;
+                                setIsSubmitting(true);
+                                try { await onSave(formData); }
+                                catch (e) { /* parent handles errors */ }
+                                finally { setIsSubmitting(false); }
+                            }}
+                            disabled={isSubmitting}
+                            className="flex items-center gap-2 px-10 py-3 rounded-2xl font-black bg-emerald-500 text-white shadow-xl hover:bg-emerald-600 transition-all text-sm uppercase disabled:opacity-50"
                         >
                             <Save size={20} />
-                            {prescription ? 'Guardar Cambios' : 'Guardar Receta'}
+                            {isSubmitting ? 'Guardando...' : (prescription ? 'Guardar Cambios' : 'Guardar Receta')}
                         </button>
                     </div>
                 </div>

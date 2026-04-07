@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Patient, Appointment, Invoice, InventoryItem, ClinicalRecord, Doctor, Liquidation, AIChatMessage, ToothState, DocumentTemplate, Expense, TreatmentPlan } from '../../types';
 import { api } from '../services/api';
 import { UserRole, canAccessPage, canAccessRoute, hasPermission } from '../config/roles';
@@ -106,11 +107,14 @@ export const INITIAL_STOCK: InventoryItem[] = [
 ];
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
+    const queryClient = useQueryClient();
+
     // === TabGuard: Restore session ONCE on initial mount (useState lazy initializer) ===
     const [isAuthenticated, setIsAuthenticated] = useState(() => !!restoreSession());
     const [currentUser, setCurrentUser] = useState<any>(() => restoreSession());
     const [role, setRole] = useState<UserRole>(() => restoreSession()?.role || 'ADMIN');
 
+    // Local state retained for backward-compat setters used by mutation callers
     const [patients, setPatients] = useState<Patient[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -121,6 +125,45 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+    // === React Query: server-side caches (only fetched when authenticated) ===
+    const { data: rqPatients } = useQuery({
+        queryKey: ['patients'],
+        queryFn: () => api.getPatients(),
+        enabled: isAuthenticated,
+        staleTime: 1000 * 60 * 5,
+    });
+    const { data: rqAppointments } = useQuery({
+        queryKey: ['appointments'],
+        queryFn: () => api.appointments.getAll(),
+        enabled: isAuthenticated,
+        staleTime: 1000 * 60 * 2,
+    });
+    const { data: rqDoctors } = useQuery({
+        queryKey: ['doctors'],
+        queryFn: () => api.getDoctors(),
+        enabled: isAuthenticated,
+        staleTime: 1000 * 60 * 10,
+    });
+    const { data: rqInvoices } = useQuery({
+        queryKey: ['invoices'],
+        queryFn: () => api.invoices.getAll(),
+        enabled: isAuthenticated,
+        staleTime: 1000 * 60 * 5,
+    });
+    const { data: rqExpenses } = useQuery({
+        queryKey: ['expenses'],
+        queryFn: () => api.expenses.getAll(),
+        enabled: isAuthenticated,
+        staleTime: 1000 * 60 * 5,
+    });
+
+    // Sync React Query data into context state so existing consumers keep working
+    useEffect(() => { if (rqPatients) setPatients(rqPatients); }, [rqPatients]);
+    useEffect(() => { if (rqAppointments) setAppointments(rqAppointments); }, [rqAppointments]);
+    useEffect(() => { if (rqDoctors) setDoctors(rqDoctors); }, [rqDoctors]);
+    useEffect(() => { if (rqInvoices) setInvoices(rqInvoices); }, [rqInvoices]);
+    useEffect(() => { if (rqExpenses) setExpenses(rqExpenses); }, [rqExpenses]);
 
     // === TabGuard: Heartbeat to protect against tab discard ===
     useEffect(() => {
@@ -140,32 +183,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [isAuthenticated]);
 
-    // Initial Data Load
-    useEffect(() => {
-        if (isAuthenticated) {
-            const fetchData = async () => {
-                try {
-                    const [pts, appts, docs, invs, exps] = await Promise.all([
-                        api.getPatients().catch(err => { console.error("Failed to fetch patients", err); return []; }),
-                        api.appointments.getAll().catch(err => { console.error("Failed to fetch appointments", err); return []; }),
-                        api.getDoctors().catch(err => { console.error("Failed to fetch doctors", err); return []; }),
-                        api.invoices.getAll().catch(err => { console.error("Failed to fetch invoices", err); return []; }),
-                        api.expenses.getAll().catch(err => { console.error("Failed to fetch expenses", err); return []; })
-                    ]);
-                    setPatients(pts);
-                    setAppointments(appts);
-                    setDoctors(docs);
-                    setInvoices(invs);
-                    setExpenses(exps);
-                    // Stock and others can be added here
-                } catch (e) {
-                    console.error("Error loading initial data", e);
-                }
-            };
-            fetchData();
-        }
-    }, [isAuthenticated]);
-
     const login = (user: any) => {
         setCurrentUser(user);
         setRole(user.role);
@@ -177,6 +194,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const logout = () => {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        // Invalidate all cached data on logout
+        queryClient.clear();
         // === TabGuard: Clear session ===
         clearSession();
     };
@@ -189,45 +208,23 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         persistSession(newUser);
     };
 
+    // React Query-backed refresh: invalidates cache → triggers automatic re-fetch
     const refreshPatients = async () => {
-        try {
-            const pts = await api.getPatients();
-            setPatients(pts);
-        } catch (e) {
-            console.error("Error refreshing patients", e);
-        }
+        await queryClient.invalidateQueries({ queryKey: ['patients'] });
     };
-
     const refreshAppointments = async () => {
-        try {
-            const appts = await api.appointments.getAll();
-            setAppointments(appts);
-        } catch (e) {
-            console.error("Error refreshing appointments", e);
-        }
+        await queryClient.invalidateQueries({ queryKey: ['appointments'] });
     };
-
     const refreshInvoices = async () => {
-        try {
-            const invs = await api.invoices.getAll();
-            setInvoices(invs);
-        } catch (e) {
-            console.error("Error refreshing invoices", e);
-        }
+        await queryClient.invalidateQueries({ queryKey: ['invoices'] });
+    };
+    const refreshDoctors = async () => {
+        await queryClient.invalidateQueries({ queryKey: ['doctors'] });
     };
 
     const addPatient = (p: Patient) => setPatients(prev => [p, ...prev]);
     const addAppointment = (a: Appointment) => setAppointments(prev => [...prev, a]);
     const addInvoice = (i: Invoice) => setInvoices(prev => [i, ...prev]);
-
-    const refreshDoctors = async () => {
-        try {
-            const docs = await api.getDoctors();
-            setDoctors(docs);
-        } catch (e) {
-            console.error("Error refreshing doctors", e);
-        }
-    };
 
     // RBAC helpers bound to current role
     const canAccessPageFn = (pageId: string) => canAccessPage(role, pageId);

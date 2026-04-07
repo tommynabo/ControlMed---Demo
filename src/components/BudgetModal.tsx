@@ -19,6 +19,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
 
     // Loading state
     const [isLoadingServices, setIsLoadingServices] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -148,7 +149,8 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     const handleSafeSave = async () => {
         if (!title) return alert("Por favor indica un título");
         if (items.length === 0) return alert("Añade al menos un tratamiento");
-
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         try {
             if (initialBudget && initialBudget.id) {
                 await api.budget.update(initialBudget.id, items, title);
@@ -161,6 +163,8 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
             onClose();
         } catch (e: any) {
             alert("Error: " + e.message);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -359,10 +363,11 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                         </button>
                         <button
                             onClick={handleSafeSave}
-                            className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold uppercase shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2"
+                            disabled={isSubmitting}
+                            className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold uppercase shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50 disabled:scale-100"
                         >
                             <DollarSign size={18} />
-                            {initialBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}
+                            {isSubmitting ? 'Guardando...' : (initialBudget ? 'Guardar Cambios' : 'Crear Presupuesto')}
                         </button>
                     </div>
                 </div>

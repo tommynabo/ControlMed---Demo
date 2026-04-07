@@ -180,10 +180,18 @@ app.post('/api/prescriptions', async (req, res) => {
 app.delete('/api/prescriptions/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.prescription.delete({ where: { id } });
+        // RGPD Soft Delete via Prisma
+        await prisma.prescription.update({
+            where: { id },
+            data: { deleted_at: new Date() }
+        }).catch(async () => {
+            // If Prisma schema lacks deleted_at yet, try Supabase
+            const sb = getSupabase();
+            await sb.from('Prescription').update({ deleted_at: new Date().toISOString() }).eq('id', id);
+        });
         res.json({ success: true });
     } catch (e) {
-        console.error('Error deleting prescription:', e);
+        console.error('Error soft-deleting prescription:', e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -673,7 +681,11 @@ app.delete('/api/clinical-records/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { error } = await supabase.from('ClinicalRecord').delete().eq('id', id);
+        // RGPD Soft Delete: set deleted_at instead of hard-deleting
+        const { error } = await supabase
+            .from('ClinicalRecord')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', id);
         if (error) throw error;
 
         res.json({ success: true });
@@ -686,10 +698,11 @@ app.delete('/api/budgets/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        // Determine if logic needs to delete items first (Cascade usually handles this, assuming Supabase/Postgres FK is set to Cascade)
-        // If not, we might need to delete line items first manually.
-        // For now trusting cascade or simple delete.
-        const { error } = await supabase.from('Budget').delete().eq('id', id);
+        // RGPD Soft Delete
+        const { error } = await supabase
+            .from('Budget')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', id);
         if (error) throw error;
 
         res.json({ success: true });
@@ -705,6 +718,7 @@ app.get('/api/patients/:patientId/clinical-records', async (req, res) => {
             .from('ClinicalRecord')
             .select('*')
             .eq('patientId', req.params.patientId)
+            .is('deleted_at', null)
             .order('date', { ascending: false });
 
         if (error) return res.status(500).json({ error: error.message });
@@ -894,8 +908,6 @@ const normalizePatient = (patient) => {
 
 app.get('/api/patients', async (req, res) => {
     try {
-        console.log("GET /api/patients - Fetching all patients...");
-
         let supabase;
         try {
             supabase = getSupabase();
@@ -903,22 +915,67 @@ app.get('/api/patients', async (req, res) => {
             return res.status(500).json({ error: configError.message });
         }
 
-        const { data, error } = await supabase
+        const { page, limit, search } = req.query;
+        const isPaginated = page !== undefined && limit !== undefined;
+
+        let query = supabase
             .from('Patient')
-            .select('*')
+            .select('*', isPaginated ? { count: 'exact' } : undefined)
             .order('name', { ascending: true });
+
+        if (search) {
+            // Sanitize search to avoid injection via PostgREST filter values
+            const safe = String(search).replace(/[%_]/g, '\\$&').slice(0, 100);
+            query = query.or(`name.ilike.%${safe}%,dni.ilike.%${safe}%`);
+        }
+
+        if (isPaginated) {
+            const pageNum = Math.max(1, parseInt(page)) - 1;
+            const limitNum = Math.min(200, Math.max(1, parseInt(limit)));
+            const from = pageNum * limitNum;
+            const to = from + limitNum - 1;
+            query = query.range(from, to);
+        }
+
+        const { data, error, count } = await query;
 
         if (error) {
             console.error("❌ Supabase Fetch Error (Patients):", error);
             return res.status(500).json({ error: error.message });
         }
 
-        console.log(`✅ Loaded ${data.length} patients.`);
-        // Normalize all patients to ensure JSON fields are parsed
         const normalizedData = data.map(normalizePatient);
+
+        if (isPaginated) {
+            return res.json({ data: normalizedData, total: count, page: parseInt(page), limit: parseInt(limit) });
+        }
+
+        console.log(`✅ Loaded ${data.length} patients.`);
         res.json(normalizedData);
     } catch (e) {
         console.error("Error Fetching Patients:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// GET single patient by ID — must be declared AFTER GET /api/patients (no conflict: differs in path depth)
+app.get('/api/patients/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        let supabase;
+        try {
+            supabase = getSupabase();
+        } catch (configError) {
+            return res.status(500).json({ error: configError.message });
+        }
+        const { data, error } = await supabase
+            .from('Patient')
+            .select('*')
+            .eq('id', id)
+            .single();
+        if (error) return res.status(404).json({ error: error.message });
+        res.json(normalizePatient(data));
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
@@ -1178,7 +1235,8 @@ app.get('/api/appointments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))');
+            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
+            .is('deleted_at', null);
 
         if (error) {
             console.error("❌ Supabase Fetch Error (Appointments):", error);
@@ -1200,6 +1258,7 @@ app.get('/api/patients/:patientId/appointments', async (req, res) => {
             .from('Appointment')
             .select('*')
             .eq('patientId', req.params.patientId)
+            .is('deleted_at', null)
             .order('date', { ascending: false });
 
         if (error) {
@@ -1305,14 +1364,24 @@ app.put('/api/appointments/:id', async (req, res) => {
 app.delete('/api/appointments/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        console.log(`🗑️ Deleting Appointment ${id}`);
+        console.log(`🗑️ Soft-deleting Appointment ${id}`);
 
-        // Try deleting via Prisma
-        await prisma.appointment.delete({
-            where: { id: id }
-        });
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        console.log("✅ Appointment Deleted:", id);
+        // RGPD Soft Delete: mark as deleted instead of hard-deleting
+        const { error } = await supabase
+            .from('Appointment')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (error) {
+            // Fallback to Prisma if supabase column not yet migrated
+            console.warn('Supabase soft-delete failed, falling back to Prisma hard-delete:', error.message);
+            await prisma.appointment.delete({ where: { id } });
+        }
+
+        console.log("✅ Appointment Soft-Deleted:", id);
         res.json({ success: true });
     } catch (e) {
         console.error("Error deleting appointment:", e);

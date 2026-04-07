@@ -83,6 +83,8 @@ const Agenda: React.FC = () => {
 
     // Feature 7: Visit details editing
     const [bookingVisitDetails, setBookingVisitDetails] = useState('');
+    // Block 3: prevent double booking
+    const [isBooking, setIsBooking] = useState(false);
 
     // Feature 8: Editable duration for existing appointments
     const [isEditingAppt, setIsEditingAppt] = useState(false);
@@ -441,6 +443,7 @@ const Agenda: React.FC = () => {
 
     // Handle Booking
     const handleBooking = async () => {
+        if (isBooking) return;
         if (selectedAppt) {
             // Update logic here if requested...
             alert("Modo edición no implementado completamente.");
@@ -507,6 +510,7 @@ const Agenda: React.FC = () => {
         };
 
         try {
+            setIsBooking(true);
             const createdAppt = await api.appointments.create(newAppt);
             // Refrescar datos globales
             await refreshAppointments();
@@ -528,6 +532,8 @@ const Agenda: React.FC = () => {
         } catch (e: any) {
             console.error(e);
             toast.error("Error al guardar la cita: " + (e.message || e));
+        } finally {
+            setIsBooking(false);
         }
     };
 
@@ -1698,8 +1704,8 @@ const Agenda: React.FC = () => {
                                 </button>
                             )}
                             {!selectedAppt && (
-                                <button onClick={handleBooking} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg">
-                                    Confirmar
+                                <button onClick={handleBooking} disabled={isBooking} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">
+                                    {isBooking ? 'Guardando...' : 'Confirmar'}
                                 </button>
                             )}
                         </div>
