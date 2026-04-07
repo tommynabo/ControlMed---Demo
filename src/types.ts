@@ -150,6 +150,7 @@ export interface PatientTreatment {
     serviceId?: string;
     serviceName: string;
     toothId?: number;
+    surface?: string;
     price: number;
     customPrice?: number;
     status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'PRESUPUESTADO';

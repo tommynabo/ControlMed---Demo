@@ -750,22 +750,33 @@ app.get('/api/patients/:patientId/clinical-records', async (req, res) => {
 // --- DOCTORS ---
 app.get('/api/doctors', async (req, res) => {
     try {
-        // Get doctorIds of active DOCTOR-role users only
-        const activeUsers = await prisma.user.findMany({
-            where: { role: 'DOCTOR', isActive: true },
-            select: { doctorId: true }
-        });
-        const activeDoctorIds = activeUsers.map(u => u.doctorId).filter(Boolean);
-
-        // Fetch only those doctors from Doctor table
-        const doctors = await prisma.doctor.findMany({
-            where: activeDoctorIds.length > 0 ? { id: { in: activeDoctorIds } } : { id: 'no-match' },
+        // Primary source: Doctor table (all doctors)
+        const allDoctors = await prisma.doctor.findMany({
             orderBy: { name: 'asc' },
             select: { id: true, name: true, specialization: true }
         });
 
-        console.log(`✅ Loaded ${doctors.length} active doctors`);
-        res.json(doctors);
+        // If Doctor table has records, return them directly
+        if (allDoctors.length > 0) {
+            console.log(`✅ Loaded ${allDoctors.length} doctors from Doctor table`);
+            return res.json(allDoctors);
+        }
+
+        // Fallback: if Doctor table is empty, auto-sync from User table
+        const doctorUsers = await prisma.user.findMany({
+            where: { role: 'DOCTOR', isActive: true },
+            select: { id: true, name: true, doctorId: true }
+        });
+
+        // Return users with DOCTOR role as doctors (use doctorId if available, otherwise user id)
+        const fallbackDoctors = doctorUsers.map(u => ({
+            id: u.doctorId || u.id,
+            name: u.name,
+            specialization: 'Odontólogo'
+        }));
+
+        console.log(`✅ Loaded ${fallbackDoctors.length} doctors (fallback from User table)`);
+        res.json(fallbackDoctors);
     } catch (e) {
         console.error('Error fetching doctors:', e.message);
         res.status(500).json({ error: e.message });
@@ -1172,16 +1183,52 @@ app.post('/api/appointments', async (req, res) => {
                 }
 
                 if (!doctor) {
-                    console.error('❌ Doctor not found with ID:', safeDoctorId);
-                    return res.status(400).json({ error: `Doctor no encontrado (ID: ${safeDoctorId}). Asegúrate de que el doctor existe en la tabla Doctor.` });
-                }
+                    // Auto-sync: try to find in User table and create Doctor record
+                    console.warn('⚠️ Doctor not in Doctor table, attempting auto-sync for ID:', safeDoctorId);
+                    const { data: userDoc, error: userErr } = await supabase
+                        .from('User')
+                        .select('id, name')
+                        .eq('id', safeDoctorId)
+                        .maybeSingle();
 
-                // Check if doctor is active (if is_active column exists)
-                if (doctor.is_active === false) {
-                    return res.status(400).json({ error: `El Dr. ${doctor.name} está inactivo. No se pueden crear citas con este doctor.` });
-                }
+                    if (userDoc) {
+                        const { error: insertErr } = await supabase
+                            .from('Doctor')
+                            .upsert({ id: userDoc.id, name: userDoc.name, specialization: 'Odontólogo' });
 
-                console.log(`✓ Doctor validation passed: Dr. ${doctor.name} (${doctor.specialization})`);
+                        if (insertErr) {
+                            console.error('❌ Auto-sync insert failed:', insertErr.message);
+                            return res.status(400).json({ error: `No se pudo sincronizar el doctor (ID: ${safeDoctorId}). Error: ${insertErr.message}` });
+                        }
+                        console.log(`✅ Auto-synced doctor: ${userDoc.name} (${safeDoctorId})`);
+                    } else {
+                        // Also try by doctorId field in User table
+                        const { data: userByDocId } = await supabase
+                            .from('User')
+                            .select('id, name, doctorId')
+                            .eq('doctorId', safeDoctorId)
+                            .maybeSingle();
+
+                        if (userByDocId) {
+                            const { error: insertErr } = await supabase
+                                .from('Doctor')
+                                .upsert({ id: safeDoctorId, name: userByDocId.name, specialization: 'Odontólogo' });
+
+                            if (!insertErr) {
+                                console.log(`✅ Auto-synced doctor via doctorId: ${userByDocId.name} (${safeDoctorId})`);
+                            }
+                        } else {
+                            console.error('❌ Doctor not found in any table with ID:', safeDoctorId);
+                            return res.status(400).json({ error: `Doctor no encontrado (ID: ${safeDoctorId}). Asegúrate de que el doctor existe en el sistema.` });
+                        }
+                    }
+                } else {
+                    // Check if doctor is active (if is_active column exists)
+                    if (doctor.is_active === false) {
+                        return res.status(400).json({ error: `El Dr. ${doctor.name} está inactivo. No se pueden crear citas con este doctor.` });
+                    }
+                    console.log(`✓ Doctor validation passed: Dr. ${doctor.name} (${doctor.specialization})`);
+                }
             } catch (validationErr) {
                 console.error('❌ Doctor validation error:', validationErr.message);
                 return res.status(500).json({ error: 'Error al validar doctor: ' + validationErr.message });

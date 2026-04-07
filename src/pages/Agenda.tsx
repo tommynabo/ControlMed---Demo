@@ -75,7 +75,7 @@ const Agenda: React.FC = () => {
     const [closureDoctorId, setClosureDoctorId] = useState<string>('');
 
     // Feature 5: Doctor on-duty filter
-    const [showOnDutyOnly, setShowOnDutyOnly] = useState(true);
+    const [showOnDutyOnly, setShowOnDutyOnly] = useState(false);
 
     // Feature 6: Mini calendar
     const [showMiniCal, setShowMiniCal] = useState(false);
@@ -475,13 +475,15 @@ const Agenda: React.FC = () => {
             return;
         }
 
-        // Validate that the slot is available according to doctor's schedule
+        // Warn if slot is outside doctor's schedule, but allow saving
         const dateToSave = new Date(`${bookingDate}T00:00:00`);
 
         const availableSlots = getAvailableTimeSlots(dateToSave, bookingDoctorId);
         if (!availableSlots.includes(bookingTime)) {
-            toast.error("Este horario no está disponible para este doctor. Verifica la configuración en Horarios Médicos.");
-            return;
+            const confirm = window.confirm(
+                "⚠️ Este horario está fuera del horario configurado para este doctor.\n\n¿Deseas guardar la cita de todas formas?"
+            );
+            if (!confirm) return;
         }
 
         // Force date to be treated as UTC midnight of the selected day to avoid timezone shifts
