@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Search, DollarSign, CheckSquare, Square, Percent, Calculator } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { api } from '../services/api';
 
 interface BudgetModalProps {
@@ -147,22 +148,35 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     const totalAmount = items.reduce((acc, item) => acc + (Number(item.price) * (Number(item.quantity) || 1)), 0);
 
     const handleSafeSave = async () => {
-        if (!title) return alert("Por favor indica un título");
-        if (items.length === 0) return alert("Añade al menos un tratamiento");
+        if (!title.trim()) return toast.error("Por favor indica un título para el presupuesto");
+        if (items.length === 0) return toast.error("Añade al menos un tratamiento al presupuesto");
         if (isSubmitting) return;
+
+        // Sanitize: ensure all items have a valid numeric price and name
+        const sanitizedItems = items
+            .filter(item => item.name && item.name.trim() !== '')
+            .map(item => ({
+                ...item,
+                price: isNaN(Number(item.price)) || item.price === '' ? 0 : Number(item.price),
+                quantity: Math.max(1, Number(item.quantity) || 1)
+            }));
+
+        if (sanitizedItems.length === 0) return toast.error("Todos los items están incompletos. Añade al menos un tratamiento con nombre.");
+
         setIsSubmitting(true);
         try {
             if (initialBudget && initialBudget.id) {
-                await api.budget.update(initialBudget.id, items, title);
-                alert("✅ Presupuesto actualizado correctamente");
+                await api.budget.update(initialBudget.id, sanitizedItems, title);
+                toast.success("✅ Presupuesto actualizado correctamente");
             } else {
-                await api.budget.create(patientId, items, title);
-                alert("✅ Presupuesto creado correctamente");
+                await api.budget.create(patientId, sanitizedItems, title);
+                toast.success("✅ Presupuesto creado correctamente");
             }
             onSave();
             onClose();
         } catch (e: any) {
-            alert("Error: " + e.message);
+            const message = e?.message || "Error desconocido al guardar el presupuesto";
+            toast.error(`Error al guardar: ${message}`, { duration: 6000 });
         } finally {
             setIsSubmitting(false);
         }

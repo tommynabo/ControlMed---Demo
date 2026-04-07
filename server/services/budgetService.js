@@ -37,7 +37,11 @@ const createBudget = async (supabase, patientId, items = [], title = "") => {
             .from('BudgetLineItem')
             .insert(lineItems);
 
-        if (itemsError) console.error("Error adding budget items:", itemsError);
+        if (itemsError) {
+            // Rollback: delete the budget header to avoid orphaned records
+            await supabase.from('Budget').delete().eq('id', budget.id);
+            throw new Error("Error al guardar los conceptos del presupuesto: " + itemsError.message);
+        }
 
         // NEW: Update status of source treatments to 'PRESUPUESTADO'
         const treatmentIds = items.map(i => i.treatmentId).filter(id => id && !id.startsWith('temp-'));
@@ -246,7 +250,8 @@ const updateBudget = async (supabase, budgetId, items = [], title = "") => {
             treatmentId: null
         }));
 
-        await supabase.from('BudgetLineItem').insert(lineItems);
+        const { error: itemsError } = await supabase.from('BudgetLineItem').insert(lineItems);
+        if (itemsError) throw new Error("Error al actualizar los conceptos del presupuesto: " + itemsError.message);
     }
 
     const { data: fullBudget } = await supabase
