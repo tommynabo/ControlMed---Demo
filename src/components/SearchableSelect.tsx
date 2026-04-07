@@ -35,6 +35,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const [filteredOptions, setFilteredOptions] = useState<SearchableSelectOption[]>(options);
     const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
     const containerRef = useRef<HTMLDivElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const onSearchRef = useRef(onSearch);
@@ -84,7 +85,10 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+            const target = event.target as Node;
+            const insideContainer = containerRef.current?.contains(target);
+            const insideDropdown = dropdownRef.current?.contains(target);
+            if (!insideContainer && !insideDropdown) {
                 setIsOpen(false);
             }
         };
@@ -118,6 +122,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
     const dropdownContent = isOpen ? (
         <div
+            ref={dropdownRef}
             style={dropdownStyle}
             className="bg-white border-2 border-slate-300 rounded-lg shadow-2xl max-h-[300px] flex flex-col"
         >
