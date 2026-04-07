@@ -1,189 +1,154 @@
 const axios = require('axios');
 const qs = require('qs');
 
-// Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+// Quipu API (https://getquipu.com)
+// Auth: OAuth2 client_credentials  →  Bearer token
+// Format: JSON:API  (Content-Type: application/vnd.quipu.v1+json)
+// ─────────────────────────────────────────────────────────────────────────────
 const QUIPU_AUTH_URL = 'https://getquipu.com/oauth/token';
-const QUIPU_API_URL = 'https://getquipu.com'; // Base URL changed to standard getquipu.com based on docs
-const APP_ID = process.env.QUIPU_APP_ID;
+const QUIPU_API_URL  = 'https://getquipu.com';
+const APP_ID     = process.env.QUIPU_APP_ID;
 const APP_SECRET = process.env.QUIPU_APP_SECRET;
 
 let cachedToken = null;
-let tokenExpiry = null;
+let tokenExpiry  = null;
 
-// Client Instance
+// Axios client with Quipu JSON:API headers
 const quipuClient = axios.create({
     baseURL: QUIPU_API_URL,
     headers: {
-        'Accept': 'application/vnd.quipu.v1+json',
+        'Accept':       'application/vnd.quipu.v1+json',
         'Content-Type': 'application/vnd.quipu.v1+json'
     },
     timeout: 15000
 });
 
-/**
- * 🔐 Authenticate and get Bearer Token
- * Automatically handles token caching and renewal.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PASO 2: OAuth2 Token — exchange App ID + Secret for a Bearer token
+// ─────────────────────────────────────────────────────────────────────────────
 async function getAuthToken() {
-    // Check if we have a valid cached token
     if (cachedToken && tokenExpiry && new Date() < tokenExpiry) {
         return cachedToken;
     }
 
+    if (!APP_ID || !APP_SECRET) {
+        throw new Error('Missing QUIPU_APP_ID or QUIPU_APP_SECRET environment variables');
+    }
+
     console.log('🔐 [Quipu] Requesting new Access Token...');
 
-    if (!APP_ID || !APP_SECRET) {
-        throw new Error("Missing QUIPU_APP_ID or QUIPU_APP_SECRET in .env");
-    }
-
-    // Basic Auth Header: Base64(AppID:AppSecret)
     const credentials = Buffer.from(`${APP_ID}:${APP_SECRET}`).toString('base64');
 
-    try {
-        const response = await axios.post(QUIPU_AUTH_URL,
-            qs.stringify({
-                grant_type: 'client_credentials',
-                scope: 'ecommerce' // Standard scope for API
-            }),
-            {
-                headers: {
-                    'Authorization': `Basic ${credentials}`,
-                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-                }
+    const response = await axios.post(
+        QUIPU_AUTH_URL,
+        qs.stringify({ grant_type: 'client_credentials', scope: 'ecommerce' }),
+        {
+            headers: {
+                'Authorization': `Basic ${credentials}`,
+                'Content-Type':  'application/x-www-form-urlencoded;charset=UTF-8'
             }
-        );
+        }
+    );
 
-        const { access_token, expires_in } = response.data;
-
-        cachedToken = access_token;
-        // Set expiry 60 seconds before actual expiry to be safe
-        tokenExpiry = new Date(new Date().getTime() + (expires_in - 60) * 1000);
-
-        console.log('✅ [Quipu] Token acquired successfully.');
-        return access_token;
-
-    } catch (error) {
-        console.error('❌ [Quipu] Auth Error:', error.response?.data || error.message);
-        throw new Error('Failed to authenticate with Quipu');
-    }
+    const { access_token, expires_in } = response.data;
+    cachedToken = access_token;
+    tokenExpiry  = new Date(Date.now() + (expires_in - 60) * 1000);
+    console.log('✅ [Quipu] Token acquired.');
+    return access_token;
 }
 
-/**
- * 🛠 Helper to make authenticated requests
- */
-async function makeRequest(method, url, data = null) {
+// ─────────────────────────────────────────────────────────────────────────────
+// PASO 1: Authenticated helper — always logs the real Quipu rejection body
+// ─────────────────────────────────────────────────────────────────────────────
+async function makeRequest(method, path, data = null) {
     const token = await getAuthToken();
     try {
         const config = {
             method,
-            url,
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
+            url: path,
+            headers: { 'Authorization': `Bearer ${token}` }
         };
         if (data) config.data = data;
-
         const response = await quipuClient(config);
         return response.data;
     } catch (error) {
-        console.error(`❌ [Quipu] API Error [${method} ${url}]:`, error.response?.data || error.message);
-        if (error.response?.data?.errors) {
-            console.error('Validation Errors:', JSON.stringify(error.response.data.errors, null, 2));
-        }
-        throw error;
+        // PASO 1: Log the exact Quipu error body so we can see which field failed
+        console.error(
+            `❌ [Quipu] ${method.toUpperCase()} ${path} →`,
+            JSON.stringify(error.response?.data || error.message, null, 2)
+        );
+        throw error; // propagate — do NOT swallow errors here
     }
 }
 
-/**
- * 👤 Get or Create Contact (Patient)
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PASO 3: Get or Create Contact (Patient)
+// Contacts are searched by tax_id; if not found they are created.
+// ─────────────────────────────────────────────────────────────────────────────
 async function getOrCreateContact(patient) {
-    try {
-        // 1. Search (Filtering by tax_id)
-        // Docs suggest filtering might be available. If not, we iterate or rely on specialized endpoint.
-        // Assuming standard filter pattern: filter[tax_id_eq] or similar. 
-        // If filter fails, we'll implement a rough find manually for now (listing contacts is expensive though).
-        // Let's try listing with filter first.
+    const taxId = patient.tax_id || patient.dni || '';
 
-        const searchUrl = `/contacts?filter[tax_id]=${patient.tax_id}`; // Verify exact filter syntax in usage
-        // Note: Docs section 11 mentions filters. Usually `filter[field]`.
-
+    // 1. Search by tax_id (Quipu filter param)
+    if (taxId && taxId !== 'UNKNOWN') {
         try {
-            const searchRes = await makeRequest('GET', searchUrl);
-            if (searchRes.data && searchRes.data.length > 0) {
-                console.log(`✅ [Quipu] Contact found: ${patient.name} (${searchRes.data[0].id})`);
-                return searchRes.data[0];
+            const searchRes = await makeRequest('GET', `/contacts?filter[tax_id]=${encodeURIComponent(taxId)}`);
+            const contacts  = searchRes?.data || [];
+            if (contacts.length > 0) {
+                console.log(`✅ [Quipu] Contact found: ${patient.name} (id ${contacts[0].id})`);
+                return contacts[0];
             }
         } catch (e) {
-            console.warn('⚠️ Search filter might be invalid, trying creation directly.');
+            console.warn('⚠️ [Quipu] Contact search failed, will create instead:', e.message);
         }
-
-        // 2. Create
-        // Docs: POST /contacts
-        /*
-         {
-           "data": {
-             "type": "contacts",
-             "attributes": { ... }
-           }
-         }
-        */
-        const payload = {
-            data: {
-                type: 'contacts',
-                attributes: {
-                    name: patient.name,
-                    tax_id: patient.tax_id || 'UNKNOWN',
-                    email: patient.email || '',
-                    address: patient.address || '',
-                    town: patient.city || '',
-                    zip_code: patient.zip_code || '',
-                    country_code: 'ES',
-                    is_client: true
-                }
-            }
-        };
-
-        const createRes = await makeRequest('POST', '/contacts', payload);
-        console.log(`✅ [Quipu] Contact created: ${patient.name}`);
-        return createRes.data;
-
-    } catch (error) {
-        // Handle "already exists" explicitly if the API returns 422
-        if (error.response?.status === 422) {
-            console.warn('⚠️ Contact might already exist (422), attempting to allow manual linking or retry.');
-        }
-        throw error;
     }
+
+    // 2. Create contact
+    const attributes = {
+        name:         patient.name        || 'Paciente',
+        tax_id:       taxId               || 'UNKNOWN',
+        email:        patient.email       || '',
+        address:      patient.address     || '',
+        town:         patient.city        || '',
+        zip_code:     patient.zip_code || patient.zipCode || '',
+        country_code: 'ES',
+        is_client:    true
+    };
+
+    const payload = { data: { type: 'contacts', attributes } };
+    const createRes = await makeRequest('POST', '/contacts', payload);
+    const contact   = createRes.data;
+    console.log(`✅ [Quipu] Contact created: ${patient.name} (id ${contact.id})`);
+    return contact;
 }
 
-/**
- * 🧾 Create Invoice
- */
-async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'credit_card') {
-    // Construct Attributes for Items (Quipu specific structure)
-    // Structure: relationships => items => data => [ { type, attributes: {} } ]
-
-    // Payment method mapping (Quipu API values)
+// ─────────────────────────────────────────────────────────────────────────────
+// PASO 3: Create Invoice
+// Items use Quipu JSON:API field names; prices are numbers (parseFloat).
+// Errors are NOT caught here — they propagate to the endpoint catch block.
+// ─────────────────────────────────────────────────────────────────────────────
+async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'cash') {
+    // Payment method mapping to Quipu accepted values
     const methodMap = {
-        'card': 'bank_card',
-        'credit_card': 'bank_card', // Correct Quipu value is 'bank_card'
-        'cash': 'cash',
-        'transfer': 'bank_transfer',
-        'bank_transfer': 'bank_transfer',
-        'direct_debit': 'direct_debit',
-        'paypal': 'paypal',
-        'check': 'check'
+        card:           'bank_card',
+        credit_card:    'bank_card',
+        cash:           'cash',
+        transfer:       'bank_transfer',
+        bank_transfer:  'bank_transfer',
+        direct_debit:   'direct_debit',
+        paypal:         'paypal',
+        check:          'check'
     };
-    const finalMethod = methodMap[paymentMethod] || 'cash'; // Fallback to cash if unknown to avoid 422
+    const finalMethod = methodMap[paymentMethod] || 'cash';
 
+    // PASO 3: Map items to Quipu book_entry_items format
     const itemsData = items.map(item => ({
         type: 'book_entry_items',
         attributes: {
-            concept: item.name,
-            unitary_amount: item.price.toString(), // API expects strings often for big decimals
-            quantity: (item.quantity || 1),
-            vat_percent: item.tax || 0, // 0 for medical services
+            concept:           item.name    || item.concept || 'Servicio médico',
+            unitary_amount:    parseFloat(item.price)    || 0,   // number, not string
+            quantity:          item.quantity || 1,
+            vat_percent:       item.tax !== undefined ? Number(item.tax) : 0, // 0 = exento médico
             retention_percent: 0
         }
     }));
@@ -192,92 +157,78 @@ async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'c
         data: {
             type: 'invoices',
             attributes: {
-                kind: 'income',
-                issue_date: date,
-                due_dates: [dueDate],
-                paid_at: date, // Assuming instant payment
+                kind:           'income',
+                issue_date:     date,
+                due_dates:      [dueDate],
+                paid_at:        date,
                 payment_method: finalMethod
             },
             relationships: {
-                contact: {
-                    data: {
-                        id: contactId,
-                        type: 'contacts'
-                    }
-                },
-                items: {
-                    data: itemsData
-                }
+                contact: { data: { id: String(contactId), type: 'contacts' } },
+                items:   { data: itemsData }
             }
         }
     };
 
-    try {
-        const res = await makeRequest('POST', '/invoices', payload);
-        const invoice = res.data;
+    console.log('📤 [Quipu] Creating invoice payload:', JSON.stringify(payload, null, 2));
 
-        console.log(`✅ [Quipu] Invoice Created: ID ${invoice.id}`);
+    // No try/catch — let errors propagate so endpoint catch block logs the real Quipu body
+    const res     = await makeRequest('POST', '/invoices', payload);
+    const invoice = res.data;
 
-        // Return structured result
-        return {
-            success: true,
-            id: invoice.id,
-            number: invoice.attributes.number || 'PENDING',
-            pdf_url: invoice.attributes.download_pdf_url,
-            preview_url: invoice.attributes.ephemeral_open_download_pdf_url, // Added Preview URL
-            raw: invoice
-        };
+    console.log(`✅ [Quipu] Invoice created: id ${invoice.id}`);
 
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
+    // PASO 4: Get PDF URL from Quipu response attributes
+    const pdfUrl     = invoice.attributes?.download_pdf_url     || null;
+    const previewUrl = invoice.attributes?.ephemeral_open_download_pdf_url || pdfUrl;
+
+    return {
+        success:     true,
+        id:          invoice.id,
+        number:      invoice.attributes?.number || 'PENDIENTE',
+        pdf_url:     pdfUrl,
+        preview_url: previewUrl,
+        raw:         invoice
+    };
 }
 
-/**
- * 📥 Get PDF URL (Legacy - returns Download URL)
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers — PDF retrieval
+// ─────────────────────────────────────────────────────────────────────────────
 async function getInvoicePdf(invoiceId) {
     try {
         const res = await makeRequest('GET', `/invoices/${invoiceId}`);
-        return res.data.attributes.download_pdf_url;
+        return res.data?.attributes?.download_pdf_url || null;
     } catch (error) {
-        console.error(`❌ [Quipu] Failed to get PDF for ${invoiceId}`);
+        console.error(`❌ [Quipu] Failed to get PDF for invoice ${invoiceId}:`, error.message);
         return null;
     }
 }
 
-/**
- * 📥 Get Both URLs (Download & Preview)
- */
 async function getInvoiceUrls(invoiceId) {
     try {
         const res = await makeRequest('GET', `/invoices/${invoiceId}`);
         return {
-            download: res.data.attributes.download_pdf_url,
-            preview: res.data.attributes.ephemeral_open_download_pdf_url
+            download: res.data?.attributes?.download_pdf_url || null,
+            preview:  res.data?.attributes?.ephemeral_open_download_pdf_url || null
         };
     } catch (error) {
-        console.error(`❌ [Quipu] Failed to get URLs for ${invoiceId}`);
+        console.error(`❌ [Quipu] Failed to get URLs for invoice ${invoiceId}:`, error.message);
         return null;
     }
 }
 
-/**
- * 📥 Download PDF Stream (Authenticated)
- * useful for ZIP generation or backend proxying
- */
 async function downloadPdf(url) {
     try {
         const token = await getAuthToken();
         const response = await axios.get(url, {
-            headers: { 'Authorization': `Bearer ${token}` },
+            headers:      { 'Authorization': `Bearer ${token}` },
             responseType: 'stream',
-            timeout: 30000
+            timeout:      30000
         });
         return response.data;
     } catch (error) {
         console.error(`❌ [Quipu] Failed to download PDF: ${url}`, error.message);
-        // Try public/ephemeral fallback if url looks like one? No, explicit is better.
         throw error;
     }
 }

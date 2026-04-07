@@ -2025,8 +2025,13 @@ app.post('/api/finance/invoice', async (req, res) => {
         }
 
     } catch (e) {
-        console.error("Invoice Error:", e);
-        res.status(500).json({ error: e.message });
+        // Log the full FacturaDirecta rejection body so we can see the exact field that failed
+        const fdError = e.response?.data;
+        console.error("❌ [Invoice Endpoint] FacturaDirecta Error Details:", JSON.stringify(fdError || e.message, null, 2));
+        res.status(500).json({
+            error: 'Failed to create invoice',
+            detail: fdError || e.message
+        });
     }
 });
 
