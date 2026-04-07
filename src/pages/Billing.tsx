@@ -128,6 +128,19 @@ const Billing: React.FC = () => {
         setInvoiceItems(newItems);
     };
 
+    // Atomic update when selecting a service from the dropdown (avoids stale closure bug)
+    const handleServiceSelect = (index: number, option: { label?: string; value?: string; price?: number }) => {
+        setInvoiceItems(prev => {
+            const newItems = [...prev];
+            newItems[index] = {
+                ...newItems[index],
+                name: option.label || option.value || '',
+                price: option.price || 0,
+            };
+            return newItems;
+        });
+    };
+
     const handleEmitInvoice = async () => {
         if (!selectedPatientId) return setEmitError("Selecciona un paciente");
         if (invoiceItems.length === 0) return setEmitError("Añade al menos un concepto");
@@ -157,8 +170,7 @@ const Billing: React.FC = () => {
                 date: new Date().toISOString(),
                 status: 'issued',
                 paymentMethod: 'card',
-                // Prefer Preview URL for immediate viewing (ephemeral), fallback to authenticated URL
-                url: data.previewUrl || data.url || data.pdf_url || `https://facturadirecta2.s3.amazonaws.com/tmp/simulated_path/${data.invoiceNumber || 'draft'}/factura_${data.invoiceNumber || Date.now()}_print.html`,
+                url: data.pdfUrl || data.previewUrl || data.url || data.pdf_url || '',
                 qrUrl: data.qr_url || data.qrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://verifactu.sede.gob.es/vn?td=FACTURA_DIRECTA_${data.invoiceNumber || 'DEMO'}`
             };
 
@@ -170,12 +182,10 @@ const Billing: React.FC = () => {
                 if (Array.isArray(pts)) setPatients(pts);
             }).catch(e => console.error("Error refreshing patients after invoice:", e));
 
-            alert(`✅ Factura ${data.invoiceNumber || data.invoice_number} emitida con éxito!`);
-
-            // Open PDF immediately (Prefer Preview URL for browser)
-            const openUrl = data.previewUrl || data.url || data.pdf_url;
-            if (openUrl) {
-                window.open(openUrl, '_blank');
+            // Open the official Quipu PDF in a new tab ready to print
+            const pdfUrl = data.pdfUrl || data.previewUrl || data.url || data.pdf_url;
+            if (pdfUrl) {
+                window.open(pdfUrl, '_blank');
             }
 
             setIsInvoiceModalOpen(false);
@@ -664,9 +674,10 @@ const Billing: React.FC = () => {
                                                         placeholder="-- Seleccionar Servicio --"
                                                         value={item.name}
                                                         onChange={(value, option) => {
-                                                            handleItemChange(idx, 'name', value);
-                                                            if (option && option.price) {
-                                                                handleItemChange(idx, 'price', option.price);
+                                                            if (option) {
+                                                                handleServiceSelect(idx, option);
+                                                            } else {
+                                                                handleItemChange(idx, 'name', value);
                                                             }
                                                         }}
                                                         onSearch={(query) => handleTreatmentSearch(idx, query)}

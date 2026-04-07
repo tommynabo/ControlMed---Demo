@@ -2009,9 +2009,11 @@ app.post('/api/finance/invoice', async (req, res) => {
             }
 
             // Respond success with PDF
+            // pdfUrl: ephemeral/preview URL that opens directly in-browser without auth token
             res.json({
                 success: true,
                 invoiceNumber: result.number,
+                pdfUrl: previewUrl || pdfUrl,
                 url: pdfUrl,
                 previewUrl: previewUrl,
                 invoiceId: savedInvoice?.id || result.id, // Prefer Local UUID, fallback to Quipu
