@@ -294,11 +294,16 @@ const Agenda: React.FC = () => {
     // Feature 5: Filter doctors working today (must be AFTER getAvailableTimeSlots)
     const doctorsOnDuty = useMemo(() => {
         if (!showOnDutyOnly) return doctors;
+        const dateStr = formatDateLocal(currentDate);
         return doctors.filter(doc => {
             const slots = getAvailableTimeSlots(currentDate, doc.id);
-            return slots.length > 0 && !isDateClosedForDoctor(currentDate, doc.id);
+            // Always keep doctors who have appointments on this day, even if schedule is "off"
+            const hasApptToday = appointments.some(a =>
+                (a.date === dateStr || a.date.startsWith(dateStr)) && a.doctorId === doc.id
+            );
+            return (slots.length > 0 || hasApptToday) && !isDateClosedForDoctor(currentDate, doc.id);
         });
-    }, [doctors, showOnDutyOnly, currentDate, doctorSchedules, agendaClosures]);
+    }, [doctors, showOnDutyOnly, currentDate, doctorSchedules, agendaClosures, appointments]);
 
 
     const filteredAppointments = useMemo(() => {

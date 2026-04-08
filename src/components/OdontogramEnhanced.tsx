@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Baby, Plus, Save, Trash2, User, X } from 'lucide-react';
+import { Baby, DollarSign, Plus, Save, Trash2, User, X } from 'lucide-react';
 import { PatientTreatment } from '../types';
 import { useAppContext } from '../context/AppContext';
 
@@ -34,39 +34,100 @@ const CHILD = {
 };
 
 // ── Tooth visual configuration ─────────────────────────────────────────
-// Width in px per tooth type (last FDI digit). Height is fixed at 54px.
-const TOOTH_W_MAP: Record<number, number> = {
-  1: 26, // central incisor
-  2: 24, // lateral incisor
-  3: 26, // canine
-  4: 32, // 1st premolar
-  5: 32, // 2nd premolar
-  6: 42, // 1st molar
-  7: 40, // 2nd molar
-  8: 36, // 3rd molar / wisdom
-  0: 32, // default
+// Per-tooth-type dimensions: w=crown width, ch=crown height, rh=root height
+const CROWN_DIMS: Record<number, { w: number; ch: number; rh: number }> = {
+  1: { w: 22, ch: 36, rh: 50 }, // central incisor
+  2: { w: 20, ch: 33, rh: 46 }, // lateral incisor
+  3: { w: 23, ch: 40, rh: 60 }, // canine
+  4: { w: 27, ch: 32, rh: 44 }, // 1st premolar
+  5: { w: 25, ch: 30, rh: 40 }, // 2nd premolar
+  6: { w: 40, ch: 36, rh: 40 }, // 1st molar
+  7: { w: 38, ch: 34, rh: 38 }, // 2nd molar
+  8: { w: 32, ch: 30, rh: 32 }, // wisdom
+  0: { w: 28, ch: 32, rh: 38 }, // default
 };
-const TOOTH_H = 54;
-const CHILD_SCALE = 0.82;
+const CHILD_SCALE = 0.80;
 
-// Arch curvature: degrees of rotation from midline outward
+// Arch curvature: degrees of rotation from midline outward (reduced for taller teeth)
 const ARCH_ROT_MAP: Record<number, number> = {
-  1: 0, 2: 4, 3: 9, 4: 14, 5: 18, 6: 22, 7: 25, 8: 27, 0: 0,
+  1: 0, 2: 3, 3: 6, 4: 10, 5: 13, 6: 16, 7: 18, 8: 20, 0: 0,
 };
 
-const getToothW = (id: number): number => {
+function getToothDims(id: number) {
   const digit = id % 10;
-  const w = TOOTH_W_MAP[digit] ?? TOOTH_W_MAP[0];
-  return id >= 50 ? Math.round(w * CHILD_SCALE) : w;
-};
-const getToothH = (id: number): number =>
-  id >= 50 ? Math.round(TOOTH_H * CHILD_SCALE) : TOOTH_H;
+  const d = CROWN_DIMS[digit] ?? CROWN_DIMS[0];
+  const s = id >= 50 ? CHILD_SCALE : 1;
+  return {
+    w:  Math.round(d.w  * s),
+    ch: Math.round(d.ch * s),
+    rh: Math.round(d.rh * s),
+    totalH: Math.round((d.ch + d.rh) * s),
+  };
+}
+
+// Crown outline path in (0..W, 0..CH) coords.
+// y=0 is occlusal/incisal, y=CH is cervical (gum line).
+function getCrownPath(digit: number, W: number, H: number): string {
+  const w = W, h = H;
+  switch (digit) {
+    case 1: return `M 1 ${h} L 0 ${h*.8} Q 0 1 ${w/2} 0 Q ${w} 1 ${w} ${h*.8} L ${w-1} ${h} Z`;
+    case 2: return `M 1 ${h} L 0 ${h*.78} Q 1 2 ${w/2} 0 Q ${w-1} 2 ${w} ${h*.78} L ${w-1} ${h} Z`;
+    case 3: return `M 1 ${h} L 0 ${h*.66} L 0 ${h*.38} L ${w/2} 0 L ${w} ${h*.38} L ${w} ${h*.66} L ${w-1} ${h} Z`;
+    case 4: return `M 0 ${h} L 0 ${h*.68} Q 0 ${h*.22} ${w*.3} 2 Q ${w*.43} ${h*.3} ${w*.5} ${h*.13} Q ${w*.57} ${h*.3} ${w*.7} 2 Q ${w} ${h*.22} ${w} ${h*.68} L ${w} ${h} Z`;
+    case 5: return `M 0 ${h} L 0 ${h*.66} Q 0 ${h*.22} ${w*.28} 2 Q ${w*.42} ${h*.28} ${w*.5} ${h*.15} Q ${w*.58} ${h*.28} ${w*.72} 2 Q ${w} ${h*.22} ${w} ${h*.66} L ${w} ${h} Z`;
+    case 6: return `M 0 ${h} L 0 ${h*.58} Q 0 ${h*.26} ${w*.2} ${h*.09} Q ${w*.35} ${h*.24} ${w*.5} ${h*.13} Q ${w*.65} ${h*.24} ${w*.8} ${h*.09} Q ${w} ${h*.26} ${w} ${h*.58} L ${w} ${h} Z`;
+    case 7: return `M 0 ${h} L 0 ${h*.55} Q 0 ${h*.23} ${w*.22} ${h*.08} Q ${w*.37} ${h*.22} ${w*.5} ${h*.13} Q ${w*.63} ${h*.22} ${w*.78} ${h*.08} Q ${w} ${h*.23} ${w} ${h*.55} L ${w} ${h} Z`;
+    case 8: return `M 0 ${h} L 0 ${h*.55} Q 0 ${h*.24} ${w*.25} ${h*.1} Q ${w*.38} ${h*.22} ${w*.5} ${h*.17} Q ${w*.62} ${h*.22} ${w*.75} ${h*.1} Q ${w} ${h*.24} ${w} ${h*.55} L ${w} ${h} Z`;
+    default:return `M 0 ${h} L 0 0 L ${w} 0 L ${w} ${h} Z`;
+  }
+}
+
+// Root SVG paths. y=0 is cervical, y=RH is root apex.
+// Returns array of { d: path, bg?: bool (lighter/behind) }
+function getRootPaths(digit: number, quadrant: number, W: number, RH: number): Array<{ d: string; bg?: boolean }> {
+  const w = W, r = RH;
+  const isUpper = quadrant <= 2 || quadrant === 5 || quadrant === 6;
+  const singleRoot = (lx: number, rx: number, apexX: number) =>
+    `M ${w*lx} 0 C ${w*lx} ${r*.6} ${w*(apexX-.1)} ${r} ${w*apexX} ${r} C ${w*(apexX+.1)} ${r} ${w*rx} ${r*.6} ${w*rx} 0 Z`;
+  switch (digit) {
+    case 1: return [{ d: singleRoot(.2, .8, .5) }];
+    case 2: return [{ d: `M ${w*.2} 0 C ${w*.17} ${r*.58} ${w*.28} ${r} ${w*.5} ${r} C ${w*.7} ${r} ${w*.82} ${r*.55} ${w*.8} 0 Z` }];
+    case 3: return [{ d: `M ${w*.18} 0 C ${w*.14} ${r*.65} ${w*.27} ${r} ${w*.5} ${r} C ${w*.73} ${r} ${w*.86} ${r*.65} ${w*.82} 0 Z` }];
+    case 4:
+      if (isUpper) return [
+        { d: `M ${w*.1} 0 C ${w*.06} ${r*.55} ${w*.12} ${r*.9} ${w*.28} ${r} C ${w*.38} ${r*.9} ${w*.4} ${r*.5} ${w*.36} 0 Z` },
+        { d: `M ${w*.64} 0 C ${w*.6} ${r*.5} ${w*.62} ${r*.9} ${w*.72} ${r} C ${w*.88} ${r*.9} ${w*.94} ${r*.55} ${w*.9} 0 Z` },
+      ];
+      return [{ d: singleRoot(.2, .8, .5) }];
+    case 5: return [{ d: singleRoot(.2, .8, .5) }];
+    case 6:
+    case 7:
+      if (isUpper) return [
+        { d: `M ${w*.04} 0 C 0 ${r*.55} ${w*.06} ${r*.9} ${w*.22} ${r} C ${w*.3} ${r*.9} ${w*.32} ${r*.5} ${w*.3} 0 Z` },
+        { d: `M ${w*.38} 0 C ${w*.35} ${r*.42} ${w*.42} ${r*.72} ${w*.5} ${r*.78} C ${w*.58} ${r*.72} ${w*.65} ${r*.42} ${w*.62} 0 Z`, bg: true },
+        { d: `M ${w*.7} 0 C ${w*.68} ${r*.5} ${w*.7} ${r*.9} ${w*.78} ${r} C ${w*.94} ${r*.9} ${w} ${r*.55} ${w*.96} 0 Z` },
+      ];
+      return [
+        { d: `M ${w*.08} 0 C ${w*.04} ${r*.54} ${w*.1} ${r*.9} ${w*.26} ${r} C ${w*.36} ${r*.9} ${w*.38} ${r*.5} ${w*.36} 0 Z` },
+        { d: `M ${w*.64} 0 C ${w*.62} ${r*.5} ${w*.64} ${r*.9} ${w*.74} ${r} C ${w*.9} ${r*.9} ${w*.96} ${r*.54} ${w*.92} 0 Z` },
+      ];
+    case 8:
+      if (isUpper) return [
+        { d: `M ${w*.08} 0 C ${w*.04} ${r*.52} ${w*.1} ${r*.88} ${w*.28} ${r} C ${w*.38} ${r*.88} ${w*.4} ${r*.5} ${w*.38} 0 Z` },
+        { d: `M ${w*.62} 0 C ${w*.6} ${r*.5} ${w*.62} ${r*.88} ${w*.72} ${r} C ${w*.9} ${r*.88} ${w*.96} ${r*.52} ${w*.92} 0 Z` },
+      ];
+      return [
+        { d: `M ${w*.12} 0 C ${w*.08} ${r*.52} ${w*.14} ${r*.88} ${w*.3} ${r} C ${w*.4} ${r*.88} ${w*.42} ${r*.5} ${w*.4} 0 Z` },
+        { d: `M ${w*.6} 0 C ${w*.58} ${r*.5} ${w*.6} ${r*.88} ${w*.7} ${r} C ${w*.88} ${r*.88} ${w*.92} ${r*.52} ${w*.88} 0 Z` },
+      ];
+    default:return [{ d: singleRoot(.2, .8, .5) }];
+  }
+}
 
 const getArchRot = (id: number): number => {
   const digit = id % 10;
   const q = Math.floor(id / 10);
   const angle = ARCH_ROT_MAP[digit] ?? 0;
-  // Q1, Q4, Q5, Q8 are left quadrants → negative rotation
   const isLeft = q === 1 || q === 4 || q === 5 || q === 8;
   return isLeft ? -angle : angle;
 };
@@ -112,9 +173,9 @@ type SurfMap = Partial<Record<Surf, Cond>>;
 type OdoState = Record<number, SurfMap>;
 
 // ══════════════════════════════════════════════════════════════════════
-// <ToothSVG />  — Variable-width tooth with 5 interactive surfaces
-// Each tooth has an anatomical rounded-rectangle outline clipped via SVG
-// clipPath. Width varies by tooth type (incisors narrow, molars wide).
+// <ToothSVG /> — Anatomical tooth with buccal-view crown + root shapes
+// isUpper=true  → SVG flipped so roots are at TOP, crown at BOTTOM
+// isUpper=false → roots at BOTTOM, crown at TOP (natural buccal view)
 // ══════════════════════════════════════════════════════════════════════
 interface ToothSVGProps {
   id: number;
@@ -129,38 +190,32 @@ const ToothSVG: React.FC<ToothSVGProps> = ({
   id, surfMap, activeSurf, isEditable, isUpper, onSurf,
 }) => {
   const [hov, setHov] = useState<Surf | null>(null);
+  const { w, ch, rh, totalH } = getToothDims(id);
+  const digit = id % 10;
+  const q     = Math.floor(id / 10);
 
-  const W = getToothW(id);
-  const H = getToothH(id);
-  // Inner zone insets: proportional to tooth size
-  const inX = Math.max(6, Math.round(W * 0.27));
-  const inY = Math.max(9, Math.round(H * 0.22));
+  // Surface zone insets
+  const inX = Math.max(4, Math.round(w  * 0.22));
+  const inY = Math.max(6, Math.round(ch * 0.24));
 
-  const q = Math.floor(id / 10);
+  // M/D assignment by quadrant
   const leftIsDistal = q === 1 || q === 4 || q === 5 || q === 8;
-
-  const topSurf:    Surf = isUpper ? 'V' : 'L';
-  const bottomSurf: Surf = isUpper ? 'L' : 'V';
-  const leftSurf:   Surf = leftIsDistal ? 'D' : 'M';
-  const rightSurf:  Surf = leftIsDistal ? 'M' : 'D';
+  const leftSurf:  Surf = leftIsDistal ? 'D' : 'M';
+  const rightSurf: Surf = leftIsDistal ? 'M' : 'D';
 
   const isMissing = Object.values(surfMap).some(c => c === 'missing');
 
-  const fillOf = (s: Surf): string => {
+  const fillOf = (s: Surf) => {
     if (activeSurf === s) return '#fde68a';
     if (hov === s && isEditable && !isMissing) return '#e0e7ff';
     const c = surfMap[s];
-    if (c && c !== 'healthy') return getCond(c).fill;
-    return '#ffffff';
+    return c && c !== 'healthy' ? getCond(c).fill : '#ffffff';
   };
-
-  const strokeOf = (s: Surf): string => {
+  const strokeOf = (s: Surf) => {
     if (activeSurf === s) return '#d97706';
     const c = surfMap[s];
-    if (c && c !== 'healthy') return getCond(c).stroke;
-    return '#c8d4de';
+    return c && c !== 'healthy' ? getCond(c).stroke : '#c8d4de';
   };
-
   const bind = (s: Surf) =>
     isEditable && !isMissing
       ? {
@@ -171,88 +226,90 @@ const ToothSVG: React.FC<ToothSVGProps> = ({
         }
       : {};
 
-  const clipId = `tc-${id}`;
+  const clipId      = `tc-${id}`;
+  const crownPathD  = getCrownPath(digit, w, ch);
+  const rootDefs    = getRootPaths(digit, q, w, rh);
+  // For upper teeth, flip the entire content vertically so roots appear at top
+  const flip = isUpper
+    ? `scale(1,-1) translate(0, ${-totalH})`
+    : undefined;
 
-  // ── Missing tooth ────────────────────────────────────────────────
+  // Crown 5-surface polygons (0..w × 0..ch, y=0 is occlusal)
+  const topPts   = `0,0 ${w},0 ${w-inX},${inY} ${inX},${inY}`;
+  const botPts   = `${inX},${ch-inY} ${w-inX},${ch-inY} ${w},${ch} 0,${ch}`;
+  const leftPts  = `0,0 ${inX},${inY} ${inX},${ch-inY} 0,${ch}`;
+  const rightPts = `${w},0 ${w},${ch} ${w-inX},${ch-inY} ${w-inX},${inY}`;
+
   if (isMissing) {
     return (
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
-        style={{ display: 'block', overflow: 'visible', opacity: 0.45 }}>
-        <rect x="1" y="1" width={W - 2} height={H - 2} rx="6"
-          fill="#f1f5f9" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4,3" />
-        <line x1="8" y1="8" x2={W - 8} y2={H - 8}
-          stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" />
-        <line x1={W - 8} y1="8" x2="8" y2={H - 8}
-          stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" />
+      <svg width={w} height={totalH} style={{ display: 'block', overflow: 'visible', opacity: 0.5 }}>
+        <g transform={flip}>
+          <g transform={`translate(0,${ch})`}>
+            {rootDefs.map((r, i) => (
+              <path key={i} d={r.d} fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
+            ))}
+          </g>
+          <path d={crownPathD} fill="#f1f5f9" stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="3,2" />
+          <line x1={w*.2} y1={ch*.12} x2={w*.8} y2={ch*.88} stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
+          <line x1={w*.8} y1={ch*.12} x2={w*.2} y2={ch*.88} stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
+        </g>
       </svg>
     );
   }
 
-  // Polygon coordinates for the 5 surface zones
-  const topPts    = `0,0 ${W},0 ${W - inX},${inY} ${inX},${inY}`;
-  const botPts    = `${inX},${H - inY} ${W - inX},${H - inY} ${W},${H} 0,${H}`;
-  const leftPts   = `0,0 ${inX},${inY} ${inX},${H - inY} 0,${H}`;
-  const rightPts  = `${W},0 ${W},${H} ${W - inX},${H - inY} ${W - inX},${inY}`;
-
-  // ── Normal tooth: 5 interactive zones clipped to tooth shape ────
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
-      style={{ display: 'block', overflow: 'visible' }}>
+    <svg width={w} height={totalH} style={{ display: 'block', overflow: 'visible' }}>
       <defs>
-        {/* Clip to rounded-rectangle tooth outline */}
         <clipPath id={clipId}>
-          <rect x="0" y="0" width={W} height={H} rx="6" ry="5" />
+          <path d={crownPathD} />
         </clipPath>
       </defs>
 
-      <g clipPath={`url(#${clipId})`}>
-        {/* TOP (Vestibular / Lingual) */}
-        <polygon points={topPts}
-          fill={fillOf(topSurf)} stroke={strokeOf(topSurf)}
-          strokeWidth="0.8" strokeLinejoin="round"
-          {...bind(topSurf)} />
+      <g transform={flip}>
+        {/* ── Roots (behind crown) ───────────────────────────── */}
+        <g transform={`translate(0,${ch})`}>
+          {rootDefs.map((r, i) => (
+            <path key={i} d={r.d}
+              fill={r.bg ? '#ece7d8' : '#f5f0e5'}
+              stroke={r.bg ? '#c4b99a' : '#c8b89a'}
+              strokeWidth="0.9"
+            />
+          ))}
+        </g>
 
-        {/* BOTTOM (Lingual / Vestibular) */}
-        <polygon points={botPts}
-          fill={fillOf(bottomSurf)} stroke={strokeOf(bottomSurf)}
-          strokeWidth="0.8" strokeLinejoin="round"
-          {...bind(bottomSurf)} />
+        {/* ── Crown surface zones, clipped to tooth outline ─── */}
+        <g clipPath={`url(#${clipId})`}>
+          {/* O – Occlusal/Incisal (top) */}
+          <polygon points={topPts}   fill={fillOf('O')} stroke={strokeOf('O')} strokeWidth="0.6" {...bind('O')} />
+          {/* L – Lingual (bottom) */}
+          <polygon points={botPts}   fill={fillOf('L')} stroke={strokeOf('L')} strokeWidth="0.6" {...bind('L')} />
+          {/* LEFT surface */}
+          <polygon points={leftPts}  fill={fillOf(leftSurf)}  stroke={strokeOf(leftSurf)}  strokeWidth="0.6" {...bind(leftSurf)}  />
+          {/* RIGHT surface */}
+          <polygon points={rightPts} fill={fillOf(rightSurf)} stroke={strokeOf(rightSurf)} strokeWidth="0.6" {...bind(rightSurf)} />
+          {/* V – Vestibular (centre) */}
+          <rect x={inX} y={inY} width={w-2*inX} height={ch-2*inY}
+            fill={fillOf('V')} stroke={strokeOf('V')} strokeWidth="0.6" {...bind('V')} />
+        </g>
 
-        {/* LEFT (Distal / Mesial) */}
-        <polygon points={leftPts}
-          fill={fillOf(leftSurf)} stroke={strokeOf(leftSurf)}
-          strokeWidth="0.8" strokeLinejoin="round"
-          {...bind(leftSurf)} />
+        {/* ── Surface labels ─────────────────────────────────── */}
+        <text x={w/2}      y={inY/2+2}      textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">O</text>
+        <text x={w/2}      y={ch-inY/2+2}   textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">L</text>
+        <text x={inX/2}    y={ch/2+2}       textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">{leftSurf}</text>
+        <text x={w-inX/2}  y={ch/2+2}       textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">{rightSurf}</text>
+        <text x={w/2}      y={ch/2+2}       textAnchor="middle" fontSize="6"   fontWeight="900" fill="#64748b" pointerEvents="none">V</text>
 
-        {/* RIGHT (Mesial / Distal) */}
-        <polygon points={rightPts}
-          fill={fillOf(rightSurf)} stroke={strokeOf(rightSurf)}
-          strokeWidth="0.8" strokeLinejoin="round"
-          {...bind(rightSurf)} />
-
-        {/* CENTER — Oclusal / Incisal */}
-        <rect x={inX} y={inY} width={W - 2 * inX} height={H - 2 * inY}
-          fill={fillOf('O')} stroke={strokeOf('O')}
-          strokeWidth="0.8"
-          {...bind('O')} />
+        {/* ── Crown outline on top ───────────────────────────── */}
+        <path d={crownPathD} fill="none" stroke="#7a9aad" strokeWidth="1.3" />
+        {/* Cervical line */}
+        <line x1={0} y1={ch} x2={w} y2={ch} stroke="#b0bec5" strokeWidth="0.7" strokeDasharray="2,1.5" />
       </g>
-
-      {/* Surface labels (decorative, always on top) */}
-      <text x={W / 2} y={inY / 2 + 3} textAnchor="middle" fontSize="6" fontWeight="800" fill="#94a3b8" pointerEvents="none">{topSurf}</text>
-      <text x={W / 2} y={H - inY / 2 + 3} textAnchor="middle" fontSize="6" fontWeight="800" fill="#94a3b8" pointerEvents="none">{bottomSurf}</text>
-      <text x={inX / 2} y={H / 2 + 2} textAnchor="middle" fontSize="6" fontWeight="800" fill="#94a3b8" pointerEvents="none">{leftSurf}</text>
-      <text x={W - inX / 2} y={H / 2 + 2} textAnchor="middle" fontSize="6" fontWeight="800" fill="#94a3b8" pointerEvents="none">{rightSurf}</text>
-      <text x={W / 2} y={H / 2 + 2} textAnchor="middle" fontSize="7" fontWeight="900" fill="#64748b" pointerEvents="none">O</text>
-
-      {/* Outer tooth border (drawn above clip so it's always visible) */}
-      <rect x="0.5" y="0.5" width={W - 1} height={H - 1} rx="6" ry="5"
-        fill="none" stroke="#94a3b8" strokeWidth="1.2" />
     </svg>
   );
 };
 
 // ══════════════════════════════════════════════════════════════════════
-// <ToothCell /> — FDI number label + SVG tooth + selection ring + arch rotation
+// <ToothCell /> — FDI number + SVG tooth + selection ring + arch rotation
 // ══════════════════════════════════════════════════════════════════════
 interface ToothCellProps {
   id: number;
@@ -269,57 +326,38 @@ const ToothCell: React.FC<ToothCellProps> = ({
 }) => {
   const isActive     = activeTooth === id;
   const hasCondition = Object.values(surfMap).some(c => c && c !== 'healthy');
-  const toothW       = getToothW(id);
+  const { w }        = getToothDims(id);
   const rot          = getArchRot(id);
 
   const numStyle: React.CSSProperties = {
-    fontSize: 9,
-    fontWeight: 800,
-    lineHeight: '1',
+    fontSize: 9, fontWeight: 800, lineHeight: '1',
     color: hasCondition ? '#5b21b6' : '#94a3b8',
-    minWidth: toothW,
-    textAlign: 'center',
-    userSelect: 'none',
-    display: 'block',
+    minWidth: w, textAlign: 'center',
+    userSelect: 'none', display: 'block',
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 3,
-        flexShrink: 0,
-        // Arch curvature: pivot point is well below/above the tooth
-        transform: `rotate(${rot}deg)`,
-        transformOrigin: isUpper ? 'center 200%' : 'center -100%',
-      }}
-    >
-      {/* FDI number — ABOVE the tooth for the upper jaw */}
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      gap: 2, flexShrink: 0,
+      transform: `rotate(${rot}deg)`,
+      transformOrigin: isUpper ? 'center 200%' : 'center -100%',
+    }}>
       {isUpper && <span style={numStyle}>{id}</span>}
-
-      {/* SVG with selection ring */}
-      <div
-        style={{
-          borderRadius: 7,
-          outline: isActive ? '2.5px solid #f59e0b' : '2px solid transparent',
-          outlineOffset: 3,
-          boxShadow: isActive ? '0 0 0 5px rgba(245,158,11,0.15)' : 'none',
-          transition: 'all 0.12s',
-        }}
-      >
+      <div style={{
+        borderRadius: 5,
+        outline: isActive ? '2.5px solid #f59e0b' : '2px solid transparent',
+        outlineOffset: 2,
+        boxShadow: isActive ? '0 0 0 4px rgba(245,158,11,0.15)' : 'none',
+        transition: 'all 0.12s',
+      }}>
         <ToothSVG
-          id={id}
-          surfMap={surfMap}
+          id={id} surfMap={surfMap}
           activeSurf={isActive ? activeSurf : null}
-          isEditable={isEditable}
-          isUpper={isUpper}
+          isEditable={isEditable} isUpper={isUpper}
           onSurf={(s) => onSurf(id, s)}
         />
       </div>
-
-      {/* FDI number — BELOW the tooth for the lower jaw */}
       {!isUpper && <span style={numStyle}>{id}</span>}
     </div>
   );
@@ -436,8 +474,9 @@ export const Odontogram: React.FC<OdontogramProps> = ({
   const [odoState, setOdoState]     = useState<OdoState>({});
   const [treatments, setTreatments] = useState<PatientTreatment[]>([]);
   const [services, setServices]     = useState<Service[]>([]);
-  const [searchTerm, setSearch]     = useState('');
-  const [isSaving, setSaving]       = useState(false);
+  const [searchTerm, setSearch]       = useState('');
+  const [isSaving, setSaving]         = useState(false);
+  const [isSavingBudget, setSavingBudget] = useState(false);
 
   // Which surface on which tooth is currently selected for editing
   const [activeTooth, setActiveTooth] = useState<number | null>(null);
@@ -591,6 +630,26 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       console.error(e);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveBudget = async () => {
+    if (!treatments.length) return;
+    try {
+      setSavingBudget(true);
+      const items = treatments.map(t => ({
+        name: t.serviceName || 'Tratamiento',
+        price: t.price ?? 0,
+        tooth: t.toothId ? String(t.toothId) : undefined,
+        quantity: 1,
+      }));
+      await api.budget.create(patientId, items, 'Presupuesto Odontograma');
+      alert('✅ Presupuesto guardado correctamente');
+    } catch (e: unknown) {
+      console.error('Error saving budget:', e);
+      alert('Error al guardar el presupuesto');
+    } finally {
+      setSavingBudget(false);
     }
   };
 
@@ -1056,28 +1115,39 @@ export const Odontogram: React.FC<OdontogramProps> = ({
               <span style={{ fontSize: 17, fontWeight: 900, color: '#0f172a' }}>
                 {totalPrice.toFixed(2)} €
               </span>
-              {isEditable && tempCount > 0 && (
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '7px 14px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: '#7c3aed',
-                    color: 'white',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    opacity: isSaving ? 0.6 : 1,
-                  }}
-                >
-                  <Save size={13} />
-                  {isSaving ? 'Guardando…' : `Guardar (${tempCount})`}
-                </button>
+              {isEditable && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {tempCount > 0 && (
+                    <button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '7px 14px', borderRadius: 8, border: 'none',
+                        background: '#16a34a', color: 'white',
+                        fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                        opacity: isSaving ? 0.6 : 1,
+                      }}
+                    >
+                      <Save size={13} />
+                      {isSaving ? 'Guardando…' : `Guardar Tratamiento (${tempCount})`}
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSaveBudget}
+                    disabled={isSavingBudget || !treatments.length}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '7px 14px', borderRadius: 8, border: 'none',
+                      background: '#7c3aed', color: 'white',
+                      fontSize: 12, fontWeight: 700, cursor: !treatments.length ? 'not-allowed' : 'pointer',
+                      opacity: (isSavingBudget || !treatments.length) ? 0.5 : 1,
+                    }}
+                  >
+                    <DollarSign size={13} />
+                    {isSavingBudget ? 'Guardando…' : 'Guardar Presupuesto'}
+                  </button>
+                </div>
               )}
             </div>
           </div>
