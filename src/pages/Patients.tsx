@@ -23,7 +23,7 @@ import { ConsentmentModal } from '../components/ConsentmentModal';
 import { DocumentsManager } from '../components/DocumentsManager';
 import { PatientBalance } from '../components/PatientBalance';
 import { BalanceBadge } from '../components/BalanceBadge';
-import { DOCTORS, DENTAL_SERVICES } from '../constants';
+import { DENTAL_SERVICES } from '../constants';
 import { PlanTratamientoTab } from '../components/PlanTratamientoTab';
 
 // Helper function to normalize patient data, ensuring prescriptions is always an array of objects
@@ -211,7 +211,7 @@ const Patients: React.FC = () => {
     const [isNewEntryModalOpen, setIsNewEntryModalOpen] = useState(false);
     const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<ClinicalRecord | null>(null);
-    const [newEntryForm, setNewEntryForm] = useState({ treatment: '', price: '', observation: '', specialization: 'General' });
+    const [newEntryForm, setNewEntryForm] = useState({ treatment: '', price: '', observation: '', specialization: 'General', doctorId: '' });
     
     // Reassign Doctor Modal
     const [isReassignDoctorModalOpen, setIsReassignDoctorModalOpen] = useState(false);
@@ -796,6 +796,7 @@ const Patients: React.FC = () => {
 
     const handleAddClinicalRecord = async () => {
         if (!newEntryForm.treatment) return toast("Rellene el tratamiento");
+        if (!newEntryForm.doctorId) return toast("Seleccione el doctor responsable");
         if (!selectedPatient?.id) return toast("Error: Paciente no seleccionado.");
         if (isSubmittingRecord) return;
         setIsSubmittingRecord(true);
@@ -822,7 +823,7 @@ const Patients: React.FC = () => {
 
             setClinicalRecords(prev => [rec, ...prev]);
             setIsNewEntryModalOpen(false);
-            setNewEntryForm({ treatment: '', observation: '', specialization: 'General', price: '' }); // Reset form
+            setNewEntryForm({ treatment: '', observation: '', specialization: 'General', price: '', doctorId: '' }); // Reset form
         } catch (e: any) {
             console.error(e);
             toast("Error al guardar: " + e.message);
@@ -1589,7 +1590,7 @@ const Patients: React.FC = () => {
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xs">EV</div>
                                                         <div>
-                                                            <p className="text-sm font-black text-slate-900">Dr. {DOCTORS.find(d => d.specialization === r.specialization)?.name || 'General'}</p>
+                                                            <p className="text-sm font-black text-slate-900">{(() => { const dn = doctors.find(d => d.id === r.authorId)?.name; return dn ? `Dr. ${dn}` : '—'; })()}</p>
                                                             <p className="text-[10px] text-slate-400 font-bold uppercase">{r.specialization}</p>
                                                         </div>
                                                     </div>
@@ -1705,7 +1706,7 @@ const Patients: React.FC = () => {
                                                                 </span>
                                                                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                                                                 <span className="text-[10px] font-bold text-indigo-500 uppercase">
-                                                                    Dr. {DOCTORS.find(d => d.id === p.doctorId)?.name || 'General'}
+                                                                    Dr. {doctors.find(d => d.id === p.doctorId)?.name || 'General'}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -2317,6 +2318,19 @@ const Patients: React.FC = () => {
                                         value={newEntryForm.treatment}
                                         onChange={e => setNewEntryForm({ ...newEntryForm, treatment: e.target.value })}
                                     />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Doctor Responsable <span className="text-red-500">*</span></label>
+                                    <select
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                                        value={newEntryForm.doctorId}
+                                        onChange={e => setNewEntryForm({ ...newEntryForm, doctorId: e.target.value })}
+                                    >
+                                        <option value="">— Seleccionar doctor —</option>
+                                        {doctors.map(d => (
+                                            <option key={d.id} value={d.id}>{d.name}{d.specialization ? ` (${d.specialization})` : ''}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="text-xs font-black uppercase text-slate-400 flex justify-between items-center mb-2">

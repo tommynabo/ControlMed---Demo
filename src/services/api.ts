@@ -400,7 +400,7 @@ export const api = {
             if (!res.ok) throw new Error('Failed to fetch clinical records');
             return res.json();
         },
-        create: async (data: { patientId: string, treatment: string, observation: string, specialization: string }): Promise<ClinicalRecord> => {
+        create: async (data: { patientId: string, treatment: string, observation: string, specialization: string, doctorId: string }): Promise<ClinicalRecord> => {
             const res = await fetch(`${API_URL}/clinical-records`, {
                 method: 'POST',
                 headers,

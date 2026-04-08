@@ -670,18 +670,21 @@ app.get('/api/finance/plans/:patientId', async (req, res) => {
 // --- CLINICAL RECORDS (Module 4 Extension) ---
 app.post('/api/clinical-records', async (req, res) => {
     try {
-        const { patientId, treatment, observation, specialization, price, date } = req.body;
+        const { patientId, treatment, observation, specialization, price, date, doctorId } = req.body;
+
+        if (!doctorId) {
+            return res.status(400).json({ error: 'Se requiere seleccionar un doctor responsable.' });
+        }
 
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        // Schema Adaptation: valid columns are id, patientId, date, text
-        // We store structured data in 'text' as a stringified JSON
         const payload = {
             treatment: treatment || 'Nota Clínica',
             observation: observation || '',
             specialization: specialization || 'General',
-            price: price || 0
+            price: price || 0,
+            doctorId: doctorId,
         };
 
         const { data, error } = await supabase
@@ -690,8 +693,8 @@ app.post('/api/clinical-records', async (req, res) => {
                 id: crypto.randomUUID(),
                 patientId,
                 date: new Date().toISOString(),
-                text: JSON.stringify(payload), // Serialize structure
-                authorId: 'system' // Optional
+                text: JSON.stringify(payload),
+                authorId: doctorId
             }])
             .select()
             .single();
@@ -790,19 +793,37 @@ app.get('/api/patients/:patientId/clinical-records', async (req, res) => {
 // --- DOCTORS ---
 app.get('/api/doctors', async (req, res) => {
     try {
-        // Primary source: Doctor table (all doctors)
+        // Join Doctor table with User table to filter real medical staff only.
+        // A Doctor record is included when:
+        //   a) It has NO linked User (standalone clinic doctor) → always include
+        //   b) It has a linked User with isDoctor=true OR role='DOCTOR' → include
+        //   c) It has a linked User who is ADMIN/RECEPTION with isDoctor=false → EXCLUDE
         const allDoctors = await prisma.doctor.findMany({
             orderBy: { name: 'asc' },
-            select: { id: true, name: true, specialization: true }
+            select: {
+                id: true,
+                name: true,
+                specialization: true,
+                users: {
+                    select: { isDoctor: true, role: true, isActive: true },
+                    where: { isActive: true }
+                }
+            }
         });
 
-        // If Doctor table has records, return them directly
-        if (allDoctors.length > 0) {
-            console.log(`✅ Loaded ${allDoctors.length} doctors from Doctor table`);
-            return res.json(allDoctors);
+        const filteredDoctors = allDoctors
+            .filter(d => {
+                if (d.users.length === 0) return true; // standalone doctor record → keep
+                return d.users.some(u => u.isDoctor === true || u.role === 'DOCTOR');
+            })
+            .map(({ users, ...rest }) => rest); // strip the users field from response
+
+        if (filteredDoctors.length > 0) {
+            console.log(`✅ Loaded ${filteredDoctors.length} doctors (filtered Doctor table)`);
+            return res.json(filteredDoctors);
         }
 
-        // Fallback: if Doctor table is empty, auto-sync from User table using isDoctor flag
+        // Fallback: if Doctor table is empty or no filtered doctors, use isDoctor users directly
         const doctorUsers = await prisma.user.findMany({
             where: { isDoctor: true, isActive: true },
             select: { id: true, name: true, doctorId: true }
