@@ -583,7 +583,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
     if (!pending.length) return;
     try {
       setSaving(true);
-      await api.treatments.create(pending);
+      await api.treatments.createBatch(patientId, pending);
       const data = await api.treatments.getByPatient(patientId);
       setTreatments(data || []);
       onTreatmentsChange?.(data || []);

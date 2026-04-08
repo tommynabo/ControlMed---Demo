@@ -1643,22 +1643,30 @@ const Patients: React.FC = () => {
 
                         {/* ODONTOGRAM TAB */}
                         {patientTab === 'odontogram' && (
-                            <div className="h-full flex flex-col items-center justify-center py-12">
-                                <div className="bg-gradient-to-br from-violet-50 via-white to-blue-50 p-12 rounded-[3rem] border border-slate-200 shadow-xl text-center max-w-lg">
-                                    <div className="w-20 h-20 bg-gradient-to-br from-violet-500 to-purple-600 text-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-violet-200">
-                                        <span className="text-3xl">🦷</span>
-                                    </div>
-                                    <h3 className="text-2xl font-black text-slate-900 mb-3">Odontograma Visual</h3>
-                                    <p className="text-sm text-slate-500 mb-8 max-w-sm mx-auto">
-                                        Abre el odontograma en pantalla completa para una mejor visualización y gestión de tratamientos.
-                                    </p>
+                            <div className="h-full flex flex-col">
+                                <div className="flex items-center justify-between mb-4 px-1">
+                                    <h3 className="text-2xl font-black text-slate-900">Odontograma</h3>
                                     <button
                                         onClick={() => setIsOdontogramOpen(true)}
-                                        className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-10 py-4 rounded-2xl text-sm font-black uppercase tracking-wider shadow-xl shadow-violet-200 hover:shadow-2xl hover:scale-[1.02] transition-all flex items-center gap-3 mx-auto"
+                                        className="flex items-center gap-2 bg-violet-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase hover:bg-violet-700 transition-colors shadow"
                                     >
-                                        <span>Abrir Odontograma</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1" /></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M14 10l6.1-6.1M9 21H3v-6M10 14l-6.1 6.1" /></svg>
+                                        Pantalla completa
                                     </button>
+                                </div>
+                                <div className="flex-1 overflow-auto">
+                                    <Odontogram
+                                        patientId={selectedPatient.id}
+                                        isEditable={true}
+                                        onTreatmentsChange={(newTreatments) => {
+                                            setTreatments(newTreatments);
+                                            if (selectedPatient) {
+                                                api.clinicalRecords.getByPatient(selectedPatient.id)
+                                                    .then(setClinicalRecords)
+                                                    .catch(e => console.error("Error refreshing history", e));
+                                            }
+                                        }}
+                                    />
                                 </div>
                             </div>
                         )}
