@@ -48,10 +48,7 @@ const CROWN_DIMS: Record<number, { w: number; ch: number; rh: number }> = {
 };
 const CHILD_SCALE = 0.80;
 
-// Arch curvature: degrees of rotation from midline outward
-const ARCH_ROT_MAP: Record<number, number> = {
-  1: 0, 2: 2, 3: 5, 4: 8, 5: 11, 6: 14, 7: 17, 8: 19, 0: 0,
-};
+// Eliminated ARCH_ROT_MAP as the patient requested a clean horizontal layout.
 
 function getToothDims(id: number) {
   const digit = id % 10;
@@ -129,14 +126,6 @@ function getRootPaths(digit: number, quadrant: number, W: number, RH: number): A
     default: return [{ d: tapRoot(.2, .8, .5) }];
   }
 }
-
-const getArchRot = (id: number): number => {
-  const digit = id % 10;
-  const q = Math.floor(id / 10);
-  const angle = ARCH_ROT_MAP[digit] ?? 0;
-  const isLeft = q === 1 || q === 4 || q === 5 || q === 8;
-  return isLeft ? -angle : angle;
-};
 
 // ── Surfaces ────────────────────────────────────────────────────────────
 type Surf = 'V' | 'L' | 'M' | 'D' | 'O';
@@ -348,7 +337,6 @@ const ToothCell: React.FC<ToothCellProps> = ({
   const isActive     = activeTooth === id;
   const hasCondition = Object.values(surfMap).some(c => c && c !== 'healthy');
   const { w }        = getToothDims(id);
-  const rot          = getArchRot(id);
 
   const numStyle: React.CSSProperties = {
     fontSize: 9, fontWeight: 800, lineHeight: '1',
@@ -361,8 +349,6 @@ const ToothCell: React.FC<ToothCellProps> = ({
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       gap: 2, flexShrink: 0,
-      transform: `rotate(${rot}deg)`,
-      transformOrigin: isUpper ? 'center 200%' : 'center -100%',
     }}>
       {isUpper && <span style={numStyle}>{id}</span>}
       <div style={{
