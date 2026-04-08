@@ -850,6 +850,7 @@ const Agenda: React.FC = () => {
                                 value={closureDoctorId}
                                 onChange={(e) => setClosureDoctorId(e.target.value)}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                                style={{ colorScheme: 'light' }}
                             >
                                 <option value="">Todos los doctores</option>
                                 {doctors.map(d => (
@@ -1397,6 +1398,7 @@ const Agenda: React.FC = () => {
                                             className="w-full bg-slate-50 p-2 rounded-xl border border-slate-200 mt-1 outline-none font-bold text-xs"
                                             value={bookingTime}
                                             onChange={(e) => setBookingTime(e.target.value)}
+                                            style={{ colorScheme: 'light' }}
                                         >
                                             {TIME_SLOTS.map(t => (
                                                 <option key={t} value={t}>{t}</option>
@@ -1464,6 +1466,7 @@ const Agenda: React.FC = () => {
                                             setBookingPrice(0);
                                         }}
                                         disabled={false}
+                                        style={{ colorScheme: 'light' }}
                                     >
                                         <option value="">-- Sin vincular --</option>
                                         {patientBudgets.map(b => (
@@ -1527,6 +1530,7 @@ const Agenda: React.FC = () => {
                                         setBookingDoctorId(e.target.value);
                                     }}
                                     disabled={false}
+                                    style={{ colorScheme: 'light' }}
                                 >
                                     <option value="">Seleccionar Doctor...</option>
                                     {doctors.map(d => (
@@ -1552,6 +1556,7 @@ const Agenda: React.FC = () => {
                                             className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold text-slate-600 text-sm"
                                             value={treatmentToAdd}
                                             onChange={(e) => setTreatmentToAdd(e.target.value)}
+                                            style={{ colorScheme: 'light' }}
                                         >
                                             <option value="">Añadir tratamiento...</option>
                                             {DENTAL_SERVICES.map(t => (
@@ -1625,6 +1630,7 @@ const Agenda: React.FC = () => {
                                         value={bookingDuration}
                                         onChange={e => setBookingDuration(Number(e.target.value))}
                                         disabled={false}
+                                        style={{ colorScheme: 'light' }}
                                     >
                                         {DURATION_OPTIONS.map(opt => (
                                             <option key={opt} value={opt}>{opt} min</option>

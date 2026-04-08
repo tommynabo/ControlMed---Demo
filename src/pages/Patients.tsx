@@ -1657,6 +1657,7 @@ const Patients: React.FC = () => {
                                 <div className="flex-1 overflow-auto">
                                     <OdontogramEnhanced
                                         patientId={selectedPatient.id}
+                                        isEditable={true}
                                     />
                                 </div>
                             </div>
@@ -2726,10 +2727,11 @@ const Patients: React.FC = () => {
 
                     {/* Odontogram Container - Scrollable */}
                     <div className="flex-1 overflow-y-auto p-6 md:p-10">
-                        <div className="max-w-7xl mx-auto">
-                                        <OdontogramEnhanced
-                                            patientId={selectedPatient.id}
-                                        />
+                        <div className="max-w-7xl mx-auto bg-white rounded-2xl p-6">
+                            <OdontogramEnhanced
+                                patientId={selectedPatient.id}
+                                isEditable={true}
+                            />
                         </div>
                     </div>
                 </div>

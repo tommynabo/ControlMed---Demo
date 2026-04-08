@@ -812,8 +812,24 @@ app.get('/api/doctors', async (req, res) => {
             }
         });
 
+        // Ghost/test doctor names to permanently exclude from the Agenda
+        const GHOST_DOCTOR_NAMES = new Set([
+            'Francisca',
+            'Prueba medico',
+            'Leticia Rodriguez Silvera',
+            'LauraLeticia Rodriguez Silvera',
+            'Laura Leticia Rodriguez Silvera',
+        ]);
+        // Ghost Doctor record IDs (belt-and-suspenders, in case names change)
+        const GHOST_DOCTOR_IDS = new Set([
+            '6c1c4982-70e6-472c-880f-6550c3945c4d', // Prueba medico
+            'f4f54750-c691-43ae-9f58-15092e184035', // Francisca
+        ]);
+
         const filteredDoctors = allDoctors
             .filter(d => {
+                // Explicit ghost/test account exclusion
+                if (GHOST_DOCTOR_IDS.has(d.id) || GHOST_DOCTOR_NAMES.has(d.name)) return false;
                 if (d.users.length === 0) return true; // truly standalone doctor (no user account at all) → keep
                 // Only include if at least one linked user is active AND is a real doctor
                 return d.users.some(u => u.isActive === true && (u.isDoctor === true || u.role === 'DOCTOR'));
