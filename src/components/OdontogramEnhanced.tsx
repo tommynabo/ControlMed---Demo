@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Baby, Plus, Save, User, X } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../services/supabase';
 import { PostgrestError } from '@supabase/supabase-js';
 
 export type Surf = 'O' | 'V' | 'L' | 'M' | 'D';
