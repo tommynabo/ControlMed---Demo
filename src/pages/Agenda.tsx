@@ -519,8 +519,10 @@ const Agenda: React.FC = () => {
         try {
             setIsBooking(true);
             const createdAppt = await api.appointments.create(newAppt);
-            // Refrescar datos globales
-            await refreshAppointments();
+            // Optimistic update: add immediately so it shows without waiting for refetch
+            addAppointment(createdAppt);
+            // Background sync to ensure consistency
+            refreshAppointments();
             
             setIsAppointmentModalOpen(false);
             setActiveSlot(null);
@@ -1236,8 +1238,8 @@ const Agenda: React.FC = () => {
                                                             const [ah, am] = appt.time.split(':').map(Number);
                                                             const startMin = ah * 60 + am;
 
-                                                            const overlapping = sorted.filter(o => {
-                                                                if (o.id === appt.id) return false;
+                                                            // Build the full overlap group (all appointments that overlap with this one)
+                                                            const overlapGroup = sorted.filter(o => {
                                                                 const [oh, om] = o.time.split(':').map(Number);
                                                                 const oStart = oh * 60 + om;
                                                                 const oEnd = oStart + (o.duration || 30);
@@ -1246,10 +1248,11 @@ const Agenda: React.FC = () => {
                                                             });
 
                                                             let width = '100%', left = '0%';
-                                                            if (overlapping.length > 0) {
-                                                                const older = overlapping.find(o => o.time < appt.time || (o.time === appt.time && o.id < appt.id));
-                                                                width = '50%';
-                                                                left = older ? '50%' : '0%';
+                                                            if (overlapGroup.length > 1) {
+                                                                const myIdx = overlapGroup.findIndex(o => o.id === appt.id);
+                                                                const pct = 100 / overlapGroup.length;
+                                                                width = `${pct}%`;
+                                                                left = `${pct * myIdx}%`;
                                                             }
 
                                                             return (

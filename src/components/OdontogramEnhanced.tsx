@@ -48,9 +48,9 @@ const CROWN_DIMS: Record<number, { w: number; ch: number; rh: number }> = {
 };
 const CHILD_SCALE = 0.80;
 
-// Arch curvature: degrees of rotation from midline outward (reduced for taller teeth)
+// Arch curvature: degrees of rotation from midline outward
 const ARCH_ROT_MAP: Record<number, number> = {
-  1: 0, 2: 3, 3: 6, 4: 10, 5: 13, 6: 16, 7: 18, 8: 20, 0: 0,
+  1: 0, 2: 2, 3: 5, 4: 8, 5: 11, 6: 14, 7: 17, 8: 19, 0: 0,
 };
 
 function getToothDims(id: number) {
@@ -70,57 +70,63 @@ function getToothDims(id: number) {
 function getCrownPath(digit: number, W: number, H: number): string {
   const w = W, h = H;
   switch (digit) {
-    case 1: return `M 1 ${h} L 0 ${h*.8} Q 0 1 ${w/2} 0 Q ${w} 1 ${w} ${h*.8} L ${w-1} ${h} Z`;
-    case 2: return `M 1 ${h} L 0 ${h*.78} Q 1 2 ${w/2} 0 Q ${w-1} 2 ${w} ${h*.78} L ${w-1} ${h} Z`;
-    case 3: return `M 1 ${h} L 0 ${h*.66} L 0 ${h*.38} L ${w/2} 0 L ${w} ${h*.38} L ${w} ${h*.66} L ${w-1} ${h} Z`;
-    case 4: return `M 0 ${h} L 0 ${h*.68} Q 0 ${h*.22} ${w*.3} 2 Q ${w*.43} ${h*.3} ${w*.5} ${h*.13} Q ${w*.57} ${h*.3} ${w*.7} 2 Q ${w} ${h*.22} ${w} ${h*.68} L ${w} ${h} Z`;
-    case 5: return `M 0 ${h} L 0 ${h*.66} Q 0 ${h*.22} ${w*.28} 2 Q ${w*.42} ${h*.28} ${w*.5} ${h*.15} Q ${w*.58} ${h*.28} ${w*.72} 2 Q ${w} ${h*.22} ${w} ${h*.66} L ${w} ${h} Z`;
-    case 6: return `M 0 ${h} L 0 ${h*.58} Q 0 ${h*.26} ${w*.2} ${h*.09} Q ${w*.35} ${h*.24} ${w*.5} ${h*.13} Q ${w*.65} ${h*.24} ${w*.8} ${h*.09} Q ${w} ${h*.26} ${w} ${h*.58} L ${w} ${h} Z`;
-    case 7: return `M 0 ${h} L 0 ${h*.55} Q 0 ${h*.23} ${w*.22} ${h*.08} Q ${w*.37} ${h*.22} ${w*.5} ${h*.13} Q ${w*.63} ${h*.22} ${w*.78} ${h*.08} Q ${w} ${h*.23} ${w} ${h*.55} L ${w} ${h} Z`;
-    case 8: return `M 0 ${h} L 0 ${h*.55} Q 0 ${h*.24} ${w*.25} ${h*.1} Q ${w*.38} ${h*.22} ${w*.5} ${h*.17} Q ${w*.62} ${h*.22} ${w*.75} ${h*.1} Q ${w} ${h*.24} ${w} ${h*.55} L ${w} ${h} Z`;
-    default:return `M 0 ${h} L 0 0 L ${w} 0 L ${w} ${h} Z`;
+    // Incisors: trapezoidal — wider at incisal, narrower at cervical, slightly convex mesial/distal
+    case 1: return `M ${w*.12} ${h} C ${w*.04} ${h*.8} 0 ${h*.5} ${w*.04} ${h*.12} L ${w*.08} 0 L ${w*.92} 0 L ${w*.96} ${h*.12} C ${w} ${h*.5} ${w*.96} ${h*.8} ${w*.88} ${h} Z`;
+    case 2: return `M ${w*.1}  ${h} C ${w*.04} ${h*.8} 0 ${h*.5} ${w*.04} ${h*.14} L ${w*.08} 0 L ${w*.92} 0 L ${w*.96} ${h*.14} C ${w} ${h*.5} ${w*.96} ${h*.8} ${w*.9}  ${h} Z`;
+    // Canine: long crown, slightly bulging sides, clear pointed cusp
+    case 3: return `M ${w*.08} ${h} C ${w*.03} ${h*.75} 0 ${h*.5} ${w*.02} ${h*.28} C ${w*.1} ${h*.06} ${w*.36} 0 ${w*.5} 0 C ${w*.64} 0 ${w*.9} ${h*.06} ${w*.98} ${h*.28} C ${w} ${h*.5} ${w*.97} ${h*.75} ${w*.92} ${h} Z`;
+    // Premolars: rectangular crown with distinct cusp bumps at incisal
+    case 4: return `M 0 ${h} L 0 ${h*.6} C 0 ${h*.34} ${w*.06} ${h*.14} ${w*.2} ${h*.04} C ${w*.28} ${h*.17} ${w*.36} ${h*.26} ${w*.45} ${h*.12} L ${w*.5} 0 L ${w*.55} ${h*.12} C ${w*.64} ${h*.26} ${w*.72} ${h*.17} ${w*.8} ${h*.04} C ${w*.94} ${h*.14} ${w} ${h*.34} ${w} ${h*.6} L ${w} ${h} Z`;
+    case 5: return `M 0 ${h} L 0 ${h*.58} C 0 ${h*.32} ${w*.08} ${h*.14} ${w*.22} ${h*.04} C ${w*.32} ${h*.18} ${w*.43} ${h*.28} ${w*.5} ${h*.08} C ${w*.57} ${h*.28} ${w*.68} ${h*.18} ${w*.78} ${h*.04} C ${w*.92} ${h*.14} ${w} ${h*.32} ${w} ${h*.58} L ${w} ${h} Z`;
+    // Molars: wide crown, two buccal cusps with central groove
+    case 6: return `M 0 ${h} L 0 ${h*.56} C 0 ${h*.3} ${w*.04} ${h*.13} ${w*.18} ${h*.03} C ${w*.28} ${h*.15} ${w*.38} ${h*.23} ${w*.48} ${h*.1} L ${w*.5} 0 L ${w*.52} ${h*.1} C ${w*.62} ${h*.23} ${w*.72} ${h*.15} ${w*.82} ${h*.03} C ${w*.96} ${h*.13} ${w} ${h*.3} ${w} ${h*.56} L ${w} ${h} Z`;
+    case 7: return `M 0 ${h} L 0 ${h*.54} C 0 ${h*.29} ${w*.05} ${h*.13} ${w*.19} ${h*.03} C ${w*.29} ${h*.15} ${w*.39} ${h*.24} ${w*.48} ${h*.11} L ${w*.5} 0 L ${w*.52} ${h*.11} C ${w*.61} ${h*.24} ${w*.71} ${h*.15} ${w*.81} ${h*.03} C ${w*.95} ${h*.13} ${w} ${h*.29} ${w} ${h*.54} L ${w} ${h} Z`;
+    case 8: return `M 0 ${h} L 0 ${h*.56} C 0 ${h*.32} ${w*.06} ${h*.16} ${w*.2}  ${h*.05} C ${w*.29} ${h*.17} ${w*.38} ${h*.26} ${w*.46} ${h*.13} L ${w*.5} ${h*.02} L ${w*.54} ${h*.13} C ${w*.62} ${h*.26} ${w*.71} ${h*.17} ${w*.8} ${h*.05} C ${w*.94} ${h*.16} ${w} ${h*.32} ${w} ${h*.56} L ${w} ${h} Z`;
+    default: return `M 0 ${h} L 0 0 L ${w} 0 L ${w} ${h} Z`;
   }
 }
 
 // Root SVG paths. y=0 is cervical, y=RH is root apex.
-// Returns array of { d: path, bg?: bool (lighter/behind) }
+// Returns array of { d: path, bg?: bool (lighter «palatal» root drawn behind) }
 function getRootPaths(digit: number, quadrant: number, W: number, RH: number): Array<{ d: string; bg?: boolean }> {
   const w = W, r = RH;
   const isUpper = quadrant <= 2 || quadrant === 5 || quadrant === 6;
-  const singleRoot = (lx: number, rx: number, apexX: number) =>
-    `M ${w*lx} 0 C ${w*lx} ${r*.6} ${w*(apexX-.1)} ${r} ${w*apexX} ${r} C ${w*(apexX+.1)} ${r} ${w*rx} ${r*.6} ${w*rx} 0 Z`;
+  // Single straight tapered root from cervical (y=0) to apex (y=r)
+  const tapRoot = (x1: number, x2: number, ax: number) =>
+    `M ${w*x1} 0 C ${w*x1} ${r*.5} ${w*(ax-.08)} ${r*.9} ${w*ax} ${r} C ${w*(ax+.08)} ${r*.9} ${w*x2} ${r*.5} ${w*x2} 0 Z`;
   switch (digit) {
-    case 1: return [{ d: singleRoot(.2, .8, .5) }];
-    case 2: return [{ d: `M ${w*.2} 0 C ${w*.17} ${r*.58} ${w*.28} ${r} ${w*.5} ${r} C ${w*.7} ${r} ${w*.82} ${r*.55} ${w*.8} 0 Z` }];
-    case 3: return [{ d: `M ${w*.18} 0 C ${w*.14} ${r*.65} ${w*.27} ${r} ${w*.5} ${r} C ${w*.73} ${r} ${w*.86} ${r*.65} ${w*.82} 0 Z` }];
-    case 4:
-      if (isUpper) return [
-        { d: `M ${w*.1} 0 C ${w*.06} ${r*.55} ${w*.12} ${r*.9} ${w*.28} ${r} C ${w*.38} ${r*.9} ${w*.4} ${r*.5} ${w*.36} 0 Z` },
-        { d: `M ${w*.64} 0 C ${w*.6} ${r*.5} ${w*.62} ${r*.9} ${w*.72} ${r} C ${w*.88} ${r*.9} ${w*.94} ${r*.55} ${w*.9} 0 Z` },
+    case 1: return [{ d: tapRoot(.18, .82, .5) }];
+    case 2: return [{ d: tapRoot(.2, .8, .49) }];
+    // Canine: long single root, slightly bulging
+    case 3: return [{ d: `M ${w*.16} 0 C ${w*.1} ${r*.45} ${w*.18} ${r*.9} ${w*.45} ${r} C ${w*.72} ${r} ${w*.9} ${r*.9} ${w*.84} ${r*.45} ${w*.84} 0 Z` }];
+    case 4: // 1st premolar
+      if (isUpper) return [ // bifurcated — buccal + palatal roots
+        { d: `M ${w*.1} 0 C ${w*.06} ${r*.5} ${w*.08} ${r*.88} ${w*.25} ${r} C ${w*.36} ${r*.88} ${w*.37} ${r*.5} ${w*.34} 0 Z` },
+        { d: `M ${w*.66} 0 C ${w*.63} ${r*.5} ${w*.64} ${r*.88} ${w*.75} ${r} C ${w*.92} ${r*.88} ${w*.94} ${r*.5} ${w*.9} 0 Z` },
       ];
-      return [{ d: singleRoot(.2, .8, .5) }];
-    case 5: return [{ d: singleRoot(.2, .8, .5) }];
-    case 6:
-    case 7:
+      return [{ d: tapRoot(.15, .85, .5) }];
+    case 5: return [{ d: tapRoot(.18, .82, .5) }];
+    case 6: // 1st molar
+    case 7: // 2nd molar
+      if (isUpper) return [ // 3 roots: mesiobuccal, palatal (bg), distobuccal
+        { d: `M ${w*.04} 0 C 0 ${r*.52} ${w*.04} ${r*.9} ${w*.2} ${r} C ${w*.3} ${r*.9} ${w*.31} ${r*.52} ${w*.29} 0 Z` },
+        { d: `M ${w*.38} 0 C ${w*.34} ${r*.38} ${w*.41} ${r*.7} ${w*.5} ${r*.76} C ${w*.59} ${r*.7} ${w*.66} ${r*.38} ${w*.62} 0 Z`, bg: true },
+        { d: `M ${w*.71} 0 C ${w*.69} ${r*.52} ${w*.7} ${r*.9} ${w*.8} ${r} C ${w*.96} ${r*.9} ${w} ${r*.52} ${w*.96} 0 Z` },
+      ];
+      return [ // 2 roots: mesial + distal, clearly separated
+        { d: `M ${w*.06} 0 C ${w*.02} ${r*.52} ${w*.06} ${r*.9} ${w*.23} ${r} C ${w*.35} ${r*.9} ${w*.36} ${r*.52} ${w*.33} 0 Z` },
+        { d: `M ${w*.67} 0 C ${w*.64} ${r*.52} ${w*.65} ${r*.9} ${w*.77} ${r} C ${w*.94} ${r*.9} ${w*.98} ${r*.52} ${w*.94} 0 Z` },
+      ];
+    case 8: // Wisdom
       if (isUpper) return [
-        { d: `M ${w*.04} 0 C 0 ${r*.55} ${w*.06} ${r*.9} ${w*.22} ${r} C ${w*.3} ${r*.9} ${w*.32} ${r*.5} ${w*.3} 0 Z` },
-        { d: `M ${w*.38} 0 C ${w*.35} ${r*.42} ${w*.42} ${r*.72} ${w*.5} ${r*.78} C ${w*.58} ${r*.72} ${w*.65} ${r*.42} ${w*.62} 0 Z`, bg: true },
-        { d: `M ${w*.7} 0 C ${w*.68} ${r*.5} ${w*.7} ${r*.9} ${w*.78} ${r} C ${w*.94} ${r*.9} ${w} ${r*.55} ${w*.96} 0 Z` },
+        { d: `M ${w*.1} 0 C ${w*.06} ${r*.5} ${w*.1} ${r*.88} ${w*.28} ${r} C ${w*.4} ${r*.88} ${w*.42} ${r*.5} ${w*.38} 0 Z` },
+        { d: `M ${w*.62} 0 C ${w*.58} ${r*.5} ${w*.6} ${r*.88} ${w*.72} ${r} C ${w*.9} ${r*.88} ${w*.94} ${r*.5} ${w*.9} 0 Z` },
       ];
       return [
-        { d: `M ${w*.08} 0 C ${w*.04} ${r*.54} ${w*.1} ${r*.9} ${w*.26} ${r} C ${w*.36} ${r*.9} ${w*.38} ${r*.5} ${w*.36} 0 Z` },
-        { d: `M ${w*.64} 0 C ${w*.62} ${r*.5} ${w*.64} ${r*.9} ${w*.74} ${r} C ${w*.9} ${r*.9} ${w*.96} ${r*.54} ${w*.92} 0 Z` },
+        { d: `M ${w*.12} 0 C ${w*.08} ${r*.5} ${w*.12} ${r*.88} ${w*.3} ${r} C ${w*.42} ${r*.88} ${w*.44} ${r*.5} ${w*.4} 0 Z` },
+        { d: `M ${w*.6} 0 C ${w*.56} ${r*.5} ${w*.58} ${r*.88} ${w*.7} ${r} C ${w*.88} ${r*.88} ${w*.92} ${r*.5} ${w*.88} 0 Z` },
       ];
-    case 8:
-      if (isUpper) return [
-        { d: `M ${w*.08} 0 C ${w*.04} ${r*.52} ${w*.1} ${r*.88} ${w*.28} ${r} C ${w*.38} ${r*.88} ${w*.4} ${r*.5} ${w*.38} 0 Z` },
-        { d: `M ${w*.62} 0 C ${w*.6} ${r*.5} ${w*.62} ${r*.88} ${w*.72} ${r} C ${w*.9} ${r*.88} ${w*.96} ${r*.52} ${w*.92} 0 Z` },
-      ];
-      return [
-        { d: `M ${w*.12} 0 C ${w*.08} ${r*.52} ${w*.14} ${r*.88} ${w*.3} ${r} C ${w*.4} ${r*.88} ${w*.42} ${r*.5} ${w*.4} 0 Z` },
-        { d: `M ${w*.6} 0 C ${w*.58} ${r*.5} ${w*.6} ${r*.88} ${w*.7} ${r} C ${w*.88} ${r*.88} ${w*.92} ${r*.52} ${w*.88} 0 Z` },
-      ];
-    default:return [{ d: singleRoot(.2, .8, .5) }];
+    default: return [{ d: tapRoot(.2, .8, .5) }];
   }
 }
 
@@ -270,9 +276,9 @@ const ToothSVG: React.FC<ToothSVGProps> = ({
         <g transform={`translate(0,${ch})`}>
           {rootDefs.map((r, i) => (
             <path key={i} d={r.d}
-              fill={r.bg ? '#ece7d8' : '#f5f0e5'}
-              stroke={r.bg ? '#c4b99a' : '#c8b89a'}
-              strokeWidth="0.9"
+              fill={r.bg ? '#e8e0d0' : '#f0ece4'}
+              stroke={r.bg ? '#b0a080' : '#9a8868'}
+              strokeWidth="1"
             />
           ))}
         </g>
@@ -300,9 +306,24 @@ const ToothSVG: React.FC<ToothSVGProps> = ({
         <text x={w/2}      y={ch/2+2}       textAnchor="middle" fontSize="6"   fontWeight="900" fill="#64748b" pointerEvents="none">V</text>
 
         {/* ── Crown outline on top ───────────────────────────── */}
-        <path d={crownPathD} fill="none" stroke="#7a9aad" strokeWidth="1.3" />
+        <path d={crownPathD} fill="none" stroke="#5a7a94" strokeWidth="1.4" />
         {/* Cervical line */}
-        <line x1={0} y1={ch} x2={w} y2={ch} stroke="#b0bec5" strokeWidth="0.7" strokeDasharray="2,1.5" />
+        <line x1={0} y1={ch} x2={w} y2={ch} stroke="#8aa0b0" strokeWidth="0.7" strokeDasharray="2,1.5" />
+        {/* Internal groove lines for molars/premolars */}
+        {(digit === 6 || digit === 7 || digit === 8) && (
+          <path
+            d={`M ${w*.5} ${ch*.1} C ${w*.49} ${ch*.35} ${w*.5} ${ch*.55} ${w*.5} ${ch*.68}`}
+            fill="none" stroke="#8aaabb" strokeWidth="0.9" opacity="0.6"
+            clipPath={`url(#${clipId})`}
+          />
+        )}
+        {digit === 4 && (
+          <path
+            d={`M ${w*.5} ${ch*.12} C ${w*.49} ${ch*.3} ${w*.5} ${ch*.5} ${w*.5} ${ch*.62}`}
+            fill="none" stroke="#8aaabb" strokeWidth="0.8" opacity="0.5"
+            clipPath={`url(#${clipId})`}
+          />
+        )}
       </g>
     </svg>
   );
