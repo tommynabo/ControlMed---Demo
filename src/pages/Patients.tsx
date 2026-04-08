@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
 import { useAppContext } from '../context/AppContext';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
-import { Odontogram } from '../components/OdontogramEnhanced';
+import OdontogramEnhanced from '../components/OdontogramEnhanced';
 import { PaymentModal } from '../components/PaymentModal';
 import { TransferBalanceModal } from '../components/TransferBalanceModal';
 import { TreatmentsList } from '../components/TreatmentsList';
@@ -1655,17 +1655,8 @@ const Patients: React.FC = () => {
                                     </button>
                                 </div>
                                 <div className="flex-1 overflow-auto">
-                                    <Odontogram
+                                    <OdontogramEnhanced
                                         patientId={selectedPatient.id}
-                                        isEditable={true}
-                                        onTreatmentsChange={(newTreatments) => {
-                                            setTreatments(newTreatments);
-                                            if (selectedPatient) {
-                                                api.clinicalRecords.getByPatient(selectedPatient.id)
-                                                    .then(setClinicalRecords)
-                                                    .catch(e => console.error("Error refreshing history", e));
-                                            }
-                                        }}
                                     />
                                 </div>
                             </div>
@@ -2736,19 +2727,9 @@ const Patients: React.FC = () => {
                     {/* Odontogram Container - Scrollable */}
                     <div className="flex-1 overflow-y-auto p-6 md:p-10">
                         <div className="max-w-7xl mx-auto">
-                            <Odontogram
-                                patientId={selectedPatient.id}
-                                isEditable={true}
-                                onTreatmentsChange={(newTreatments) => {
-                                    setTreatments(newTreatments);
-                                    // Also refresh clinical records to show the new history entry
-                                    if (selectedPatient) {
-                                        api.clinicalRecords.getByPatient(selectedPatient.id)
-                                            .then(setClinicalRecords)
-                                            .catch(e => console.error("Error refreshing history", e));
-                                    }
-                                }}
-                            />
+                                        <OdontogramEnhanced
+                                            patientId={selectedPatient.id}
+                                        />
                         </div>
                     </div>
                 </div>
