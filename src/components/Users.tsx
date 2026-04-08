@@ -9,6 +9,7 @@ interface User {
   email: string;
   full_name: string;
   role: 'ADMIN' | 'DOCTOR' | 'RECEPTIONIST' | 'ASSISTANT';
+  isDoctor?: boolean;
   is_active: boolean;
   created_at?: string;
 }
@@ -26,6 +27,7 @@ const Users: React.FC = () => {
     email: '',
     full_name: '',
     role: 'RECEPTIONIST',
+    isDoctor: false,
     is_active: true,
     password: ''
   });
@@ -58,6 +60,7 @@ const Users: React.FC = () => {
       email: '',
       full_name: '',
       role: 'RECEPTIONIST',
+      isDoctor: false,
       is_active: true,
       password: ''
     });
@@ -103,6 +106,7 @@ const Users: React.FC = () => {
           email: userForm.email,
           full_name: userForm.full_name,
           role: userForm.role,
+          isDoctor: userForm.isDoctor || userForm.role === 'DOCTOR',
           is_active: userForm.is_active
         };
         if (userForm.password) {
@@ -114,6 +118,7 @@ const Users: React.FC = () => {
           email: userForm.email,
           full_name: userForm.full_name,
           role: userForm.role,
+          isDoctor: userForm.isDoctor || userForm.role === 'DOCTOR',
           is_active: userForm.is_active,
           password: userForm.password
         });
@@ -313,9 +318,14 @@ const Users: React.FC = () => {
                 <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Rol *</label>
                 <select
                   value={userForm.role}
-                  onChange={(e) =>
-                    setUserForm({ ...userForm, role: e.target.value as User['role'] })
-                  }
+                  onChange={(e) => {
+                    const newRole = e.target.value as User['role'];
+                    setUserForm({
+                      ...userForm,
+                      role: newRole,
+                      isDoctor: newRole === 'DOCTOR' ? true : userForm.isDoctor
+                    });
+                  }}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-200"
                 >
                   {roles.map(role => (
@@ -324,6 +334,20 @@ const Users: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {/* isDoctor checkbox — available for any role */}
+                <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={userForm.isDoctor || userForm.role === 'DOCTOR'}
+                    disabled={userForm.role === 'DOCTOR'}
+                    onChange={e => setUserForm({ ...userForm, isDoctor: e.target.checked })}
+                    className="w-4 h-4 rounded accent-indigo-600"
+                  />
+                  <span className="text-xs font-semibold text-slate-600">
+                    También es Doctor
+                    <span className="ml-1 text-slate-400 font-normal">(aparece en agendas y citas)</span>
+                  </span>
+                </label>
               </div>
 
               <div>

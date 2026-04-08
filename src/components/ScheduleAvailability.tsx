@@ -8,6 +8,8 @@ interface SystemUser {
   email: string;
   full_name: string;
   role: string;
+  isDoctor?: boolean;
+  is_active?: boolean;
 }
 
 interface DoctorSchedule {
@@ -139,8 +141,8 @@ const ScheduleAvailability: React.FC = () => {
   };
   // Filter doctors based on search input (for the "Add Schedule" dropdown)
   const filteredDoctors = systemDoctors.filter(doc => {
-    // Only show active users with DOCTOR role
-    if (doc.role !== 'DOCTOR') return false;
+    // Only show users marked as doctors (isDoctor=true covers ADMIN+DOCTOR dual-role AND pure DOCTOR role)
+    if (!doc.isDoctor && doc.role !== 'DOCTOR') return false;
     if (doc.is_active === false) return false;
     // If not ADMIN, only allow managing their own schedule
     if (currentUserRole !== 'ADMIN' && doc.id !== currentUser?.id) return false;

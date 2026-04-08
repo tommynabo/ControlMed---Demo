@@ -10,6 +10,7 @@ interface SystemUser {
     name: string;
     password?: string;
     role: UserRole;
+    isDoctor: boolean;
     doctorId?: string;
     createdAt?: string;
 }
@@ -20,6 +21,7 @@ const EMPTY_USER: Omit<SystemUser, 'id'> = {
     name: '',
     password: '',
     role: 'DOCTOR',
+    isDoctor: true,
     doctorId: '',
 };
 
@@ -83,6 +85,7 @@ const UserManagement: React.FC = () => {
             name: user.name,
             password: '',
             role: user.role,
+            isDoctor: user.isDoctor ?? (user.role === 'DOCTOR'),
             doctorId: user.doctorId || '',
         });
         setShowPassword(false);
@@ -114,6 +117,7 @@ const UserManagement: React.FC = () => {
                 gmail: formData.gmail || null,
                 name: formData.name,
                 role: formData.role,
+                isDoctor: formData.isDoctor || formData.role === 'DOCTOR',
                 doctorId: formData.doctorId || null,
             };
             if (formData.password) {
@@ -308,19 +312,41 @@ const UserManagement: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Rol *</label>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Rol de Acceso *</label>
                             <select
                                 value={formData.role}
-                                onChange={e => setFormData(p => ({ ...p, role: e.target.value as UserRole }))}
+                                onChange={e => {
+                                    const newRole = e.target.value as UserRole;
+                                    setFormData(p => ({
+                                        ...p,
+                                        role: newRole,
+                                        // DOCTOR role always implies isDoctor=true
+                                        isDoctor: newRole === 'DOCTOR' ? true : p.isDoctor,
+                                    }));
+                                }}
                                 className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none bg-white"
                             >
                                 {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => (
                                     <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                                 ))}
                             </select>
+                            {/* isDoctor checkbox — available for any role */}
+                            <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.isDoctor || formData.role === 'DOCTOR'}
+                                    disabled={formData.role === 'DOCTOR'}
+                                    onChange={e => setFormData(p => ({ ...p, isDoctor: e.target.checked }))}
+                                    className="w-4 h-4 rounded accent-blue-600"
+                                />
+                                <span className="text-xs font-semibold text-slate-600">
+                                    También es Doctor
+                                    <span className="ml-1 text-slate-400 font-normal">(aparece en agendas, citas y tratamientos)</span>
+                                </span>
+                            </label>
                         </div>
 
-                        {formData.role === 'DOCTOR' && (
+                        {(formData.isDoctor || formData.role === 'DOCTOR') && (
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Doctor Asociado</label>
                                 <select
@@ -397,6 +423,11 @@ const UserManagement: React.FC = () => {
                                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${getRoleBadgeColor(user.role)}`}>
                                             {ROLE_LABELS[user.role] || user.role}
                                         </span>
+                                        {user.isDoctor && user.role !== 'DOCTOR' && (
+                                            <span className="ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
+                                                + Doctor
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="px-5 py-3 text-sm text-slate-600">
                                         {user.doctorId ? doctors.find(d => d.id === user.doctorId)?.name || user.doctorId : '—'}

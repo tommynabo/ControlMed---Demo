@@ -22,7 +22,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION is_doctor() RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN get_user_role() = 'DOCTOR';
+  RETURN EXISTS (
+    SELECT 1 FROM "User"
+    WHERE "id" = auth.uid()::TEXT
+      AND ("isDoctor" = true OR role = 'DOCTOR')
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

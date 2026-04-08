@@ -21,6 +21,7 @@ model User {
   password  String
   name      String
   role      Role        @default(DOCTOR)
+  isDoctor  Boolean     @default(false)
   isActive  Boolean     @default(true)
   doctorId  String?
   doctor    Doctor?     @relation(fields: [doctorId], references: [id])

@@ -286,7 +286,8 @@ app.get('/api/system-users', async (req, res) => {
         const mappedUsers = users.map(u => ({
             ...u,
             full_name: u.name,
-            is_active: u.isActive
+            is_active: u.isActive,
+            isDoctor: u.isDoctor
         }));
         res.json(mappedUsers);
     } catch (e) {
@@ -304,7 +305,8 @@ app.get('/api/system-users', async (req, res) => {
         const mappedUsers = users.map(u => ({
             ...u,
             full_name: u.name,
-            is_active: u.isActive
+            is_active: u.isActive,
+            isDoctor: u.isDoctor
         }));
         res.json(mappedUsers);
     } catch (e) {
@@ -332,11 +334,14 @@ app.get('/api/system-users', async (req, res) => {
 
 app.post('/api/system-users', async (req, res) => {
     try {
-        const { email, full_name, role, is_active, password, doctorId } = req.body;
+        const { email, full_name, role, is_active, password, doctorId, isDoctor } = req.body;
 
         // Map frontend roles to Prisma enum values
         const ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
         const prismaRole = ROLE_MAP[role] || 'DOCTOR';
+
+        // isDoctor: true when role is DOCTOR or explicitly set
+        const isDoctorFlag = isDoctor === true || prismaRole === 'DOCTOR';
 
         const result = await prisma.$transaction(async (tx) => {
             const sharedId = crypto.randomUUID();
@@ -347,14 +352,15 @@ app.post('/api/system-users', async (req, res) => {
                     email,
                     name: full_name,
                     role: prismaRole,
+                    isDoctor: isDoctorFlag,
                     isActive: is_active !== undefined ? is_active : true,
                     password: password || '123',
                     doctorId: doctorId || null
                 }
             });
 
-            // If DOCTOR, create Doctor profile + default schedule atomically
-            if (prismaRole === 'DOCTOR') {
+            // If isDoctor (DOCTOR role OR explicitly flagged), create Doctor profile + default schedule
+            if (isDoctorFlag && !doctorId) {
                 await tx.doctor.create({
                     data: {
                         id: sharedId,
@@ -379,13 +385,14 @@ app.post('/api/system-users', async (req, res) => {
                 });
             }
 
-            return user;
+            return tx.user.findUnique({ where: { id: sharedId } });
         });
 
         res.status(201).json({
             ...result,
             full_name: result.name,
-            is_active: result.isActive
+            is_active: result.isActive,
+            isDoctor: result.isDoctor
         });
     } catch (e) {
         console.error('Error creating system user:', e);
@@ -396,27 +403,60 @@ app.post('/api/system-users', async (req, res) => {
 app.put('/api/system-users/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, full_name, role, is_active, doctorId } = req.body;
+        const { email, full_name, role, is_active, doctorId, isDoctor } = req.body;
 
         // Map frontend roles to Prisma enum values
         const SU_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
         const prismaRole = role ? (SU_ROLE_MAP[role] || role) : undefined;
 
-        const user = await prisma.user.update({
-            where: { id },
-            data: {
-                email,
-                name: full_name,
-                role: prismaRole,
-                isActive: is_active,
-                doctorId
+        // Determine isDoctor: explicit flag takes precedence; role=DOCTOR always implies isDoctor
+        const isDoctorFlag = isDoctor !== undefined
+            ? isDoctor === true
+            : prismaRole === 'DOCTOR' ? true : undefined;
+
+        const updateData = {
+            ...(email !== undefined && { email }),
+            ...(full_name !== undefined && { name: full_name }),
+            ...(prismaRole !== undefined && { role: prismaRole }),
+            ...(is_active !== undefined && { isActive: is_active }),
+            ...(isDoctorFlag !== undefined && { isDoctor: isDoctorFlag }),
+            ...(doctorId !== undefined && { doctorId: doctorId || null })
+        };
+
+        const user = await prisma.$transaction(async (tx) => {
+            const updated = await tx.user.update({ where: { id }, data: updateData });
+
+            // If now isDoctor and no Doctor profile exists, create one
+            if (updated.isDoctor) {
+                const targetId = updated.doctorId || id;
+                const existingDoctor = await tx.doctor.findUnique({ where: { id: targetId } });
+                if (!existingDoctor) {
+                    await tx.doctor.create({
+                        data: { id, name: updated.name, specialization: 'Odontólogo', commissionPercentage: 0 }
+                    });
+                    await tx.user.update({ where: { id }, data: { doctorId: id } });
+                    await tx.doctorSchedule.create({
+                        data: {
+                            doctorId: id, doctorName: updated.name,
+                            monday: true, tuesday: true, wednesday: true,
+                            thursday: true, friday: true, saturday: false, sunday: false,
+                            morningStart: '09:00:00', morningEnd: '13:00:00',
+                            afternoonStart: '16:00:00', afternoonEnd: '20:00:00'
+                        }
+                    });
+                } else if (full_name) {
+                    await tx.doctor.update({ where: { id: existingDoctor.id }, data: { name: full_name } });
+                }
             }
+
+            return tx.user.findUnique({ where: { id } });
         });
 
         res.json({
             ...user,
             full_name: user.name,
-            is_active: user.isActive
+            is_active: user.isActive,
+            isDoctor: user.isDoctor
         });
     } catch (e) {
         console.error('Error updating system user:', e);
@@ -762,13 +802,13 @@ app.get('/api/doctors', async (req, res) => {
             return res.json(allDoctors);
         }
 
-        // Fallback: if Doctor table is empty, auto-sync from User table
+        // Fallback: if Doctor table is empty, auto-sync from User table using isDoctor flag
         const doctorUsers = await prisma.user.findMany({
-            where: { role: 'DOCTOR', isActive: true },
+            where: { isDoctor: true, isActive: true },
             select: { id: true, name: true, doctorId: true }
         });
 
-        // Return users with DOCTOR role as doctors (use doctorId if available, otherwise user id)
+        // Return users with isDoctor=true as doctors (use doctorId if available, otherwise user id)
         const fallbackDoctors = doctorUsers.map(u => ({
             id: u.doctorId || u.id,
             name: u.name,
@@ -828,11 +868,11 @@ app.post('/api/sync/doctors', async (req, res) => {
     try {
         const supabase = getSupabase();
 
-        // Get all users with DOCTOR role
+        // Get all users with isDoctor=true
         const { data: doctorUsers, error: userError } = await supabase
             .from('User')
             .select('id, name')
-            .eq('role', 'DOCTOR');
+            .eq('isDoctor', true);
 
         if (userError) {
             return res.status(500).json({ error: 'Error fetching doctor users: ' + userError.message });
@@ -1658,6 +1698,7 @@ app.get('/api/auth/users', async (req, res) => {
                 email: true,
                 name: true,
                 role: true,
+                isDoctor: true,
                 doctorId: true,
                 createdAt: true
             }
@@ -1684,6 +1725,9 @@ app.post('/api/auth/users', async (req, res) => {
             return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
         }
 
+        // isDoctor is true when the role is DOCTOR, or explicitly set for other roles (ADMIN etc)
+        const isDoctorFlag = req.body.isDoctor === true || prismaRole === 'DOCTOR';
+
         const result = await prisma.$transaction(async (tx) => {
             // Check duplicate email
             const existing = await tx.user.findUnique({ where: { email } });
@@ -1701,12 +1745,13 @@ app.post('/api/auth/users', async (req, res) => {
                     email,
                     name,
                     password,
-                    role: prismaRole
+                    role: prismaRole,
+                    isDoctor: isDoctorFlag
                 }
             });
 
-            // 2. If it's a DOCTOR, create profile and schedule
-            if (role === 'DOCTOR') {
+            // 2. If isDoctor (DOCTOR role OR explicitly flagged), create profile and schedule
+            if (isDoctorFlag) {
                 await tx.doctor.create({
                     data: {
                         id: sharedId,
@@ -1742,10 +1787,13 @@ app.post('/api/auth/users', async (req, res) => {
                 });
             }
 
-            return user;
+            return tx.user.findUnique({
+                where: { id: sharedId },
+                select: { id: true, email: true, name: true, role: true, isDoctor: true, doctorId: true, createdAt: true }
+            });
         });
 
-        console.log(`✅ User/Doctor created atomically: ${name} (${role})`);
+        console.log(`✅ User/Doctor created atomically: ${name} (${role}, isDoctor=${isDoctorFlag})`);
         res.status(201).json(result);
     } catch (e) {
         console.error('Error creating user/doctor:', e);
@@ -1767,39 +1815,64 @@ app.put('/api/auth/users/:id', async (req, res) => {
             return res.status(400).json({ error: `Rol inválido. Roles válidos: ${VALID_ROLES.join(', ')}` });
         }
 
-        const updated = await prisma.user.update({
-            where: { id },
-            data: {
-                email,
-                name,
-                password,
-                role: prismaRole,
-                doctorId
-            },
-            select: {
-                id: true,
-                email: true,
-                name: true,
-                role: true,
-                doctorId: true,
-                createdAt: true
+        const isDoctorFlag = req.body.isDoctor !== undefined
+            ? req.body.isDoctor === true
+            : prismaRole === 'DOCTOR' ? true : undefined;
+
+        const updateData = {
+            ...(email !== undefined && { email }),
+            ...(name !== undefined && { name }),
+            ...(password !== undefined && password !== '' && { password }),
+            ...(prismaRole !== undefined && { role: prismaRole }),
+            ...(isDoctorFlag !== undefined && { isDoctor: isDoctorFlag }),
+            ...(doctorId !== undefined && { doctorId: doctorId || null })
+        };
+
+        const updated = await prisma.$transaction(async (tx) => {
+            const user = await tx.user.update({
+                where: { id },
+                data: updateData,
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    role: true,
+                    isDoctor: true,
+                    doctorId: true,
+                    createdAt: true
+                }
+            });
+
+            // If now isDoctor and no Doctor profile exists, create one
+            if (user.isDoctor) {
+                const existingDoctor = await tx.doctor.findUnique({ where: { id: user.doctorId || id } });
+                if (!existingDoctor) {
+                    await tx.doctor.create({
+                        data: { id, name: user.name, specialization: 'Odontólogo', commissionPercentage: 0 }
+                    });
+                    await tx.user.update({ where: { id }, data: { doctorId: id } });
+                    await tx.doctorSchedule.create({
+                        data: {
+                            doctorId: id, doctorName: user.name,
+                            monday: true, tuesday: true, wednesday: true,
+                            thursday: true, friday: true, saturday: false, sunday: false,
+                            morningStart: '09:00:00', morningEnd: '13:00:00',
+                            afternoonStart: '16:00:00', afternoonEnd: '20:00:00'
+                        }
+                    });
+                } else if (name) {
+                    // Keep doctor name in sync
+                    await tx.doctor.update({ where: { id: existingDoctor.id }, data: { name } });
+                }
             }
+
+            return tx.user.findUnique({
+                where: { id },
+                select: { id: true, email: true, name: true, role: true, isDoctor: true, doctorId: true, createdAt: true }
+            });
         });
 
-        // If name changed and it's a doctor, update Doctor name too
-        if (name && (updated.role === 'DOCTOR' || updated.doctorId)) {
-            const targetId = updated.doctorId || updated.id;
-            try {
-                await prisma.doctor.update({
-                    where: { id: targetId },
-                    data: { name }
-                });
-            } catch (err) {
-                // Ignore if doctor record doesn't exist for some reason
-            }
-        }
-
-        console.log(`✅ User updated: ${updated.name} (${updated.role})`);
+        console.log(`✅ User updated: ${updated.name} (${updated.role}, isDoctor=${updated.isDoctor})`);
         res.json(updated);
     } catch (e) {
         console.error('Error updating user:', e);
