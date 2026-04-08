@@ -451,7 +451,26 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       .catch((e: unknown) => console.error('services:', e));
   }, [api]);
 
-  // Load treatments & seed odontogram state
+  // Load persisted odontogram state (tooth conditions) from DB
+  useEffect(() => {
+    if (!patientId || !api?.odontogram?.get) return;
+    api.odontogram.get(patientId)
+      .then((data: any) => {
+        if (data?.teethState) {
+          try {
+            const parsed: OdoState = typeof data.teethState === 'string'
+              ? JSON.parse(data.teethState)
+              : data.teethState;
+            setOdoState(parsed || {});
+          } catch (e) {
+            console.error('Error parsing odontogram state:', e);
+          }
+        }
+      })
+      .catch((e: unknown) => console.error('odontogram load:', e));
+  }, [patientId, api]);
+
+  // Load treatments & seed odontogram state (treatments complement saved conditions)
   useEffect(() => {
     if (!patientId || !api?.treatments?.getByPatient) return;
     api.treatments.getByPatient(patientId)
@@ -460,6 +479,8 @@ export const Odontogram: React.FC<OdontogramProps> = ({
         setTreatments(list);
         onTreatmentsChange?.(list);
 
+        // Seed visual state from treatments for teeth that have no manually saved condition.
+        // Saved conditions (loaded via api.odontogram.get) always take priority.
         const init: OdoState = {};
         list.forEach(t => {
           if (!t.toothId) return;
@@ -474,7 +495,15 @@ export const Odontogram: React.FC<OdontogramProps> = ({
             });
           }
         });
-        setOdoState(init);
+        // Merge: persisted state (prev) wins over treatment-derived state (init)
+        setOdoState(prev => {
+          const merged: OdoState = { ...init };
+          (Object.keys(prev) as unknown as number[]).forEach(toothKey => {
+            const k = Number(toothKey);
+            merged[k] = { ...(init[k] ?? {}), ...prev[k] };
+          });
+          return merged;
+        });
       })
       .catch((e: unknown) => console.error('treatments:', e));
   }, [patientId, api]);
@@ -492,20 +521,33 @@ export const Odontogram: React.FC<OdontogramProps> = ({
   };
 
   // ── Select a condition from the picker ──────────────────────────────
-  const handleCondSelect = (cond: Cond) => {
+  const handleCondSelect = async (cond: Cond) => {
     if (!activeTooth || !activeSurf) return;
-    setOdoState(prev => {
-      const tooth = { ...(prev[activeTooth] ?? {}) };
-      if (cond === 'missing') {
-        return {
-          ...prev,
-          [activeTooth]: { V: 'missing', L: 'missing', M: 'missing', D: 'missing', O: 'missing' },
-        };
-      }
-      return { ...prev, [activeTooth]: { ...tooth, [activeSurf]: cond } };
-    });
+
+    // Compute new state synchronously before any async calls
+    let newOdoState: OdoState;
+    if (cond === 'missing') {
+      newOdoState = {
+        ...odoState,
+        [activeTooth]: { V: 'missing', L: 'missing', M: 'missing', D: 'missing', O: 'missing' },
+      };
+    } else {
+      const tooth = { ...(odoState[activeTooth] ?? {}) };
+      newOdoState = { ...odoState, [activeTooth]: { ...tooth, [activeSurf]: cond } };
+    }
+
+    setOdoState(newOdoState);
     setActiveTooth(null);
     setActiveSurf(null);
+
+    // Persist tooth conditions to DB
+    try {
+      if (api?.odontogram?.save) {
+        await api.odontogram.save(patientId, newOdoState);
+      }
+    } catch (e) {
+      console.error('Error saving odontogram state:', e);
+    }
   };
 
   // ── Treatment helpers ────────────────────────────────────────────────

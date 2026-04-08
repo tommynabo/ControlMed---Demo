@@ -805,16 +805,18 @@ app.get('/api/doctors', async (req, res) => {
                 name: true,
                 specialization: true,
                 users: {
-                    select: { isDoctor: true, role: true, isActive: true },
-                    where: { isActive: true }
+                    // Fetch ALL linked users (active and inactive) so we can correctly
+                    // distinguish truly standalone records from records tied to inactive users.
+                    select: { isDoctor: true, role: true, isActive: true }
                 }
             }
         });
 
         const filteredDoctors = allDoctors
             .filter(d => {
-                if (d.users.length === 0) return true; // standalone doctor record → keep
-                return d.users.some(u => u.isDoctor === true || u.role === 'DOCTOR');
+                if (d.users.length === 0) return true; // truly standalone doctor (no user account at all) → keep
+                // Only include if at least one linked user is active AND is a real doctor
+                return d.users.some(u => u.isActive === true && (u.isDoctor === true || u.role === 'DOCTOR'));
             })
             .map(({ users, ...rest }) => rest); // strip the users field from response
 

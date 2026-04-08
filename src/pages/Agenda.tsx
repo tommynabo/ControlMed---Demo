@@ -687,11 +687,12 @@ const Agenda: React.FC = () => {
                 <div className="flex gap-4 items-center flex-wrap justify-end">
                     {/* DOCTOR SELECTOR (ADMIN / RECEPTION) */}
                     {(currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') && (
-                        <div className="bg-slate-50 p-1 rounded-xl border border-slate-200">
+                        <div className="bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
                             <select
                                 value={selectedDoctorId}
                                 onChange={(e) => setSelectedDoctorId(e.target.value)}
-                                className="bg-transparent text-xs font-bold uppercase text-slate-600 outline-none px-2 py-2 cursor-pointer"
+                                className="bg-white text-xs font-bold uppercase text-slate-900 outline-none px-2 py-2 cursor-pointer rounded-lg"
+                                style={{ colorScheme: 'light' }}
                             >
                                 <option value="all">Vista General (Todos)</option>
                                 {doctors.map(doc => (
