@@ -263,7 +263,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
         quantity: 1,
       }));
       await api.budget.create(patientId, items, 'Presupuesto Odontograma');
-      alert('\u2705 Presupuesto guardado correctamente');
+      alert('✅ Presupuesto guardado correctamente');
     } catch (e: unknown) {
       console.error('Error saving budget:', e);
       alert('Error al guardar el presupuesto');
@@ -306,7 +306,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
         <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <h3 className="text-xl font-black text-slate-900">Odontograma</h3>
-            <p className="text-xs text-slate-400 font-semibold mt-1">Dentici\u00f3n permanente + temporal \u00b7 FDI</p>
+            <p className="text-xs text-slate-400 font-semibold mt-1">Dentición permanente + temporal · FDI</p>
           </div>
           {isEditable && tempCount > 0 && (
             <button
@@ -315,7 +315,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
               className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-3 rounded-xl text-sm font-black uppercase flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-50"
             >
               <Save size={18} />
-              {isSaving ? 'Guardando\u2026' : `Guardar (${tempCount})`}
+              {isSaving ? 'Guardando…' : `Guardar (${tempCount})`}
             </button>
           )}
         </div>
@@ -368,21 +368,21 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                 <X size={14} /> Limpiar
               </button>
             </div>
-            <p className="text-xs text-violet-700">\ud83d\udc47 Busca un tratamiento abajo para asignarlo</p>
+            <p className="text-xs text-violet-700">👇 Busca un tratamiento abajo para asignarlo</p>
           </div>
         )}
 
         {/* Search treatment */}
         {isEditable && (
           <div className="relative z-10 mt-8 pt-6 border-t border-slate-200/50">
-            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">\ud83d\udd0d Buscar Tratamiento</label>
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">🔍 Buscar Tratamiento</label>
             <div className="relative mb-4">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
-                placeholder="Ej: Limpieza, Extracci\u00f3n, Corona\u2026"
+                placeholder="Ej: Limpieza, Extracción, Corona…"
                 className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
               />
             </div>
@@ -399,9 +399,9 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                       className="group p-4 bg-white border-2 border-slate-200 rounded-xl hover:border-violet-400 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-left"
                     >
                       <p className="text-sm font-black text-slate-900 mb-1">{s.name}</p>
-                      <p className="text-xs font-bold text-violet-600">{s.final_price}\u20ac</p>
+                      <p className="text-xs font-bold text-violet-600">{s.final_price}€</p>
                       <div className="mt-2 flex items-center gap-1 text-xs text-slate-500 group-hover:text-violet-600">
-                        <Plus size={12} /><span>A\u00f1adir</span>
+                        <Plus size={12} /><span>Añadir</span>
                       </div>
                     </button>
                   ))
@@ -416,7 +416,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       {treatments.length > 0 && (
         <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-lg">
           <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-            <h4 className="text-lg font-black text-slate-900">\ud83d\udccb Tratamientos ({treatments.length})</h4>
+            <h4 className="text-lg font-black text-slate-900">📋 Tratamientos ({treatments.length})</h4>
             {isEditable && (
               <div className="flex gap-3 flex-wrap">
                 {tempCount > 0 && (
@@ -426,7 +426,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                     className="bg-gradient-to-r from-green-600 to-green-700 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-lg transition-all disabled:opacity-50"
                   >
                     <Save size={14} />
-                    {isSaving ? 'Guardando\u2026' : `Guardar (${tempCount})`}
+                    {isSaving ? 'Guardando…' : `Guardar (${tempCount})`}
                   </button>
                 )}
                 <button
@@ -435,7 +435,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                   className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   <FileText size={14} />
-                  {isSavingBudget ? 'Guardando\u2026' : 'Guardar Presupuesto'}
+                  {isSavingBudget ? 'Guardando…' : 'Guardar Presupuesto'}
                 </button>
               </div>
             )}
@@ -453,7 +453,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
             <div className="col-span-5">Tratamiento</div>
             <div className="col-span-2">Precio</div>
             <div className="col-span-2">Estado</div>
-            <div className="col-span-1 text-right">\u2013</div>
+            <div className="col-span-1 text-right">–</div>
           </div>
 
           <div className="space-y-2 mt-4">
@@ -468,14 +468,14 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                     className="w-4 h-4 rounded cursor-pointer"
                   />
                 </div>
-                <div className="col-span-1 font-black text-violet-600 text-center text-lg">{t.toothId ?? '\u2013'}</div>
+                <div className="col-span-1 font-black text-violet-600 text-center text-lg">{t.toothId ?? '–'}</div>
                 <div className="col-span-5 font-bold text-slate-900">
                   {t.serviceName}
                   {t.id.startsWith('temp-') && (
                     <span className="ml-2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Sin guardar</span>
                   )}
                 </div>
-                <div className="col-span-2 font-black text-slate-900">{(t.price ?? 0).toFixed(2)}\u20ac</div>
+                <div className="col-span-2 font-black text-slate-900">{(t.price ?? 0).toFixed(2)}€</div>
                 <div className="col-span-2">
                   <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${t.status === 'COMPLETADO' ? 'bg-green-100 text-green-700' : t.status === 'EN_PROCESO' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
                     {t.status}
@@ -494,7 +494,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
 
           <div className="mt-6 pt-6 border-t border-slate-200 flex justify-between items-center">
             <p className="text-sm font-bold text-slate-600">Total:</p>
-            <p className="text-2xl font-black text-slate-900">{totalPrice.toFixed(2)}\u20ac</p>
+            <p className="text-2xl font-black text-slate-900">{totalPrice.toFixed(2)}€</p>
           </div>
         </div>
       )}
