@@ -114,125 +114,149 @@ ${formData.prescriberName}
     };
 
     const handlePrint = () => {
-        const logoUrl = `${window.location.origin}/logo.jpeg`;
         const w = window.open('', '_blank');
         if (!w) return;
 
-        const content = `<!DOCTYPE html>
-<html lang="es">
-<head>
+        const patientFullName = [patient.name, patient.lastName1, patient.lastName2].filter(Boolean).join(' ');
+        const prescDate = formData.prescriptionDate
+            ? new Date(formData.prescriptionDate + 'T12:00:00').toLocaleDateString('es-ES')
+            : '—';
+        const dispDate = formData.dispensationDate
+            ? new Date(formData.dispensationDate + 'T12:00:00').toLocaleDateString('es-ES')
+            : '—';
+        const birthDate = patient.birthDate
+            ? new Date(patient.birthDate).toLocaleDateString('es-ES')
+            : '—';
+
+        const col1 = `<div class="col col-1">
+            <div class="section-header">Prescripción</div>
+            <div class="rp-prefix">RP/</div>
+            <div class="medication-name">${formData.medication || '—'}</div>
+            <div class="col-label">Forma Farmacéutica</div>
+            <div class="col-value-sm">${formData.pharmaceuticalForm}</div>
+            <div class="col-label">Vía de Administración</div>
+            <div class="col-value-sm">${formData.administrationRoute}</div>
+            <div class="col-label">Núm. Envases</div>
+            <div class="col-value">${formData.packagesNumber || 1}</div>
+            <div class="sustituir-block">
+                <div class="sustituir-title">Sustituir en caso de:</div>
+                <div class="checkbox-row"><span class="checkbox-sq"></span> Urgencia</div>
+                <div class="checkbox-row"><span class="checkbox-sq"></span> Desabastecimiento</div>
+                <div class="checkbox-row"><span class="checkbox-sq"></span> Otros</div>
+            </div>
+        </div>`;
+
+        const col2 = `<div class="col col-2">
+            <div class="section-header">Posología y Dispensación</div>
+            <div class="col-label">Duración del Tratamiento</div>
+            <div class="col-value-sm">${formData.duration || '—'} días</div>
+            <div class="grid-2" style="margin-top:6px;">
+                <div class="grid-cell grid-left">
+                    <div class="grid-cell-label">Unidades</div>
+                    <div class="grid-cell-val">${formData.dose || formData.units || '—'}</div>
+                </div>
+                <div class="grid-cell">
+                    <div class="grid-cell-label">Pauta</div>
+                    <div class="grid-cell-val">${formData.schedulePattern || '—'}</div>
+                </div>
+            </div>
+            <div class="col-label">Núm. Orden Dispensación</div>
+            <div class="col-value-sm">${formData.dispensationOrderNumber || '—'}</div>
+            <div class="col-label">Fecha Prevista Dispensación</div>
+            <div class="col-value-sm">${dispDate}</div>
+            <div class="advertencia">
+                <div class="advertencia-title">Advertencia para el Farmacéutico</div>
+                ${formData.schedulePattern || formData.posology || 'Dispensar según pauta prescrita'}
+            </div>
+        </div>`;
+
+        const col3 = `<div class="col col-3">
+            <div class="section-header">Paciente Privado</div>
+            <div class="col-label">Nombre y Apellidos</div>
+            <div class="col-value-sm">${patientFullName}</div>
+            <div class="col-label">Fecha de Nacimiento</div>
+            <div class="col-value-sm">${birthDate}</div>
+            <div class="col-label">DNI / NIE</div>
+            <div class="col-value-sm">${patient.dni || '—'}</div>
+            <div class="prescriptor-section">
+                <div class="section-header">Prescriptor</div>
+                <div class="col-label">Nombre</div>
+                <div class="col-value-sm">${formData.prescriberName}</div>
+                <div class="col-label">Núm. Colegiado</div>
+                <div class="col-value-sm">—</div>
+                <div class="col-label">Especialidad</div>
+                <div class="col-value-sm">${formData.prescriberSpecialty}</div>
+                <div class="col-label">Fecha Prescripción</div>
+                <div class="col-value-sm">${prescDate}</div>
+            </div>
+            <div class="farmacia-section">
+                <div class="section-header">Farmacia (NIF/CIF)</div>
+            </div>
+        </div>`;
+
+        const copyFooter = `<div class="copy-footer">
+            <div class="footer-left">Esta receta es válida para su dispensación durante 10 días desde la fecha de prescripción. Solo es válida en territorio nacional. El médico prescriptor es responsable de la indicación terapéutica.</div>
+            <div class="footer-right">De conformidad con la Ley Orgánica 15/1999 de Protección de Datos de Carácter Personal, los datos personales reflejados en este documento son tratados con absoluta confidencialidad y únicamente con fines sanitarios.</div>
+        </div>`;
+
+        const buildCopy = (label: string) => `<div class="copy">
+            <div class="copy-label">${label}</div>
+            <div class="copy-body">${col1}${col2}${col3}</div>
+            ${copyFooter}
+        </div>`;
+
+        const indicaciones = formData.patientInstructions
+            ? `<div class="indicaciones">
+            <div class="indicaciones-title">Indicaciones para el Paciente</div>
+            <div class="indicaciones-text">${formData.patientInstructions.replace(/\n/g, '<br>')}</div>
+        </div>`
+            : '';
+
+        const content = `<!DOCTYPE html><html lang="es"><head>
     <meta charset="UTF-8">
-    <title>Receta Médica – ${patient.name} ${patient.lastName1 || ''}</title>
+    <title>Receta Médica – ${patientFullName}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        @page { size: A4; margin: 18mm 22mm 22mm 22mm; }
-        body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #111827; background: white; }
-        .header { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 10px; border-bottom: 3px solid #111827; margin-bottom: 14px; }
-        .clinic-name { font-size: 17pt; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
-        .clinic-specialty { font-size: 9pt; color: #6b7280; margin-top: 3px; }
-        .clinic-private { margin-top: 6px; font-size: 7.5pt; font-weight: 700; color: #9ca3af; letter-spacing: 1.5px; text-transform: uppercase; }
-        .logo-box img { height: 68px; max-width: 130px; object-fit: contain; }
-        .doc-meta { display: flex; gap: 28px; margin-bottom: 14px; font-size: 8.5pt; color: #6b7280; }
-        .doc-meta strong { color: #111827; font-weight: 700; }
-        .section-label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #9ca3af; margin-bottom: 5px; }
-        .patient-box { display: grid; grid-template-columns: 2fr 1fr 1fr; border: 1px solid #d1d5db; border-radius: 5px; margin-bottom: 16px; overflow: hidden; }
-        .patient-field { padding: 9px 14px; border-right: 1px solid #d1d5db; }
-        .patient-field:last-child { border-right: none; }
-        .patient-field .label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #9ca3af; margin-bottom: 3px; }
-        .patient-field .value { font-size: 11.5pt; font-weight: 700; }
-        .patient-field .value-sm { font-size: 9.5pt; font-weight: 600; color: #374151; }
-        .rp-box { border: 2px solid #111827; border-radius: 6px; padding: 14px 18px; margin-bottom: 14px; }
-        .rp-header { display: flex; align-items: baseline; gap: 10px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
-        .rp-label { font-size: 22pt; font-weight: 900; font-style: italic; color: #111827; line-height: 1; }
-        .rp-medication { font-size: 14pt; font-weight: 700; color: #1d4ed8; }
-        .rp-details { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-        .rp-detail .label { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #9ca3af; margin-bottom: 3px; }
-        .rp-detail .value { font-size: 9.5pt; font-weight: 600; color: #1f2937; }
-        .instructions-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 5px; padding: 12px 15px; margin-bottom: 12px; }
-        .instructions-box p { font-size: 9pt; line-height: 1.65; color: #1e3a8a; white-space: pre-wrap; }
-        .diagnosis-box { background: #fefce8; border: 1px solid #fde68a; border-radius: 5px; padding: 9px 14px; margin-bottom: 14px; font-size: 9pt; color: #713f12; }
-        .footer-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 30px; padding-top: 12px; border-top: 1px solid #d1d5db; }
-        .validity { font-size: 7pt; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.7; }
-        .signature-block { text-align: center; min-width: 210px; }
-        .signature-space { height: 52px; }
-        .signature-line { border-top: 1.5px solid #111827; margin-bottom: 5px; }
-        .signature-name { font-size: 9.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-        .signature-col { font-size: 8pt; color: #6b7280; margin-top: 2px; }
-    </style>
-</head>
+        @page { size: A4; margin: 8mm 12mm; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; color: #000; background: white; }
+        .copy { border: 1.5px solid #000; margin-bottom: 6mm; page-break-inside: avoid; }
+        .copy-label { background: #e0e0e0; text-align: center; font-size: 6.5pt; font-weight: 900; text-transform: uppercase; padding: 3px 0; border-bottom: 1px solid #000; letter-spacing: 1px; }
+        .copy-body { display: grid; grid-template-columns: 1.2fr 1fr 1fr; }
+        .col { padding: 6px 8px; vertical-align: top; }
+        .col-1 { border-right: 1px solid #000; }
+        .col-2 { border-right: 1px solid #000; }
+        .col-label { font-size: 5.5pt; text-transform: uppercase; font-weight: 900; color: #555; margin-bottom: 1px; margin-top: 6px; }
+        .col-value { font-size: 9pt; font-weight: 700; }
+        .col-value-sm { font-size: 7.5pt; font-weight: 600; }
+        .section-header { font-size: 6.5pt; font-weight: 900; text-transform: uppercase; border-bottom: 1px solid #999; padding-bottom: 2px; margin-bottom: 4px; letter-spacing: 0.5px; }
+        .medication-name { font-size: 11pt; font-weight: 900; margin-bottom: 4px; line-height: 1.2; }
+        .rp-prefix { font-size: 9pt; font-style: italic; font-weight: 700; color: #444; }
+        .checkbox-row { font-size: 7pt; margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+        .checkbox-sq { display: inline-block; width: 9px; height: 9px; border: 1.5px solid #000; flex-shrink: 0; }
+        .sustituir-block { margin-top: 8px; border-top: 1px solid #ccc; padding-top: 6px; }
+        .sustituir-title { font-size: 6pt; font-weight: 900; text-transform: uppercase; color: #555; margin-bottom: 3px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #888; }
+        .grid-cell { padding: 3px 5px; }
+        .grid-cell-label { font-size: 5.5pt; font-weight: 900; text-transform: uppercase; color: #666; }
+        .grid-cell-val { font-size: 8pt; font-weight: 700; }
+        .grid-left { border-right: 1px solid #888; }
+        .advertencia { margin-top: 6px; border: 1px dashed #aaa; padding: 4px 5px; font-size: 7pt; color: #333; }
+        .advertencia-title { font-size: 5.5pt; font-weight: 900; text-transform: uppercase; color: #666; margin-bottom: 2px; }
+        .prescriptor-section { border-top: 1px solid #ccc; margin-top: 6px; padding-top: 4px; }
+        .farmacia-section { border-top: 1px solid #ccc; margin-top: 6px; padding-top: 4px; min-height: 22px; }
+        .copy-footer { display: flex; border-top: 1px solid #000; }
+        .footer-left { flex: 1; padding: 4px 7px; border-right: 1px solid #000; font-size: 5.5pt; color: #444; line-height: 1.5; }
+        .footer-right { flex: 1; padding: 4px 7px; font-size: 5.5pt; color: #444; line-height: 1.5; }
+        .indicaciones { margin-top: 4mm; border: 1px solid #000; padding: 8px 10px; }
+        .indicaciones-title { font-size: 8pt; font-weight: 900; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; }
+        .indicaciones-text { font-size: 8.5pt; line-height: 1.6; white-space: pre-wrap; }
+    </style></head>
 <body>
-    <div class="header">
-        <div>
-            <div class="clinic-name">${formData.prescriberName}</div>
-            <div class="clinic-specialty">${formData.prescriberSpecialty}</div>
-            <div class="clinic-private">Receta Médica Privada</div>
-        </div>
-        <div class="logo-box"><img src="${logoUrl}" onerror="this.style.display='none'" /></div>
-    </div>
-    <div class="doc-meta">
-        <span>Fecha Prescripción: <strong>${new Date(formData.prescriptionDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}</strong></span>
-        ${formData.dispensationDate ? `<span>Fecha Dispensación: <strong>${new Date(formData.dispensationDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}</strong></span>` : ''}
-        <span>Nº Orden: <strong>${formData.dispensationOrderNumber || '—'}</strong></span>
-    </div>
-    <div class="section-label">Datos del Paciente</div>
-    <div class="patient-box">
-        <div class="patient-field">
-            <div class="label">Nombre y Apellidos</div>
-            <div class="value">${patient.name} ${patient.lastName1 || ''} ${patient.lastName2 || ''}</div>
-        </div>
-        <div class="patient-field">
-            <div class="label">DNI / NIE</div>
-            <div class="value-sm">${patient.dni || '—'}</div>
-        </div>
-        <div class="patient-field">
-            <div class="label">Fecha de Nacimiento</div>
-            <div class="value-sm">${patient.birthDate ? new Date(patient.birthDate).toLocaleDateString('es-ES') : '—'}</div>
-        </div>
-    </div>
-    <div class="rp-box">
-        <div class="rp-header">
-            <span class="rp-label">Rp/</span>
-            <span class="rp-medication">${formData.medication || '—'}</span>
-        </div>
-        <div class="rp-details">
-            <div class="rp-detail">
-                <div class="label">Forma Farm.</div>
-                <div class="value">${formData.pharmaceuticalForm}</div>
-            </div>
-            <div class="rp-detail">
-                <div class="label">Vía Administración</div>
-                <div class="value">${formData.administrationRoute}</div>
-            </div>
-            <div class="rp-detail">
-                <div class="label">Pauta / Dosis</div>
-                <div class="value">${formData.schedulePattern} — ${formData.dose}</div>
-            </div>
-            <div class="rp-detail">
-                <div class="label">Duración / Envases</div>
-                <div class="value">${formData.duration} días (${formData.units})</div>
-            </div>
-        </div>
-    </div>
-    ${formData.patientInstructions ? `
-    <div class="section-label">Instrucciones para el Paciente</div>
-    <div class="instructions-box"><p>${formData.patientInstructions.replace(/\n/g, '<br>')}</p></div>` : ''}
-    ${formData.diagnosis ? `
-    <div class="diagnosis-box"><strong>Diagnóstico:</strong> ${formData.diagnosis}</div>` : ''}
-    <div class="footer-row">
-        <div class="validity">
-            Receta Electrónica Privada<br>
-            Válida durante 10 días desde la fecha de prescripción
-        </div>
-        <div class="signature-block">
-            <div class="signature-space"></div>
-            <div class="signature-line"></div>
-            <div class="signature-name">${formData.prescriberName}</div>
-            <div class="signature-col">${formData.prescriberSpecialty}</div>
-        </div>
-    </div>
+    ${buildCopy('EJEMPLAR PARA EL FARMACÉUTICO')}
+    ${buildCopy('EJEMPLAR PARA EL PACIENTE')}
+    ${indicaciones}
     <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
-</body>
-</html>`;
+</body></html>`;
 
         w.document.write(content);
         w.document.close();

@@ -319,13 +319,15 @@ const Patients: React.FC = () => {
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
+            const logoUrl = `${window.location.origin}/logo.jpeg`;
             // Fetch clinic data dynamically from Settings > Clínica
-            let clinicName = 'Clínica Dental';
-            let clinicSubtitle = '';
+            let clinicName = 'CHC Clínica Dental';
+            let clinicSubtitle = 'CHCMEDIC SL';
             let clinicCIF = '';
             let clinicAddress = '';
             let clinicPhone = '';
             let clinicEmail = '';
+            let clinicIBAN = '';
             try {
                 const [clinicInfo, addresses, billing] = await Promise.all([
                     api.clinic.getInfo(),
@@ -339,139 +341,130 @@ const Patients: React.FC = () => {
                 }
                 if (billing) {
                     clinicCIF = billing.cif || billing.tax_id || '';
-                    clinicSubtitle = billing.business_name || billing.razon_social || '';
+                    clinicSubtitle = billing.business_name || billing.razon_social || clinicSubtitle;
+                    clinicIBAN = billing.iban || '';
                 }
                 if (addresses && addresses.length > 0) {
                     const addr = addresses[0];
-                    clinicAddress = [addr.street, addr.city, addr.postal_code, addr.country].filter(Boolean).join(', ');
+                    clinicAddress = [addr.street, addr.city ? `${addr.postal_code || ''} ${addr.city}`.trim() : ''].filter(Boolean).join('\n');
                 }
             } catch (err) {
                 console.warn('Could not load clinic info for print, using defaults');
             }
 
-            const total = budget.items?.reduce((sum: number, item: any) => sum + ((Number(item.price) || 0) * (item.quantity || 1)), 0) || 0;
-            const statusLabel = budget.status === 'ACCEPTED' ? 'ACEPTADO' : budget.status === 'REJECTED' ? 'RECHAZADO' : budget.status === 'CONVERTED' ? 'CONVERTIDO' : 'PENDIENTE';
-            const statusColor = budget.status === 'ACCEPTED' ? '#16a34a' : budget.status === 'REJECTED' ? '#dc2626' : '#94a3b8';
-            const budgetDate = new Date(budget.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+            // Calculate totals with per-item discount
+            const globalDiscount = Number(budget.discount) || 0; // global % discount if any
+            const items = budget.items || [];
+            const importe = items.reduce((sum: number, item: any) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 1)), 0);
+            const descuento = items.reduce((sum: number, item: any) => {
+                const disc = Number(item.discount) || globalDiscount;
+                const subtotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+                return sum + (subtotal * disc / 100);
+            }, 0);
+            const total = importe - descuento;
 
-            const itemsHtml = budget.items?.map((item: any, idx: number) => `
-                <tr style="background:${idx % 2 === 0 ? '#ffffff' : '#f8fafc'}">
-                    <td style="padding:14px 12px;font-size:13px;color:#64748b;text-align:center;border-bottom:1px solid #e2e8f0">${item.quantity || 1}</td>
-                    <td style="padding:14px 12px;border-bottom:1px solid #e2e8f0">
-                        <div style="font-weight:700;font-size:14px;color:#0f172a">${item.name}</div>
-                        ${item.tooth ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px">Pieza dental: ${item.tooth}</div>` : ''}
-                    </td>
-                    <td style="padding:14px 12px;font-size:14px;font-weight:700;color:#0f172a;text-align:right;border-bottom:1px solid #e2e8f0">${(Number(item.price) || 0).toFixed(2)} &euro;</td>
-                    <td style="padding:14px 12px;font-size:14px;font-weight:700;color:#0f172a;text-align:right;border-bottom:1px solid #e2e8f0">${((Number(item.price) || 0) * (item.quantity || 1)).toFixed(2)} &euro;</td>
-                </tr>
-            `).join('') || '';
+            const budgetNum = budget.number || budget.id?.substring(0, 6).toUpperCase() || '—';
+            const budgetDate = new Date(budget.createdAt || budget.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const patientNH = selectedPatient?.id?.substring(0, 6).toUpperCase() || '—';
+
+            const itemsHtml = items.map((item: any, idx: number) => {
+                const qty = Number(item.quantity) || 1;
+                const price = Number(item.price) || 0;
+                const disc = Number(item.discount) || globalDiscount;
+                const rowTotal = price * qty * (1 - disc / 100);
+                return `
+                <tr>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${qty}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${price.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${disc > 0 ? disc.toFixed(2) : ''}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${rowTotal.toFixed(2)}</td>
+                </tr>`;
+            }).join('');
+
+            const patientAddr = [selectedPatient?.address, selectedPatient?.city ? `${selectedPatient.postalCode || ''} ${selectedPatient.city}`.trim() : ''].filter(Boolean).join('\n');
 
             w.document.write(`<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Presupuesto - ${selectedPatient?.name || 'Paciente'}</title>
+    <title>Presupuesto Nº ${budgetNum} - ${selectedPatient?.name || 'Paciente'}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Inter',system-ui,sans-serif; color:#0f172a; background:#fff; }
+        @page { size: A4; margin: 15mm 18mm; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #1a1a1a; background: white; }
         @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+        table { border-collapse: collapse; }
     </style>
 </head>
 <body>
-    <div style="max-width:800px;margin:0 auto;padding:48px 40px">
-        <!-- HEADER -->
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;border-bottom:3px solid #0f172a">
-            <div>
-                <h1 style="font-size:28px;font-weight:900;letter-spacing:-0.5px;color:#0f172a">${clinicName.toUpperCase()}</h1>
-                <p style="font-size:13px;font-weight:600;color:#64748b;margin-top:4px">${clinicSubtitle || ''}</p>
-                ${clinicCIF ? `<p style="font-size:11px;color:#94a3b8;margin-top:2px">CIF: ${clinicCIF}</p>` : ''}
+    <div style="max-width:740px;margin:0 auto">
+        <!-- HEADER: Logo + Presupuesto box -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px">
+            <div style="display:flex;align-items:center;gap:14px">
+                <img src="${logoUrl}" onerror="this.style.display='none'" style="height:70px;max-width:120px;object-fit:contain" />
+                <div style="font-size:10px;color:#555;line-height:1.7;margin-top:4px">
+                    <div style="font-weight:700;font-size:11px;color:#222">CLÍNICA DENTAL</div>
+                </div>
             </div>
-            <div style="text-align:right">
-                ${clinicAddress ? `<p style="font-size:11px;color:#94a3b8;line-height:1.6">${clinicAddress}</p>` : ''}
-                ${clinicPhone ? `<p style="font-size:11px;color:#94a3b8;line-height:1.6">Tel: ${clinicPhone}</p>` : ''}
-                ${clinicEmail ? `<p style="font-size:11px;color:#94a3b8;line-height:1.6">${clinicEmail}</p>` : ''}
-            </div>
-        </div>
-
-        <!-- DOCUMENT TITLE + STATUS -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin:32px 0 24px">
-            <div>
-                <p style="font-size:11px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase">Presupuesto Dental</p>
-                <p style="font-size:22px;font-weight:900;color:#0f172a;margin-top:4px">#${budget.id.substring(0, 8).toUpperCase()}</p>
-            </div>
-            <div style="display:flex;align-items:center;gap:12px">
-                <span style="background:${statusColor}15;color:${statusColor};font-size:11px;font-weight:800;padding:6px 16px;border-radius:20px;letter-spacing:0.5px">${statusLabel}</span>
+            <div style="border:1.5px solid #333;padding:12px 18px;text-align:right;min-width:200px">
+                <div style="font-weight:700;font-size:12px;margin-bottom:4px">Presupuesto Nº ${budgetNum}</div>
+                <div style="font-size:11px;margin-bottom:2px">Fecha: ${budgetDate}</div>
+                <div style="font-size:11px">N.H. ${patientNH}</div>
             </div>
         </div>
 
-        <!-- PATIENT & DATE INFO -->
-        <div style="display:flex;gap:24px;margin-bottom:32px">
-            <div style="flex:1;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
-                <p style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:8px">Datos del Paciente</p>
-                <p style="font-size:16px;font-weight:800;color:#0f172a">${selectedPatient?.name || ''}</p>
-                <p style="font-size:12px;color:#64748b;margin-top:4px">DNI/NIE: ${selectedPatient?.dni || 'N/A'}</p>
-                ${selectedPatient?.phone ? `<p style="font-size:12px;color:#64748b;margin-top:2px">Tel: ${selectedPatient.phone}</p>` : ''}
+        <!-- PARTIES INFO -->
+        <div style="display:flex;justify-content:space-between;margin-bottom:22px;gap:30px">
+            <div style="flex:1">
+                <div style="font-weight:700;font-size:12px;margin-bottom:6px">${clinicSubtitle || clinicName}</div>
+                ${clinicCIF ? `<div style="font-size:11px;color:#444;margin-bottom:2px">${clinicCIF}</div>` : ''}
+                ${clinicAddress ? `<div style="font-size:11px;color:#444;margin-bottom:2px;white-space:pre-line">${clinicAddress}</div>` : ''}
+                ${clinicPhone ? `<div style="font-size:11px;color:#444;margin-bottom:2px">${clinicPhone}</div>` : ''}
+                ${clinicIBAN ? `<div style="font-size:11px;color:#444">${clinicIBAN}</div>` : ''}
             </div>
-            <div style="width:200px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px">
-                <p style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:8px">Fecha</p>
-                <p style="font-size:14px;font-weight:700;color:#0f172a">${budgetDate}</p>
-                <p style="font-size:11px;color:#94a3b8;margin-top:6px">Validez: 30 dias</p>
+            <div style="text-align:right;flex:1">
+                <div style="font-weight:700;font-size:12px;margin-bottom:6px">${selectedPatient?.name || ''}</div>
+                <div style="font-size:11px;color:#444;margin-bottom:2px">${selectedPatient?.dni || ''}</div>
+                ${patientAddr ? `<div style="font-size:11px;color:#444;white-space:pre-line">${patientAddr}</div>` : ''}
             </div>
         </div>
 
         <!-- ITEMS TABLE -->
-        <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+        <table style="width:100%;margin-bottom:16px;border:1px solid #ccc">
             <thead>
-                <tr style="background:#0f172a">
-                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:center;width:60px;border-radius:8px 0 0 0">Cant.</th>
-                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:left">Tratamiento</th>
-                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:right;width:100px">Precio Ud.</th>
-                    <th style="padding:12px;font-size:10px;font-weight:800;letter-spacing:1px;color:#fff;text-transform:uppercase;text-align:right;width:100px;border-radius:0 8px 0 0">Subtotal</th>
+                <tr style="background:#f0f0f0">
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:left;font-weight:700">Concepto</th>
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:45px">Uni.</th>
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px">Precio</th>
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:65px">% Des.</th>
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px">Total</th>
                 </tr>
             </thead>
             <tbody>${itemsHtml}</tbody>
         </table>
 
         <!-- TOTALS -->
-        <div style="display:flex;justify-content:flex-end;margin-bottom:40px">
-            <div style="width:280px;background:#f8fafc;border:2px solid #e2e8f0;border-radius:12px;padding:20px">
-                <div style="display:flex;justify-content:space-between;margin-bottom:8px">
-                    <span style="font-size:12px;color:#64748b;font-weight:600">Subtotal</span>
-                    <span style="font-size:13px;font-weight:700;color:#0f172a">${total.toFixed(2)} &euro;</span>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
+            <div style="border:1px solid #ccc;min-width:220px">
+                <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
+                    <span style="font-size:11px">Importe:</span>
+                    <span style="font-size:11px;font-weight:700">${importe.toFixed(2)}&euro;</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;padding-bottom:12px;border-bottom:2px solid #e2e8f0;margin-bottom:12px">
-                    <span style="font-size:12px;color:#64748b;font-weight:600">IVA (exento sanitario)</span>
-                    <span style="font-size:13px;font-weight:700;color:#0f172a">0,00 &euro;</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                    <span style="font-size:14px;font-weight:900;color:#0f172a;text-transform:uppercase">Total</span>
-                    <span style="font-size:24px;font-weight:900;color:#0f172a">${total.toFixed(2)} &euro;</span>
+                ${descuento > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
+                    <span style="font-size:11px">Descuentos:</span>
+                    <span style="font-size:11px;font-weight:700">-${descuento.toFixed(2)}&euro;</span>
+                </div>` : ''}
+                <div style="display:flex;justify-content:space-between;padding:7px 12px;background:#f0f0f0">
+                    <span style="font-size:12px;font-weight:700">TOTAL:</span>
+                    <span style="font-size:12px;font-weight:700">${total.toFixed(2)}&euro;</span>
                 </div>
             </div>
         </div>
 
-        <!-- CONDITIONS -->
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:20px;margin-bottom:40px">
-            <p style="font-size:10px;font-weight:800;letter-spacing:1.5px;color:#94a3b8;text-transform:uppercase;margin-bottom:10px">Condiciones</p>
-            <ul style="font-size:11px;color:#64748b;line-height:1.8;padding-left:16px">
-                <li>Este presupuesto tiene una validez de 30 dias desde la fecha de emision.</li>
-                <li>Los precios incluyen todos los materiales necesarios para el tratamiento.</li>
-                <li>El pago puede realizarse en efectivo, tarjeta o financiacion sin intereses.</li>
-                <li>Las sesiones de revision post-tratamiento estan incluidas en el precio.</li>
-            </ul>
-        </div>
-
-        <!-- SIGNATURES -->
-        <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:48px;padding-top:24px">
-            <div style="text-align:center">
-                <div style="width:200px;border-bottom:2px solid #0f172a;margin-bottom:8px;height:60px"></div>
-                <p style="font-size:10px;font-weight:800;letter-spacing:1px;color:#0f172a;text-transform:uppercase">La Clinica</p>
-            </div>
-            <div style="text-align:center">
-                <div style="width:200px;border-bottom:2px solid #0f172a;margin-bottom:8px;height:60px"></div>
-                <p style="font-size:10px;font-weight:800;letter-spacing:1px;color:#0f172a;text-transform:uppercase">El Paciente (Conforme)</p>
-            </div>
+        <!-- FOOTER TEXT -->
+        <div style="font-size:10px;color:#555;line-height:1.7;margin-top:8px">
+            <p>Este presupuesto tiene una validez de 90 días a partir de la fecha de emisión. Pasado este plazo, ${clinicSubtitle || clinicName} se reserva el derecho de revisar los precios y condiciones según posibles cambios en tarifas, materiales o necesidades clínicas del paciente. La aceptación del presente presupuesto implica la conformidad del paciente con los tratamientos, precios y condiciones indicadas.</p>
         </div>
     </div>
 </body>
@@ -650,6 +643,69 @@ const Patients: React.FC = () => {
     const [isNewVisitModalOpen, setIsNewVisitModalOpen] = useState(false);
     const [newVisitForm, setNewVisitForm] = useState({ date: new Date().toISOString().split('T')[0], time: '09:00', treatmentId: '', treatmentName: '', doctorId: '', observations: '', duration: 60 });
     const [isCreatingVisit, setIsCreatingVisit] = useState(false);
+
+    // Visit Management State (Feature 1)
+    const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+    const [editVisitForm, setEditVisitForm] = useState<{ date: string; time: string; doctorId: string; status: string; observations: string }>({ date: '', time: '', doctorId: '', status: '', observations: '' });
+    const [isSavingVisit, setIsSavingVisit] = useState(false);
+    const [visitForPayment, setVisitForPayment] = useState<Appointment | null>(null);
+    const [visitBudgets, setVisitBudgets] = useState<any[]>([]);
+    const [isVisitBudgetOpen, setIsVisitBudgetOpen] = useState(false);
+    const [visitForBudget, setVisitForBudget] = useState<Appointment | null>(null);
+
+    const handleEditVisit = (visit: Appointment) => {
+        setEditingVisitId(visit.id);
+        const d = new Date(visit.date);
+        const dateStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+        setEditVisitForm({
+            date: dateStr,
+            time: visit.time,
+            doctorId: visit.doctorId || '',
+            status: visit.status || 'Scheduled',
+            observations: visit.observations || '',
+        });
+    };
+
+    const handleSaveVisitEdit = async (visitId: string) => {
+        setIsSavingVisit(true);
+        try {
+            const updated = await api.appointments.update(visitId, {
+                date: `${editVisitForm.date}T00:00:00.000Z`,
+                time: editVisitForm.time,
+                doctorId: editVisitForm.doctorId || undefined,
+                status: editVisitForm.status,
+                observations: editVisitForm.observations || undefined,
+            });
+            setPatientAppointments(prev => prev.map(a => a.id === visitId ? { ...a, ...updated } : a));
+            await refreshAppointments();
+            setEditingVisitId(null);
+            toast.success('Visita actualizada correctamente');
+        } catch (e: any) {
+            toast.error('Error al actualizar visita: ' + e.message);
+        } finally {
+            setIsSavingVisit(false);
+        }
+    };
+
+    const handleUpdateVisitStatus = async (visitId: string, newStatus: string) => {
+        try {
+            const updated = await api.appointments.update(visitId, { status: newStatus });
+            setPatientAppointments(prev => prev.map(a => a.id === visitId ? { ...a, status: newStatus } : a));
+            await refreshAppointments();
+            toast.success('Estado actualizado');
+        } catch (e: any) {
+            toast.error('Error al actualizar estado: ' + e.message);
+        }
+    };
+
+    const handleOpenVisitBudget = async (visit: Appointment) => {
+        setVisitForBudget(visit);
+        if (selectedPatient) {
+            const budgets = await api.budget.getByPatient(selectedPatient.id).catch(() => []);
+            setVisitBudgets(budgets);
+        }
+        setIsVisitBudgetOpen(true);
+    };
 
     // Doctors State (for transfer modal)
     const [doctors, setDoctors] = useState<any[]>([]);
@@ -1466,24 +1522,74 @@ const Patients: React.FC = () => {
                                                         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
+                                                            const isEditing = editingVisitId === visit.id;
+                                                            const statusColor = visit.status === 'Completed' || visit.status === 'COMPLETADO' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700';
                                                             return (
-                                                                <div key={visit.id} className="bg-blue-50 border border-blue-100 p-5 rounded-2xl flex items-center justify-between">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-12 h-12 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black text-sm">
-                                                                            {new Date(visit.date).getDate()}
+                                                                <div key={visit.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                                                                    <div className="p-4 flex items-center justify-between">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="w-12 h-12 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0">
+                                                                                {new Date(visit.date).getUTCDate()}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
+                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
+                                                                                {visitDoctor && <p className="text-[10px] text-blue-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                            </div>
                                                                         </div>
-                                                                        <div>
-                                                                            <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
-                                                                            <p className="text-xs text-slate-500 font-medium">
-                                                                                {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
-                                                                            </p>
-                                                                            {visitDoctor && <p className="text-[10px] text-blue-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                                            {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
+                                                                            <span className={`px-2 py-1 text-[10px] font-black uppercase rounded-lg ${statusColor}`}>Programada</span>
+                                                                            <button onClick={() => handleEditVisit(visit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
+                                                                            <button onClick={() => { setVisitForPayment(visit); setIsPaymentModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>
+                                                                            <button onClick={() => handleOpenVisitBudget(visit)} className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Presupuesto"><Calculator size={14} /></button>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="flex items-center gap-3">
-                                                                        {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
-                                                                        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-black uppercase rounded-lg">Programada</span>
-                                                                    </div>
+                                                                    {isEditing && (
+                                                                        <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-3 animate-in slide-in-from-top-2">
+                                                                            <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Editar Cita</p>
+                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Fecha</label>
+                                                                                    <input type="date" value={editVisitForm.date} onChange={e => setEditVisitForm(p => ({ ...p, date: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Hora</label>
+                                                                                    <input type="time" value={editVisitForm.time} onChange={e => setEditVisitForm(p => ({ ...p, time: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Doctor</label>
+                                                                                    <select value={editVisitForm.doctorId} onChange={e => setEditVisitForm(p => ({ ...p, doctorId: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="">Sin asignar</option>
+                                                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Estado</label>
+                                                                                    <select value={editVisitForm.status} onChange={e => setEditVisitForm(p => ({ ...p, status: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="Scheduled">Programada</option>
+                                                                                        <option value="Completed">Completada</option>
+                                                                                        <option value="noshow">No Vino</option>
+                                                                                        <option value="Cancelled">Cancelada</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div className="col-span-2">
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Observaciones</label>
+                                                                                    <input type="text" value={editVisitForm.observations} onChange={e => setEditVisitForm(p => ({ ...p, observations: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="Notas..." />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex gap-2 mt-2">
+                                                                                <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
+                                                                            </div>
+                                                                            <div className="flex gap-2 pt-2 border-t border-slate-200">
+                                                                                <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Completed')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors uppercase">✓ Vino</button>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'noshow')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200 transition-colors uppercase">✗ No Vino</button>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Cancelled')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-red-100 text-red-700 hover:bg-red-200 transition-colors uppercase">Anular</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })}
@@ -1503,24 +1609,73 @@ const Patients: React.FC = () => {
                                                         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
+                                                            const isEditing = editingVisitId === visit.id;
                                                             return (
-                                                                <div key={visit.id} className="bg-amber-50 border border-amber-100 p-5 rounded-2xl flex items-center justify-between">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-12 h-12 bg-amber-500 text-white rounded-xl flex items-center justify-center font-black text-sm">
-                                                                            {new Date(visit.date).getDate()}
+                                                                <div key={visit.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                                                                    <div className="p-4 flex items-center justify-between">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="w-12 h-12 bg-amber-500 text-white rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0">
+                                                                                {new Date(visit.date).getUTCDate()}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
+                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
+                                                                                {visitDoctor && <p className="text-[10px] text-amber-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                            </div>
                                                                         </div>
-                                                                        <div>
-                                                                            <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
-                                                                            <p className="text-xs text-slate-500 font-medium">
-                                                                                {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
-                                                                            </p>
-                                                                            {visitDoctor && <p className="text-[10px] text-amber-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                                            {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
+                                                                            <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase rounded-lg">En Proceso</span>
+                                                                            <button onClick={() => handleEditVisit(visit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
+                                                                            <button onClick={() => { setVisitForPayment(visit); setIsPaymentModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>
+                                                                            <button onClick={() => handleOpenVisitBudget(visit)} className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Presupuesto"><Calculator size={14} /></button>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="flex items-center gap-3">
-                                                                        {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
-                                                                        <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase rounded-lg">Pago Parcial</span>
-                                                                    </div>
+                                                                    {isEditing && (
+                                                                        <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-3 animate-in slide-in-from-top-2">
+                                                                            <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Editar Cita</p>
+                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Fecha</label>
+                                                                                    <input type="date" value={editVisitForm.date} onChange={e => setEditVisitForm(p => ({ ...p, date: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Hora</label>
+                                                                                    <input type="time" value={editVisitForm.time} onChange={e => setEditVisitForm(p => ({ ...p, time: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Doctor</label>
+                                                                                    <select value={editVisitForm.doctorId} onChange={e => setEditVisitForm(p => ({ ...p, doctorId: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="">Sin asignar</option>
+                                                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Estado</label>
+                                                                                    <select value={editVisitForm.status} onChange={e => setEditVisitForm(p => ({ ...p, status: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="Scheduled">Programada</option>
+                                                                                        <option value="Completed">Completada</option>
+                                                                                        <option value="noshow">No Vino</option>
+                                                                                        <option value="Cancelled">Cancelada</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div className="col-span-2">
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Observaciones</label>
+                                                                                    <input type="text" value={editVisitForm.observations} onChange={e => setEditVisitForm(p => ({ ...p, observations: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="Notas..." />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex gap-2 mt-2">
+                                                                                <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
+                                                                            </div>
+                                                                            <div className="flex gap-2 pt-2 border-t border-slate-200">
+                                                                                <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Completed')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors uppercase">✓ Vino</button>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'noshow')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200 transition-colors uppercase">✗ No Vino</button>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Cancelled')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-red-100 text-red-700 hover:bg-red-200 transition-colors uppercase">Anular</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })}
@@ -1540,26 +1695,73 @@ const Patients: React.FC = () => {
                                                         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
+                                                            const isEditing = editingVisitId === visit.id;
                                                             return (
-                                                                <div key={visit.id} className="bg-white border border-slate-100 p-5 rounded-2xl flex items-center justify-between shadow-sm">
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className="w-12 h-12 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center font-black text-sm">
-                                                                            {new Date(visit.date).getDate()}
+                                                                <div key={visit.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                                                                    <div className="p-4 flex items-center justify-between">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className="w-12 h-12 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0">
+                                                                                {new Date(visit.date).getUTCDate()}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
+                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
+                                                                                {visitDoctor && <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                            </div>
                                                                         </div>
-                                                                        <div>
-                                                                            <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
-                                                                            <p className="text-xs text-slate-500 font-medium">
-                                                                                {new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · {visit.time}
-                                                                            </p>
-                                                                            {visitDoctor && <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                                            {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
+                                                                            <span className={`px-2 py-1 text-[10px] font-black uppercase rounded-lg ${visit.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{visit.paid ? 'Pagado' : 'Completado'}</span>
+                                                                            <button onClick={() => handleEditVisit(visit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
+                                                                            {!visit.paid && <button onClick={() => { setVisitForPayment(visit); setIsPaymentModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>}
+                                                                            <button onClick={() => handleOpenVisitBudget(visit)} className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Presupuesto"><Calculator size={14} /></button>
                                                                         </div>
                                                                     </div>
-                                                                    <div className="flex items-center gap-3">
-                                                                        {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
-                                                                        <span className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg ${visit.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                                                            {visit.paid ? 'Pagado' : 'Completado'}
-                                                                        </span>
-                                                                    </div>
+                                                                    {isEditing && (
+                                                                        <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-3 animate-in slide-in-from-top-2">
+                                                                            <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Editar Cita</p>
+                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Fecha</label>
+                                                                                    <input type="date" value={editVisitForm.date} onChange={e => setEditVisitForm(p => ({ ...p, date: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Hora</label>
+                                                                                    <input type="time" value={editVisitForm.time} onChange={e => setEditVisitForm(p => ({ ...p, time: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Doctor</label>
+                                                                                    <select value={editVisitForm.doctorId} onChange={e => setEditVisitForm(p => ({ ...p, doctorId: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="">Sin asignar</option>
+                                                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Estado</label>
+                                                                                    <select value={editVisitForm.status} onChange={e => setEditVisitForm(p => ({ ...p, status: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="Scheduled">Programada</option>
+                                                                                        <option value="Completed">Completada</option>
+                                                                                        <option value="noshow">No Vino</option>
+                                                                                        <option value="Cancelled">Cancelada</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div className="col-span-2">
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Observaciones</label>
+                                                                                    <input type="text" value={editVisitForm.observations} onChange={e => setEditVisitForm(p => ({ ...p, observations: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="Notas..." />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex gap-2 mt-2">
+                                                                                <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
+                                                                            </div>
+                                                                            <div className="flex gap-2 pt-2 border-t border-slate-200">
+                                                                                <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Completed')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors uppercase">✓ Vino</button>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'noshow')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200 transition-colors uppercase">✗ No Vino</button>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Cancelled')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-red-100 text-red-700 hover:bg-red-200 transition-colors uppercase">Anular</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })}
@@ -1580,35 +1782,46 @@ const Patients: React.FC = () => {
                                         <Plus size={16} /> Nueva Entrada
                                     </button>
                                 </div>
-                                <div className="space-y-4">
+                                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                    {/* Table header */}
+                                    <div className="grid border-b border-slate-200 bg-slate-50" style={{ gridTemplateColumns: '120px 90px 140px 1fr 100px' }}>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Fecha</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Hora</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Usuario</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Texto</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Acciones</div>
+                                    </div>
                                     {clinicalRecords.filter(r => r.patientId === selectedPatient.id).length === 0 ? (
-                                        <div className="text-center p-8 opacity-50"><p className="text-xs font-bold uppercase">No hay historial clínico registrado</p></div>
+                                        <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase">No hay historial clínico registrado</p></div>
                                     ) : (
-                                        clinicalRecords.filter(r => r.patientId === selectedPatient.id).map(r => (
-                                            <div key={r.id} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm">
-                                                <div className="flex justify-between mb-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xs">EV</div>
-                                                        <div>
-                                                            <p className="text-sm font-black text-slate-900">{(() => { const dn = doctors.find(d => d.id === r.authorId)?.name; return dn ? `Dr. ${dn}` : '—'; })()}</p>
-                                                            <p className="text-[10px] text-slate-400 font-bold uppercase">{r.specialization}</p>
+                                        clinicalRecords.filter(r => r.patientId === selectedPatient.id)
+                                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                            .map((r, idx) => {
+                                                const dateObj = new Date(r.date);
+                                                const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                                const timeStr = dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                                                const doctorName = doctors.find(d => d.id === r.authorId)?.name || '—';
+                                                const textContent = [r.clinicalData?.treatment, r.clinicalData?.observation].filter(Boolean).join('\n');
+                                                return (
+                                                    <div key={r.id} className={`grid border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`} style={{ gridTemplateColumns: '120px 90px 140px 1fr 100px' }}>
+                                                        <div className="px-4 py-4 text-xs font-bold text-slate-700 self-start pt-4">{dateStr}</div>
+                                                        <div className="px-4 py-4 text-xs font-bold text-slate-600 self-start pt-4">{timeStr}</div>
+                                                        <div className="px-4 py-4 self-start pt-4">
+                                                            <span className="text-xs font-bold text-slate-700">{doctorName}</span>
+                                                        </div>
+                                                        <div className="px-4 py-4 self-start">
+                                                            {r.clinicalData?.treatment && <p className="text-xs font-black text-slate-900 mb-1">{r.clinicalData.treatment}</p>}
+                                                            <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{r.clinicalData?.observation}</p>
+                                                        </div>
+                                                        <div className="px-4 py-4 flex items-start justify-end gap-2 pt-4">
+                                                            <button onClick={() => { setRecordToReassign(r); setIsReassignDoctorModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Reasignar Doctor"><UserCheck size={14} /></button>
+                                                            <button onClick={() => { setEditingRecord(r); setIsEditEntryModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
+                                                            <button onClick={() => handleDeleteRecord(r.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar"><Trash2 size={14} /></button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-4">
-                                                        <p className="text-[10px] font-bold text-slate-400">{new Date(r.date).toLocaleDateString()}</p>
-                                                        <div className="flex gap-2">
-                                                            <button onClick={() => { setRecordToReassign(r); setIsReassignDoctorModalOpen(true); }} className="text-slate-400 hover:text-green-500 transition-colors" title="Reasignar Doctor"><UserCheck size={16} /></button>
-                                                            <button onClick={() => { setEditingRecord(r); setIsEditEntryModalOpen(true); }} className="text-slate-400 hover:text-blue-500 transition-colors"><Edit3 size={16} /></button>
-                                                            <button onClick={() => handleDeleteRecord(r.id)} className="text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="text-sm font-medium text-slate-600 leading-relaxed">
-                                                    <p className="text-xs font-black uppercase text-slate-800 mb-1">{r.clinicalData.treatment}</p>
-                                                    {r.clinicalData.observation}
-                                                </div>
-                                            </div>
-                                        )))}
+                                                );
+                                            })
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -2567,6 +2780,22 @@ const Patients: React.FC = () => {
                 }}
             />
 
+            {/* BUDGET MODAL for Visit (Feature 1) */}
+            <BudgetModal
+                isOpen={isVisitBudgetOpen}
+                onClose={() => { setIsVisitBudgetOpen(false); setVisitForBudget(null); }}
+                patientId={selectedPatient?.id || ''}
+                onSave={async () => {
+                    setIsVisitBudgetOpen(false);
+                    setVisitForBudget(null);
+                    if (selectedPatient) {
+                        const updatedBudgets = await api.budget.getByPatient(selectedPatient.id);
+                        setBudgets(updatedBudgets);
+                    }
+                    toast.success('Presupuesto guardado correctamente');
+                }}
+            />
+
             {selectedPatient && (
                 <PrescriptionModal
                     isOpen={isPrescriptionOpen}
@@ -2582,9 +2811,12 @@ const Patients: React.FC = () => {
             {/* Payment Modal */}
             <PaymentModal
                 isOpen={isPaymentModalOpen}
-                onClose={() => setIsPaymentModalOpen(false)}
+                onClose={() => { setIsPaymentModalOpen(false); setVisitForPayment(null); }}
                 patient={selectedPatient || { id: '', name: '', wallet: 0 }}
                 budgets={budgets}
+                appointment={visitForPayment || undefined}
+                defaultAmount={visitForPayment ? (visitForPayment as any).amount || 0 : undefined}
+                defaultConcept={visitForPayment ? ((visitForPayment as any).treatmentName || visitForPayment.treatment || 'Visita') as string : undefined}
                 onPaymentComplete={(payment, invoice) => {
                     if (selectedPatient) {
                         // 1. Immediate Update (Optimistic/Server-Confirmed)

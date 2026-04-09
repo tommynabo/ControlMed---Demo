@@ -348,7 +348,6 @@ const ToothCell: React.FC<ToothCellProps> = ({
   const isActive     = activeTooth === id;
   const hasCondition = Object.values(surfMap).some(c => c && c !== 'healthy');
   const { w }        = getToothDims(id);
-  const rot          = getArchRot(id);
 
   const numStyle: React.CSSProperties = {
     fontSize: 9, fontWeight: 800, lineHeight: '1',
@@ -361,8 +360,6 @@ const ToothCell: React.FC<ToothCellProps> = ({
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       gap: 2, flexShrink: 0,
-      transform: `rotate(${rot}deg)`,
-      transformOrigin: isUpper ? 'center 200%' : 'center -100%',
     }}>
       {isUpper && <span style={numStyle}>{id}</span>}
       <div style={{
@@ -703,11 +700,11 @@ export const Odontogram: React.FC<OdontogramProps> = ({
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
+        alignItems: isUpper ? 'flex-end' : 'flex-start',
         flexWrap: 'nowrap',
-        gap: 2,
+        gap: 1,
         overflow: 'visible',
-        padding: '4px 0',
+        padding: '2px 0',
       }}
     >
       {left.map(id => renderTooth(id, isUpper))}
@@ -716,12 +713,11 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       <div
         style={{
           width: 2,
-          height: 64,
-          background: 'linear-gradient(to bottom, #e2e8f0, #94a3b8, #e2e8f0)',
-          margin: '0 6px',
+          alignSelf: 'stretch',
+          background: '#64748b',
+          margin: '0 4px',
           flexShrink: 0,
-          borderRadius: 2,
-          opacity: 0.8,
+          minHeight: 64,
         }}
       />
 
@@ -878,10 +874,10 @@ export const Odontogram: React.FC<OdontogramProps> = ({
               style={{
                 position: 'relative',
                 width: '100%',
-                margin: '12px 0',
+                margin: '8px 0',
               }}
             >
-              <div style={{ borderTop: '1.5px dashed #e2e8f0' }} />
+              <div style={{ borderTop: '2px solid #64748b' }} />
               <span
                 style={{
                   position: 'absolute',
@@ -892,7 +888,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
                   padding: '0 10px',
                   fontSize: 8,
                   fontWeight: 800,
-                  color: '#cbd5e1',
+                  color: '#64748b',
                   letterSpacing: 2,
                   textTransform: 'uppercase',
                   whiteSpace: 'nowrap',
