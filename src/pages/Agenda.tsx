@@ -1,8 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-    ChevronLeft, ChevronRight, Search, Plus, Calendar, User, Clock, CheckCircle2, ExternalLink,
-    Lock, Unlock, Eye, EyeOff, Save, X, AlertTriangle, Sparkles
-} from 'lucide-react';
+import { Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
@@ -446,6 +443,31 @@ const Agenda: React.FC = () => {
         setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
     };
 
+    const checkOverlap = (dateStr: string, timeStr: string, durationMin: number, doctorId: string, excludeApptId?: string) => {
+        if (!doctorId || doctorId === 'all') return false;
+        const [h2, m2] = timeStr.split(':').map(Number);
+        const start2 = h2 * 60 + m2;
+        const end2 = start2 + (durationMin || 30);
+        const date2 = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+
+        return appointments.some(a => {
+            if (a.id === excludeApptId) return false;
+            if (a.status === 'Cancelled' || a.status === 'Anulada') return false;
+            if (a.doctorId !== doctorId) return false;
+            
+            const [h1, m1] = a.time.split(':').map(Number);
+            const start1 = h1 * 60 + m1;
+            const end1 = start1 + (a.duration || 30);
+            
+            const date1 = a.date.split('T')[0];
+            
+            if (date1 === date2) {
+                return Math.max(start1, start2) < Math.min(end1, end2);
+            }
+            return false;
+        });
+    };
+
     // Handle Booking
     const handleBooking = async () => {
         if (isBooking) return;
@@ -493,6 +515,15 @@ const Agenda: React.FC = () => {
 
         // Force date to be treated as UTC midnight of the selected day to avoid timezone shifts
         const isoDate = `${bookingDate}T00:00:00.000Z`;
+
+        // Check for overlaps before saving
+        if (checkOverlap(isoDate, bookingTime, bookingDuration || 30, bookingDoctorId, selectedAppt?.id)) {
+            toast.error(`El doctor ya tiene una cita reservada en este horario. Revisa la disponibilidad.`, {
+                style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' },
+                icon: '🚫'
+            });
+            return;
+        }
 
         const newAppt: any = {
             date: isoDate, // Send full ISO at UTC midnight
@@ -575,11 +606,19 @@ const Agenda: React.FC = () => {
 
         const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}T00:00:00.000Z`;
 
+        const newDrId = drId || draggingAppt.doctorId;
+        if (checkOverlap(dateStr, time, draggingAppt.duration || 30, newDrId, draggingAppt.id)) {
+            toast.error(`No se puede mover aquí: El doctor ya tiene cita en ese horario.`);
+            setDraggingAppt(null);
+            setDragOverSlot(null);
+            return;
+        }
+
         try {
             const updated = await api.appointments.update(draggingAppt.id, {
                 date: dateStr,
                 time: time,
-                doctorId: drId || draggingAppt.doctorId
+                doctorId: newDrId
             });
 
             setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
@@ -625,6 +664,13 @@ const Agenda: React.FC = () => {
             const newDuration = Math.max(5, (appt.duration || 30) + deltaMins);
 
             if (newDuration !== appt.duration) {
+                // Pre-check for overlapping extension
+                if (checkOverlap(appt.date, appt.time, newDuration, appt.doctorId, appt.id)) {
+                    toast.error(`La nueva duración choca con otra cita del doctor.`);
+                    setResizingAppt(null);
+                    return;
+                }
+
                 try {
                     const updated = await api.appointments.update(appt.id, {
                         duration: newDuration
@@ -679,6 +725,31 @@ const Agenda: React.FC = () => {
         setSelectedAppt(null); // Switch to "New" mode visually
         setActiveSlot(null);
     };
+
+    // Calculate Unassigned appointments for the current view
+    const apptDateStrFilter = (a: Appointment) => a.date.split('T')[0];
+    const isVisibleFilter = (a: Appointment) => {
+        const s = (a.status || '').toLowerCase();
+        return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada';
+    };
+    const knownDoctorIds = new Set(doctors.map(d => d.id));
+    let unassignedApptsToShow: Appointment[] = [];
+    if (viewMode === 'daily') {
+        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+        unassignedApptsToShow = appointments.filter(a =>
+            isVisibleFilter(a) && apptDateStrFilter(a) === dateStr && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
+        );
+    } else {
+        const weekDates = Array.from({ length: 7 }).map((_, i) => {
+            const d = new Date(currentDate);
+            const dow = d.getDay();
+            d.setDate(d.getDate() - dow + (dow === 0 ? -6 : 1) + i);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        });
+        unassignedApptsToShow = appointments.filter(a =>
+            isVisibleFilter(a) && weekDates.includes(apptDateStrFilter(a)) && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -877,6 +948,30 @@ const Agenda: React.FC = () => {
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Unassigned Appointments Warning Strip */}
+            {unassignedApptsToShow.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-4 overflow-x-auto shadow-sm items-center">
+                    <div className="flex-shrink-0 flex items-center gap-2 text-amber-700 font-black whitespace-nowrap">
+                        <AlertTriangle size={20} />
+                        CITAS SIN ASIGNAR ({unassignedApptsToShow.length}):
+                    </div>
+                    {unassignedApptsToShow.map(a => {
+                        const patName = patients.find(p => p.id === a.patientId)?.name || '⚠️ Paciente Eliminado';
+                        return (
+                            <div key={a.id} className="bg-white border border-amber-200 p-3 rounded-xl flex-shrink-0 min-w-[200px] hover:shadow-md transition-shadow cursor-pointer"
+                                onClick={() => { setSelectedAppt(a); setIsAppointmentModalOpen(true); }}
+                            >
+                                <div className="text-xs font-black text-slate-900 truncate">{patName}</div>
+                                <div className="text-[10px] text-amber-600 font-bold mt-0.5">{apptDateStrFilter(a)} a las {a.time} - {a.duration || 30} min</div>
+                                <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                                    <Edit3 size={10} /> Clic para asignar doctor
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
@@ -1222,9 +1317,6 @@ const Agenda: React.FC = () => {
                                                     unassignedAppts = appointments.filter(a =>
                                                         isVisible(a) && apptDateStr(a) === dateStr && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
                                                     );
-                                                    if (unassignedAppts.length > 0) {
-                                                        unassignedAppts.forEach(a => console.warn('[Agenda] Cita huérfana (sin doctor válido):', a.id, a));
-                                                    }
                                                 } else {
                                                     columns.push(appointments.filter(a =>
                                                         isVisible(a) && apptDateStr(a) === dateStr &&
@@ -1245,73 +1337,80 @@ const Agenda: React.FC = () => {
                                                 }
                                             }
 
-                                            return columns.map((colAppts, colIdx) => {
-                                                const sorted = [...colAppts].sort((a, b) => a.time.localeCompare(b.time));
-                                                return (
-                                                    <div key={colIdx} className="flex-1 relative h-full pointer-events-none border-r border-transparent">
-                                                        {sorted.map(appt => {
-                                                            const top = timeToTop(appt.time);
-                                                            const height = (appt.duration || 30) * PX_PER_MIN;
+                                            return (
+                                                <>
+                                                    {unassignedAppts.length > 0 && (
+                                                        <div className="absolute top-2 left-2 right-2 z-50 bg-red-100 border border-red-200 text-red-700 p-2 rounded text-[10px] font-bold">
+                                                            ⚠️ {unassignedAppts.length} cita(s) sin doctor asignado
+                                                        </div>
+                                                    )}
+                                                    {columns.map((colAppts, colIdx) => {
+                                                        const sorted = [...colAppts].sort((a, b) => a.time.localeCompare(b.time));
+                                                        return (
+                                                            <div key={colIdx} className="flex-1 relative h-full pointer-events-none border-r border-transparent">
+                                                                {sorted.map(appt => {
+                                                                    const top = timeToTop(appt.time);
+                                                                    const height = (appt.duration || 30) * PX_PER_MIN;
 
-                                                            const [ah, am] = appt.time.split(':').map(Number);
-                                                            const startMin = ah * 60 + am;
+                                                                    const [ah, am] = appt.time.split(':').map(Number);
+                                                                    const startMin = ah * 60 + am;
 
-                                                            // Build the full overlap group (all appointments that overlap with this one)
-                                                            const overlapGroup = sorted.filter(o => {
-                                                                const [oh, om] = o.time.split(':').map(Number);
-                                                                const oStart = oh * 60 + om;
-                                                                const oEnd = oStart + (o.duration || 30);
-                                                                const myEnd = startMin + (appt.duration || 30);
-                                                                return startMin < oEnd && myEnd > oStart;
-                                                            });
+                                                                    // Build the full overlap group (all appointments that overlap with this one)
+                                                                    const overlapGroup = sorted.filter(o => {
+                                                                        const [oh, om] = o.time.split(':').map(Number);
+                                                                        const oStart = oh * 60 + om;
+                                                                        const oEnd = oStart + (o.duration || 30);
+                                                                        const myEnd = startMin + (appt.duration || 30);
+                                                                        return startMin < oEnd && myEnd > oStart;
+                                                                    });
 
-                                                            let width = '100%', left = '0%';
-                                                            if (overlapGroup.length > 1) {
-                                                                const myIdx = overlapGroup.findIndex(o => o.id === appt.id);
-                                                                const pct = 100 / overlapGroup.length;
-                                                                width = `${pct}%`;
-                                                                left = `${pct * myIdx}%`;
-                                                            }
+                                                                    let width = '100%', left = '0%';
+                                                                    if (overlapGroup.length > 1) {
+                                                                        const myIdx = overlapGroup.findIndex(o => o.id === appt.id);
+                                                                        const pct = 100 / overlapGroup.length;
+                                                                        width = `${pct}%`;
+                                                                        left = `${pct * myIdx}%`;
+                                                                    }
 
-                                                            return (
-                                                                <div
-                                                                    key={appt.id}
-                                                                    draggable={currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR'}
-                                                                    onDragStart={(e) => handleDragStart(e, appt)}
-                                                                    onDragEnd={() => setDraggingAppt(null)}
-                                                                    onClick={(e) => handleAppointmentClick(e, appt)}
-                                                                    style={{ top: `${top}px`, height: `${height}px`, left, width, position: 'absolute' }}
-                                                                    className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all z-10 overflow-hidden flex flex-col justify-start group ${getAppointmentColors(appt.status, appt.paid)} ${draggingAppt?.id === appt.id ? 'opacity-40 scale-95 border-dashed grayscale shadow-none' : 'hover:scale-[1.01] hover:z-20 shadow-sm'}`}
-                                                                >
-                                                                    <div className="flex justify-between items-start mb-0.5">
-                                                                        <div className="flex items-center gap-1 min-w-0">
-                                                                            {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
-                                                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-                                                                                    <div className="w-1 h-3 flex flex-col gap-0.5">
-                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
-                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
-                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
-                                                                                    </div>
+                                                                    return (
+                                                                        <div
+                                                                            key={appt.id}
+                                                                            draggable={currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR'}
+                                                                            onDragStart={(e) => handleDragStart(e, appt)}
+                                                                            onDragEnd={() => setDraggingAppt(null)}
+                                                                            onClick={(e) => handleAppointmentClick(e, appt)}
+                                                                            style={{ top: `${top}px`, height: `${height}px`, left, width, position: 'absolute' }}
+                                                                            className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all z-10 overflow-hidden flex flex-col justify-start group ${getAppointmentColors(appt.status, appt.paid)} ${draggingAppt?.id === appt.id ? 'opacity-40 scale-95 border-dashed grayscale shadow-none' : 'hover:scale-[1.01] hover:z-20 shadow-sm'}`}
+                                                                        >
+                                                                            <div className="flex justify-between items-start mb-0.5">
+                                                                                <div className="flex items-center gap-1 min-w-0">
+                                                                                    {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
+                                                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+                                                                                            <div className="w-1 h-3 flex flex-col gap-0.5">
+                                                                                                <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                                <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                                <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || '⚠️ Paciente Eliminado'}</span>
                                                                                 </div>
-                                                                            )}
-                                                                            <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
-                                                                        </div>
-                                                                        {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
-                                                                    </div>
-                                                                    {(() => {
-                                                                        const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
-                                                                            ? (appt.treatment as any).name
-                                                                            : appt.treatment || (appt as any).treatmentName;
-                                                                        const budgetItems = (appt as any).budget?.items;
-                                                                        const displayTreatment = (budgetItems && budgetItems.length > 0)
-                                                                            ? budgetItems.map((item: any) => item.name).join(', ')
-                                                                            : treatmentText;
-                                                                        return appt.duration && appt.duration >= 15 && displayTreatment ? (
-                                                                            <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
-                                                                                {displayTreatment}
-                                                                            </span>
-                                                                        ) : null;
-                                                                    })()}
+                                                                                {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
+                                                                            </div>
+                                                                            {(() => {
+                                                                                const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
+                                                                                    ? (appt.treatment as any).name
+                                                                                    : appt.treatment || (appt as any).treatmentName;
+                                                                                const budgetItems = (appt as any).budget?.items;
+                                                                                const displayTreatment = (budgetItems && budgetItems.length > 0)
+                                                                                    ? budgetItems.map((item: any) => item.name).join(', ')
+                                                                                    : treatmentText;
+                                                                                return appt.duration && appt.duration >= 15 && displayTreatment ? (
+                                                                                    <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
+                                                                                        {displayTreatment}
+                                                                                    </span>
+                                                                                ) : null;
+                                                                            })()}
                                                                     {appt.duration && appt.duration >= 30 && appt.observations && (
                                                                         <p className="text-[9px] opacity-60 mt-0.5 line-clamp-2 leading-tight">
                                                                             {appt.observations}
@@ -1336,7 +1435,9 @@ const Agenda: React.FC = () => {
                                                         })}
                                                     </div>
                                                 );
-                                            });
+                                            })}
+                                            </>
+                                            );
                                         })()}
                                     </div>
 

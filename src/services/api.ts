@@ -1,5 +1,6 @@
 import { Patient, Appointment, Invoice, ClinicalRecord, InventoryItem, Doctor } from '../types';
 import { supabase } from './supabase';
+import { queryClient } from '../../App';
 
 // Use relative path in production (Vercel), localhost in dev
 // @ts-ignore - Vite env
@@ -364,11 +365,15 @@ export const api = {
                 headers,
                 body: JSON.stringify(appointment)
             });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || 'Failed to create appointment');
+            try {
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Failed to create appointment');
+                }
+                return await res.json();
+            } finally {
+                queryClient.invalidateQueries({ queryKey: ['appointments'] });
             }
-            return res.json();
         },
         update: async (id: string, updates: Partial<Appointment>): Promise<Appointment> => {
             const res = await fetch(`${API_URL}/appointments/${id}`, {
@@ -376,20 +381,28 @@ export const api = {
                 headers,
                 body: JSON.stringify(updates)
             });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || 'Failed to update appointment');
+            try {
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Failed to update appointment');
+                }
+                return await res.json();
+            } finally {
+                queryClient.invalidateQueries({ queryKey: ['appointments'] });
             }
-            return res.json();
         },
         delete: async (id: string): Promise<void> => {
             const res = await fetch(`${API_URL}/appointments/${id}`, {
                 method: 'DELETE',
                 headers
             });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || 'Failed to delete appointment');
+            try {
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Failed to delete appointment');
+                }
+            } finally {
+                queryClient.invalidateQueries({ queryKey: ['appointments'] });
             }
         }
     },

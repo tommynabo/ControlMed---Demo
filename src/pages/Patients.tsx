@@ -44,7 +44,7 @@ const Patients: React.FC = () => {
     const {
         patients, setPatients, searchQuery, setSearchQuery,
         selectedPatient, setSelectedPatient, clinicalRecords, setClinicalRecords,
-        invoices, setInvoices, api, refreshAppointments
+        invoices, setInvoices, api, refreshAppointments, appointments
     } = useAppContext();
 
 
@@ -136,6 +136,31 @@ const Patients: React.FC = () => {
                 if (slotTimeValue >= (aStartH + aStartM/60) && slotTimeValue < (aEndH + aEndM/60)) inAfternoon = true;
             }
             return inMorning || inAfternoon;
+        });
+    };
+
+    const checkOverlap = (dateStr: string, timeStr: string, durationMin: number, doctorId: string, excludeApptId?: string) => {
+        if (!doctorId || doctorId === 'all') return false;
+        const [h2, m2] = timeStr.split(':').map(Number);
+        const start2 = h2 * 60 + m2;
+        const end2 = start2 + (durationMin || 30);
+        const date2 = new Date(dateStr).toISOString().split('T')[0];
+
+        return appointments.some(a => {
+            if (a.id === excludeApptId) return false;
+            if (a.status === 'Cancelled' || a.status === 'Anulada') return false;
+            if (a.doctorId !== doctorId) return false;
+            
+            const [h1, m1] = a.time.split(':').map(Number);
+            const start1 = h1 * 60 + m1;
+            const end1 = start1 + (a.duration || 30);
+            
+            const date1 = new Date(a.date).toISOString().split('T')[0];
+            
+            if (date1 === date2) {
+                return Math.max(start1, start2) < Math.min(end1, end2); // overlap condition
+            }
+            return false;
         });
     };
 
@@ -667,6 +692,19 @@ const Patients: React.FC = () => {
     };
 
     const handleSaveVisitEdit = async (visitId: string) => {
+        // Validation: Overlap check
+        const visitDuration = visitForPayment?.duration || 30; // Find actual visit duration from global state if needed, using 30 as fallback
+        const currentVisit = patientAppointments.find(a => a.id === visitId);
+        const durationMin = currentVisit?.duration || 30;
+        
+        if (editVisitForm.doctorId && checkOverlap(editVisitForm.date, editVisitForm.time, durationMin, editVisitForm.doctorId, visitId)) {
+            toast.error(`El doctor ya tiene una cita en ese horario. Por favor, elige otro hueco.`, {
+                style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' },
+                icon: '🚫'
+            });
+            return;
+        }
+
         setIsSavingVisit(true);
         try {
             const updated = await api.appointments.update(visitId, {
@@ -1455,6 +1493,15 @@ const Patients: React.FC = () => {
                                                     // Validation: Doctor schedule
                                                     if (newVisitForm.doctorId && !checkAvailability(newVisitForm.date, newVisitForm.time, newVisitForm.doctorId)) {
                                                         toast.error("El doctor seleccionado no trabaja en este horario.");
+                                                        return;
+                                                    }
+
+                                                    // Validation: Overlap check
+                                                    if (newVisitForm.doctorId && checkOverlap(newVisitForm.date, newVisitForm.time, newVisitForm.duration || 30, newVisitForm.doctorId)) {
+                                                        toast.error(`El Dr. ya tiene una cita programada en ese horario. Por favor, elige otro hueco.`, {
+                                                            style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' },
+                                                            icon: '🚫'
+                                                        });
                                                         return;
                                                     }
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Patient, Appointment, Invoice, InventoryItem, ClinicalRecord, Doctor, Liquidation, AIChatMessage, ToothState, DocumentTemplate, Expense, TreatmentPlan } from '../../types';
+import { supabase } from '../services/supabase';
 import { api } from '../services/api';
 import { UserRole, canAccessPage, canAccessRoute, hasPermission } from '../config/roles';
 
@@ -178,10 +179,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
         console.log('[TabGuard] ✅ Protección anti-descarte activada');
 
+        // === Supabase Realtime Listener (Block 3) ===
+        const channel = supabase.channel('agenda-realtime')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'appointments' },
+                (payload) => {
+                    console.log('[Realtime] Agenda actualizada desde otro cliente:', payload);
+                    queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                    queryClient.invalidateQueries({ queryKey: ['calendar'] });
+                }
+            )
+            .subscribe();
+
         return () => {
             clearInterval(heartbeatInterval);
+            supabase.removeChannel(channel);
         };
-    }, [isAuthenticated]);
+    }, [isAuthenticated, queryClient]);
 
     const login = (user: any) => {
         setCurrentUser(user);

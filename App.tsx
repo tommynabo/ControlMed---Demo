@@ -21,7 +21,7 @@ import { Liquidations } from './src/pages/Liquidations';import ProtectedRoute fr
 
 import { AppointmentDetails } from './src/pages/AppointmentDetails';
 
-const queryClient = new QueryClient({
+export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5,     // 5 min before data is considered stale
