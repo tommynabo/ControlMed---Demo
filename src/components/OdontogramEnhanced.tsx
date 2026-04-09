@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Baby, DollarSign, Plus, Save, Trash2, User, X } from 'lucide-react';
+import { Search, Trash2, FileText, Plus, Save, X } from 'lucide-react';
 import { PatientTreatment } from '../types';
 import { useAppContext } from '../context/AppContext';
 
-// ══════════════════════════════════════════════════════════════════════
+// ======================================================================
 // TYPES
-// ══════════════════════════════════════════════════════════════════════
+// ======================================================================
 interface OdontogramProps {
   patientId: string;
   isEditable: boolean;
@@ -16,492 +16,139 @@ interface Service {
   id: string;
   name: string;
   final_price: number;
+  specialty_name?: string;
 }
 
-// ── FDI Numbering ──────────────────────────────────────────────────────
-// Each array is ordered from OUTERMOST → INNERMOST (toward midline)
-const ADULT = {
-  upperLeft:  [18, 17, 16, 15, 14, 13, 12, 11], // Q1
-  upperRight: [21, 22, 23, 24, 25, 26, 27, 28], // Q2
-  lowerLeft:  [48, 47, 46, 45, 44, 43, 42, 41], // Q4
-  lowerRight: [31, 32, 33, 34, 35, 36, 37, 38], // Q3
-};
-const CHILD = {
-  upperLeft:  [55, 54, 53, 52, 51], // Q5
-  upperRight: [61, 62, 63, 64, 65], // Q6
-  lowerLeft:  [85, 84, 83, 82, 81], // Q8
-  lowerRight: [71, 72, 73, 74, 75], // Q7
+// ======================================================================
+// SVG TOOTH PATHS  (restored from ffd0e4c — the classic aesthetic)
+// ======================================================================
+const PATHS = {
+  incisor:  'M10,5 L20,5 L22,30 L15,45 L8,30 Z',
+  canine:   'M15,2 L25,10 L22,35 L15,50 L8,35 L5,10 Z',
+  premolar: 'M5,5 L25,5 L28,25 L15,40 L2,25 Z',
+  molar:    'M2,5 L10,2 L20,2 L28,5 L30,20 L25,35 L15,40 L5,35 L0,20 Z',
 };
 
-// ── Tooth visual configuration ─────────────────────────────────────────
-// Per-tooth-type dimensions: w=crown width, ch=crown height, rh=root height
-const CROWN_DIMS: Record<number, { w: number; ch: number; rh: number }> = {
-  1: { w: 22, ch: 36, rh: 50 }, // central incisor
-  2: { w: 20, ch: 33, rh: 46 }, // lateral incisor
-  3: { w: 23, ch: 40, rh: 60 }, // canine
-  4: { w: 27, ch: 32, rh: 44 }, // 1st premolar
-  5: { w: 25, ch: 30, rh: 40 }, // 2nd premolar
-  6: { w: 40, ch: 36, rh: 40 }, // 1st molar
-  7: { w: 38, ch: 34, rh: 38 }, // 2nd molar
-  8: { w: 32, ch: 30, rh: 32 }, // wisdom
-  0: { w: 28, ch: 32, rh: 38 }, // default
-};
-const CHILD_SCALE = 0.80;
-
-// Arch curvature: degrees of rotation from midline outward
-const ARCH_ROT_MAP: Record<number, number> = {
-  1: 0, 2: 2, 3: 5, 4: 8, 5: 11, 6: 14, 7: 17, 8: 19, 0: 0,
+const getToothShape = (id: number): string => {
+  const d = id % 10;
+  if (id >= 51) return d >= 1 && d <= 3 ? PATHS.incisor : PATHS.molar;
+  if (d <= 2)   return PATHS.incisor;
+  if (d === 3)  return PATHS.canine;
+  if (d <= 5)   return PATHS.premolar;
+  return PATHS.molar;
 };
 
-function getToothDims(id: number) {
-  const digit = id % 10;
-  const d = CROWN_DIMS[digit] ?? CROWN_DIMS[0];
-  const s = id >= 50 ? CHILD_SCALE : 1;
-  return {
-    w:  Math.round(d.w  * s),
-    ch: Math.round(d.ch * s),
-    rh: Math.round(d.rh * s),
-    totalH: Math.round((d.ch + d.rh) * s),
-  };
-}
-
-// Crown outline path in (0..W, 0..CH) coords.
-// y=0 is occlusal/incisal, y=CH is cervical (gum line).
-function getCrownPath(digit: number, W: number, H: number): string {
-  const w = W, h = H;
-  switch (digit) {
-    // Incisors: trapezoidal — wider at incisal, narrower at cervical, slightly convex mesial/distal
-    case 1: return `M ${w*.12} ${h} C ${w*.04} ${h*.8} 0 ${h*.5} ${w*.04} ${h*.12} L ${w*.08} 0 L ${w*.92} 0 L ${w*.96} ${h*.12} C ${w} ${h*.5} ${w*.96} ${h*.8} ${w*.88} ${h} Z`;
-    case 2: return `M ${w*.1}  ${h} C ${w*.04} ${h*.8} 0 ${h*.5} ${w*.04} ${h*.14} L ${w*.08} 0 L ${w*.92} 0 L ${w*.96} ${h*.14} C ${w} ${h*.5} ${w*.96} ${h*.8} ${w*.9}  ${h} Z`;
-    // Canine: long crown, slightly bulging sides, clear pointed cusp
-    case 3: return `M ${w*.08} ${h} C ${w*.03} ${h*.75} 0 ${h*.5} ${w*.02} ${h*.28} C ${w*.1} ${h*.06} ${w*.36} 0 ${w*.5} 0 C ${w*.64} 0 ${w*.9} ${h*.06} ${w*.98} ${h*.28} C ${w} ${h*.5} ${w*.97} ${h*.75} ${w*.92} ${h} Z`;
-    // Premolars: rectangular crown with distinct cusp bumps at incisal
-    case 4: return `M 0 ${h} L 0 ${h*.6} C 0 ${h*.34} ${w*.06} ${h*.14} ${w*.2} ${h*.04} C ${w*.28} ${h*.17} ${w*.36} ${h*.26} ${w*.45} ${h*.12} L ${w*.5} 0 L ${w*.55} ${h*.12} C ${w*.64} ${h*.26} ${w*.72} ${h*.17} ${w*.8} ${h*.04} C ${w*.94} ${h*.14} ${w} ${h*.34} ${w} ${h*.6} L ${w} ${h} Z`;
-    case 5: return `M 0 ${h} L 0 ${h*.58} C 0 ${h*.32} ${w*.08} ${h*.14} ${w*.22} ${h*.04} C ${w*.32} ${h*.18} ${w*.43} ${h*.28} ${w*.5} ${h*.08} C ${w*.57} ${h*.28} ${w*.68} ${h*.18} ${w*.78} ${h*.04} C ${w*.92} ${h*.14} ${w} ${h*.32} ${w} ${h*.58} L ${w} ${h} Z`;
-    // Molars: wide crown, two buccal cusps with central groove
-    case 6: return `M 0 ${h} L 0 ${h*.56} C 0 ${h*.3} ${w*.04} ${h*.13} ${w*.18} ${h*.03} C ${w*.28} ${h*.15} ${w*.38} ${h*.23} ${w*.48} ${h*.1} L ${w*.5} 0 L ${w*.52} ${h*.1} C ${w*.62} ${h*.23} ${w*.72} ${h*.15} ${w*.82} ${h*.03} C ${w*.96} ${h*.13} ${w} ${h*.3} ${w} ${h*.56} L ${w} ${h} Z`;
-    case 7: return `M 0 ${h} L 0 ${h*.54} C 0 ${h*.29} ${w*.05} ${h*.13} ${w*.19} ${h*.03} C ${w*.29} ${h*.15} ${w*.39} ${h*.24} ${w*.48} ${h*.11} L ${w*.5} 0 L ${w*.52} ${h*.11} C ${w*.61} ${h*.24} ${w*.71} ${h*.15} ${w*.81} ${h*.03} C ${w*.95} ${h*.13} ${w} ${h*.29} ${w} ${h*.54} L ${w} ${h} Z`;
-    case 8: return `M 0 ${h} L 0 ${h*.56} C 0 ${h*.32} ${w*.06} ${h*.16} ${w*.2}  ${h*.05} C ${w*.29} ${h*.17} ${w*.38} ${h*.26} ${w*.46} ${h*.13} L ${w*.5} ${h*.02} L ${w*.54} ${h*.13} C ${w*.62} ${h*.26} ${w*.71} ${h*.17} ${w*.8} ${h*.05} C ${w*.94} ${h*.16} ${w} ${h*.32} ${w} ${h*.56} L ${w} ${h} Z`;
-    default: return `M 0 ${h} L 0 0 L ${w} 0 L ${w} ${h} Z`;
-  }
-}
-
-// Root SVG paths. y=0 is cervical, y=RH is root apex.
-// Returns array of { d: path, bg?: bool (lighter «palatal» root drawn behind) }
-function getRootPaths(digit: number, quadrant: number, W: number, RH: number): Array<{ d: string; bg?: boolean }> {
-  const w = W, r = RH;
-  const isUpper = quadrant <= 2 || quadrant === 5 || quadrant === 6;
-  // Single straight tapered root from cervical (y=0) to apex (y=r)
-  const tapRoot = (x1: number, x2: number, ax: number) =>
-    `M ${w*x1} 0 C ${w*x1} ${r*.5} ${w*(ax-.08)} ${r*.9} ${w*ax} ${r} C ${w*(ax+.08)} ${r*.9} ${w*x2} ${r*.5} ${w*x2} 0 Z`;
-  switch (digit) {
-    case 1: return [{ d: tapRoot(.18, .82, .5) }];
-    case 2: return [{ d: tapRoot(.2, .8, .49) }];
-    // Canine: long single root, slightly bulging
-    case 3: return [{ d: `M ${w*.16} 0 C ${w*.1} ${r*.45} ${w*.18} ${r*.9} ${w*.45} ${r} C ${w*.72} ${r} ${w*.9} ${r*.9} ${w*.84} ${r*.45} ${w*.84} 0 Z` }];
-    case 4: // 1st premolar
-      if (isUpper) return [ // bifurcated — buccal + palatal roots
-        { d: `M ${w*.1} 0 C ${w*.06} ${r*.5} ${w*.08} ${r*.88} ${w*.25} ${r} C ${w*.36} ${r*.88} ${w*.37} ${r*.5} ${w*.34} 0 Z` },
-        { d: `M ${w*.66} 0 C ${w*.63} ${r*.5} ${w*.64} ${r*.88} ${w*.75} ${r} C ${w*.92} ${r*.88} ${w*.94} ${r*.5} ${w*.9} 0 Z` },
-      ];
-      return [{ d: tapRoot(.15, .85, .5) }];
-    case 5: return [{ d: tapRoot(.18, .82, .5) }];
-    case 6: // 1st molar
-    case 7: // 2nd molar
-      if (isUpper) return [ // 3 roots: mesiobuccal, palatal (bg), distobuccal
-        { d: `M ${w*.04} 0 C 0 ${r*.52} ${w*.04} ${r*.9} ${w*.2} ${r} C ${w*.3} ${r*.9} ${w*.31} ${r*.52} ${w*.29} 0 Z` },
-        { d: `M ${w*.38} 0 C ${w*.34} ${r*.38} ${w*.41} ${r*.7} ${w*.5} ${r*.76} C ${w*.59} ${r*.7} ${w*.66} ${r*.38} ${w*.62} 0 Z`, bg: true },
-        { d: `M ${w*.71} 0 C ${w*.69} ${r*.52} ${w*.7} ${r*.9} ${w*.8} ${r} C ${w*.96} ${r*.9} ${w} ${r*.52} ${w*.96} 0 Z` },
-      ];
-      return [ // 2 roots: mesial + distal, clearly separated
-        { d: `M ${w*.06} 0 C ${w*.02} ${r*.52} ${w*.06} ${r*.9} ${w*.23} ${r} C ${w*.35} ${r*.9} ${w*.36} ${r*.52} ${w*.33} 0 Z` },
-        { d: `M ${w*.67} 0 C ${w*.64} ${r*.52} ${w*.65} ${r*.9} ${w*.77} ${r} C ${w*.94} ${r*.9} ${w*.98} ${r*.52} ${w*.94} 0 Z` },
-      ];
-    case 8: // Wisdom
-      if (isUpper) return [
-        { d: `M ${w*.1} 0 C ${w*.06} ${r*.5} ${w*.1} ${r*.88} ${w*.28} ${r} C ${w*.4} ${r*.88} ${w*.42} ${r*.5} ${w*.38} 0 Z` },
-        { d: `M ${w*.62} 0 C ${w*.58} ${r*.5} ${w*.6} ${r*.88} ${w*.72} ${r} C ${w*.9} ${r*.88} ${w*.94} ${r*.5} ${w*.9} 0 Z` },
-      ];
-      return [
-        { d: `M ${w*.12} 0 C ${w*.08} ${r*.5} ${w*.12} ${r*.88} ${w*.3} ${r} C ${w*.42} ${r*.88} ${w*.44} ${r*.5} ${w*.4} 0 Z` },
-        { d: `M ${w*.6} 0 C ${w*.56} ${r*.5} ${w*.58} ${r*.88} ${w*.7} ${r} C ${w*.88} ${r*.88} ${w*.92} ${r*.5} ${w*.88} 0 Z` },
-      ];
-    default: return [{ d: tapRoot(.2, .8, .5) }];
-  }
-}
-
-const getArchRot = (id: number): number => {
-  const digit = id % 10;
-  const q = Math.floor(id / 10);
-  const angle = ARCH_ROT_MAP[digit] ?? 0;
-  const isLeft = q === 1 || q === 4 || q === 5 || q === 8;
-  return isLeft ? -angle : angle;
+// Condition colour map (kept from current logic for visual feedback)
+const COND_COLORS: Record<string, { fill: string; stroke: string }> = {
+  healthy:  { fill: '#ffffff',  stroke: '#cbd5e1' },
+  caries:   { fill: '#fecaca',  stroke: '#dc2626' },
+  filled:   { fill: '#ddd6fe',  stroke: '#7c3aed' },
+  crown:    { fill: '#fef08a',  stroke: '#b45309' },
+  missing:  { fill: '#f1f5f9',  stroke: '#94a3b8' },
+  endo:     { fill: '#fed7aa',  stroke: '#c2410c' },
+  implant:  { fill: '#bbf7d0',  stroke: '#15803d' },
+  fracture: { fill: '#fbcfe8',  stroke: '#be185d' },
+  sealant:  { fill: '#a5f3fc',  stroke: '#0e7490' },
 };
 
-// ── Surfaces ────────────────────────────────────────────────────────────
-type Surf = 'V' | 'L' | 'M' | 'D' | 'O';
-
-const SURF_NAME: Record<Surf, string> = {
-  V: 'Vestibular',
-  L: 'Lingual / Palatino',
-  M: 'Mesial',
-  D: 'Distal',
-  O: 'Oclusal / Incisal',
-};
-
-// ── Conditions ──────────────────────────────────────────────────────────
-type Cond =
-  | 'healthy' | 'caries' | 'filled' | 'crown' | 'missing'
-  | 'endo' | 'implant' | 'fracture' | 'sealant';
-
-interface CondDef {
-  id: Cond;
-  label: string;
-  fill: string;
-  stroke: string;
-}
-
-const CONDS: CondDef[] = [
-  { id: 'healthy',  label: 'Sano',        fill: '#f8fafc', stroke: '#94a3b8' },
-  { id: 'caries',   label: 'Caries',      fill: '#fecaca', stroke: '#dc2626' },
-  { id: 'filled',   label: 'Obturado',    fill: '#ddd6fe', stroke: '#7c3aed' },
-  { id: 'crown',    label: 'Corona',      fill: '#fef08a', stroke: '#b45309' },
-  { id: 'missing',  label: 'Ausente',     fill: '#f1f5f9', stroke: '#94a3b8' },
-  { id: 'endo',     label: 'Endodoncia',  fill: '#fed7aa', stroke: '#c2410c' },
-  { id: 'implant',  label: 'Implante',    fill: '#bbf7d0', stroke: '#15803d' },
-  { id: 'fracture', label: 'Fractura',    fill: '#fbcfe8', stroke: '#be185d' },
-  { id: 'sealant',  label: 'Sellador',    fill: '#a5f3fc', stroke: '#0e7490' },
-];
-
-const getCond = (id: Cond): CondDef => CONDS.find(c => c.id === id) ?? CONDS[0];
-
-type SurfMap = Partial<Record<Surf, Cond>>;
+type SurfMap = Partial<Record<string, string>>;
 type OdoState = Record<number, SurfMap>;
 
-// ══════════════════════════════════════════════════════════════════════
-// <ToothSVG /> — Anatomical tooth with buccal-view crown + root shapes
-// isUpper=true  → SVG flipped so roots are at TOP, crown at BOTTOM
-// isUpper=false → roots at BOTTOM, crown at TOP (natural buccal view)
-// ══════════════════════════════════════════════════════════════════════
-interface ToothSVGProps {
-  id: number;
-  surfMap: SurfMap;
-  activeSurf: Surf | null;
-  isEditable: boolean;
-  isUpper: boolean;
-  onSurf: (s: Surf) => void;
-}
-
-const ToothSVG: React.FC<ToothSVGProps> = ({
-  id, surfMap, activeSurf, isEditable, isUpper, onSurf,
-}) => {
-  const [hov, setHov] = useState<Surf | null>(null);
-  const { w, ch, rh, totalH } = getToothDims(id);
-  const digit = id % 10;
-  const q     = Math.floor(id / 10);
-
-  // Surface zone insets
-  const inX = Math.max(4, Math.round(w  * 0.22));
-  const inY = Math.max(6, Math.round(ch * 0.24));
-
-  // M/D assignment by quadrant
-  const leftIsDistal = q === 1 || q === 4 || q === 5 || q === 8;
-  const leftSurf:  Surf = leftIsDistal ? 'D' : 'M';
-  const rightSurf: Surf = leftIsDistal ? 'M' : 'D';
-
-  const isMissing = Object.values(surfMap).some(c => c === 'missing');
-
-  const fillOf = (s: Surf) => {
-    if (activeSurf === s) return '#fde68a';
-    if (hov === s && isEditable && !isMissing) return '#e0e7ff';
-    const c = surfMap[s];
-    return c && c !== 'healthy' ? getCond(c).fill : '#ffffff';
-  };
-  const strokeOf = (s: Surf) => {
-    if (activeSurf === s) return '#d97706';
-    const c = surfMap[s];
-    return c && c !== 'healthy' ? getCond(c).stroke : '#c8d4de';
-  };
-  const bind = (s: Surf) =>
-    isEditable && !isMissing
-      ? {
-          onClick: (e: React.MouseEvent) => { e.stopPropagation(); onSurf(s); },
-          onMouseEnter: () => setHov(s),
-          onMouseLeave: () => setHov(null),
-          style: { cursor: 'pointer' } as React.CSSProperties,
-        }
-      : {};
-
-  const clipId      = `tc-${id}`;
-  const crownPathD  = getCrownPath(digit, w, ch);
-  const rootDefs    = getRootPaths(digit, q, w, rh);
-  // For upper teeth, flip the entire content vertically so roots appear at top
-  const flip = isUpper
-    ? `scale(1,-1) translate(0, ${-totalH})`
-    : undefined;
-
-  // Crown 5-surface polygons (0..w × 0..ch, y=0 is occlusal)
-  const topPts   = `0,0 ${w},0 ${w-inX},${inY} ${inX},${inY}`;
-  const botPts   = `${inX},${ch-inY} ${w-inX},${ch-inY} ${w},${ch} 0,${ch}`;
-  const leftPts  = `0,0 ${inX},${inY} ${inX},${ch-inY} 0,${ch}`;
-  const rightPts = `${w},0 ${w},${ch} ${w-inX},${ch-inY} ${w-inX},${inY}`;
-
-  if (isMissing) {
-    return (
-      <svg width={w} height={totalH} style={{ display: 'block', overflow: 'visible', opacity: 0.5 }}>
-        <g transform={flip}>
-          <g transform={`translate(0,${ch})`}>
-            {rootDefs.map((r, i) => (
-              <path key={i} d={r.d} fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="0.8" />
-            ))}
-          </g>
-          <path d={crownPathD} fill="#f1f5f9" stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="3,2" />
-          <line x1={w*.2} y1={ch*.12} x2={w*.8} y2={ch*.88} stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
-          <line x1={w*.8} y1={ch*.12} x2={w*.2} y2={ch*.88} stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
-        </g>
-      </svg>
-    );
-  }
-
-  return (
-    <svg width={w} height={totalH} style={{ display: 'block', overflow: 'visible' }}>
-      <defs>
-        <clipPath id={clipId}>
-          <path d={crownPathD} />
-        </clipPath>
-      </defs>
-
-      <g transform={flip}>
-        {/* ── Roots (behind crown) ───────────────────────────── */}
-        <g transform={`translate(0,${ch})`}>
-          {rootDefs.map((r, i) => (
-            <path key={i} d={r.d}
-              fill={r.bg ? '#e8e0d0' : '#f0ece4'}
-              stroke={r.bg ? '#b0a080' : '#9a8868'}
-              strokeWidth="1"
-            />
-          ))}
-        </g>
-
-        {/* ── Crown surface zones, clipped to tooth outline ─── */}
-        <g clipPath={`url(#${clipId})`}>
-          {/* O – Occlusal/Incisal (top) */}
-          <polygon points={topPts}   fill={fillOf('O')} stroke={strokeOf('O')} strokeWidth="0.6" {...bind('O')} />
-          {/* L – Lingual (bottom) */}
-          <polygon points={botPts}   fill={fillOf('L')} stroke={strokeOf('L')} strokeWidth="0.6" {...bind('L')} />
-          {/* LEFT surface */}
-          <polygon points={leftPts}  fill={fillOf(leftSurf)}  stroke={strokeOf(leftSurf)}  strokeWidth="0.6" {...bind(leftSurf)}  />
-          {/* RIGHT surface */}
-          <polygon points={rightPts} fill={fillOf(rightSurf)} stroke={strokeOf(rightSurf)} strokeWidth="0.6" {...bind(rightSurf)} />
-          {/* V – Vestibular (centre) */}
-          <rect x={inX} y={inY} width={w-2*inX} height={ch-2*inY}
-            fill={fillOf('V')} stroke={strokeOf('V')} strokeWidth="0.6" {...bind('V')} />
-        </g>
-
-        {/* ── Surface labels ─────────────────────────────────── */}
-        <text x={w/2}      y={inY/2+2}      textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">O</text>
-        <text x={w/2}      y={ch-inY/2+2}   textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">L</text>
-        <text x={inX/2}    y={ch/2+2}       textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">{leftSurf}</text>
-        <text x={w-inX/2}  y={ch/2+2}       textAnchor="middle" fontSize="5.5" fontWeight="800" fill="#94a3b8" pointerEvents="none">{rightSurf}</text>
-        <text x={w/2}      y={ch/2+2}       textAnchor="middle" fontSize="6"   fontWeight="900" fill="#64748b" pointerEvents="none">V</text>
-
-        {/* ── Crown outline on top ───────────────────────────── */}
-        <path d={crownPathD} fill="none" stroke="#5a7a94" strokeWidth="1.4" />
-        {/* Cervical line */}
-        <line x1={0} y1={ch} x2={w} y2={ch} stroke="#8aa0b0" strokeWidth="0.7" strokeDasharray="2,1.5" />
-        {/* Internal groove lines for molars/premolars */}
-        {(digit === 6 || digit === 7 || digit === 8) && (
-          <path
-            d={`M ${w*.5} ${ch*.1} C ${w*.49} ${ch*.35} ${w*.5} ${ch*.55} ${w*.5} ${ch*.68}`}
-            fill="none" stroke="#8aaabb" strokeWidth="0.9" opacity="0.6"
-            clipPath={`url(#${clipId})`}
-          />
-        )}
-        {digit === 4 && (
-          <path
-            d={`M ${w*.5} ${ch*.12} C ${w*.49} ${ch*.3} ${w*.5} ${ch*.5} ${w*.5} ${ch*.62}`}
-            fill="none" stroke="#8aaabb" strokeWidth="0.8" opacity="0.5"
-            clipPath={`url(#${clipId})`}
-          />
-        )}
-      </g>
-    </svg>
-  );
+const getDominantCondition = (surf: SurfMap): string => {
+  const vals = Object.values(surf).filter(Boolean) as string[];
+  if (!vals.length) return 'healthy';
+  if (vals.includes('missing')) return 'missing';
+  const non = vals.filter(v => v !== 'healthy');
+  return non.length ? non[0] : 'healthy';
 };
 
-// ══════════════════════════════════════════════════════════════════════
-// <ToothCell /> — FDI number + SVG tooth + selection ring + arch rotation
-// ══════════════════════════════════════════════════════════════════════
-interface ToothCellProps {
-  id: number;
-  isUpper: boolean;
-  isEditable: boolean;
-  surfMap: SurfMap;
-  activeTooth: number | null;
-  activeSurf: Surf | null;
-  onSurf: (toothId: number, s: Surf) => void;
-}
-
-const ToothCell: React.FC<ToothCellProps> = ({
-  id, isUpper, isEditable, surfMap, activeTooth, activeSurf, onSurf,
-}) => {
-  const isActive     = activeTooth === id;
-  const hasCondition = Object.values(surfMap).some(c => c && c !== 'healthy');
-  const { w }        = getToothDims(id);
-  const rot          = getArchRot(id);
-
-  const numStyle: React.CSSProperties = {
-    fontSize: 9, fontWeight: 800, lineHeight: '1',
-    color: hasCondition ? '#5b21b6' : '#94a3b8',
-    minWidth: w, textAlign: 'center',
-    userSelect: 'none', display: 'block',
-  };
-
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      gap: 2, flexShrink: 0,
-      transform: `rotate(${rot}deg)`,
-      transformOrigin: isUpper ? 'center 200%' : 'center -100%',
-    }}>
-      {isUpper && <span style={numStyle}>{id}</span>}
-      <div style={{
-        borderRadius: 5,
-        outline: isActive ? '2.5px solid #f59e0b' : '2px solid transparent',
-        outlineOffset: 2,
-        boxShadow: isActive ? '0 0 0 4px rgba(245,158,11,0.15)' : 'none',
-        transition: 'all 0.12s',
-      }}>
-        <ToothSVG
-          id={id} surfMap={surfMap}
-          activeSurf={isActive ? activeSurf : null}
-          isEditable={isEditable} isUpper={isUpper}
-          onSurf={(s) => onSurf(id, s)}
-        />
-      </div>
-      {!isUpper && <span style={numStyle}>{id}</span>}
-    </div>
-  );
+// ======================================================================
+// FDI QUADRANTS
+// ======================================================================
+const ADULT_Q = {
+  Q1: [18, 17, 16, 15, 14, 13, 12, 11],
+  Q2: [21, 22, 23, 24, 25, 26, 27, 28],
+  Q3: [31, 32, 33, 34, 35, 36, 37, 38],
+  Q4: [48, 47, 46, 45, 44, 43, 42, 41],
+};
+const CHILD_Q = {
+  Q5: [55, 54, 53, 52, 51],
+  Q6: [61, 62, 63, 64, 65],
+  Q7: [71, 72, 73, 74, 75],
+  Q8: [85, 84, 83, 82, 81],
 };
 
-// ══════════════════════════════════════════════════════════════════════
-// <ConditionPicker /> — condition selector panel
-// Rendered below the board, NOT floating, so it never clips
-// ══════════════════════════════════════════════════════════════════════
-interface PickerProps {
-  toothId: number;
-  surf: Surf;
-  current: Cond;
-  onSelect: (c: Cond) => void;
-  onClose: () => void;
-}
+// ======================================================================
+// <Tooth /> — simple SVG shield shape (ffd0e4c aesthetic)
+// ======================================================================
+const Tooth: React.FC<{
+  id: number;
+  treatments: PatientTreatment[];
+  condition: string;
+  isSelected: boolean;
+  isChild?: boolean;
+  isEditable: boolean;
+  onClick: (e: React.MouseEvent) => void;
+}> = ({ id, treatments, condition, isSelected, isChild, isEditable, onClick }) => {
+  const hasTreatment = treatments.length > 0;
+  const hasCondition = condition !== 'healthy';
+  const cond = COND_COLORS[condition] ?? COND_COLORS.healthy;
+  const svgW = isChild ? 36 : 44;
+  const svgH = isChild ? 50 : 60;
 
-const ConditionPicker: React.FC<PickerProps> = ({
-  toothId, surf, current, onSelect, onClose,
-}) => (
-  <div
-    style={{
-      background: 'white',
-      border: '1px solid #e2e8f0',
-      borderRadius: 12,
-      padding: '12px 14px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-      marginTop: 14,
-    }}
-  >
-    {/* Header */}
+  return (
     <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10,
-      }}
+      className={`relative flex flex-col items-center group ${isEditable ? 'cursor-pointer' : 'cursor-default'} ${isChild ? 'w-[36px] md:w-[44px]' : 'w-[40px] md:w-[52px]'}`}
+      onClick={isEditable ? onClick : undefined}
     >
-      <span style={{ fontSize: 11, fontWeight: 800, color: '#334155' }}>
-        Diente{' '}
-        <strong style={{ color: '#7c3aed' }}>{toothId}</strong>
-        {' · '}
-        {SURF_NAME[surf]}
-      </span>
-      <button
-        onClick={onClose}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          color: '#94a3b8', padding: '2px 4px', borderRadius: 4,
-          display: 'flex', alignItems: 'center',
-        }}
-      >
-        <X size={14} />
-      </button>
-    </div>
-
-    {/* Condition grid */}
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: 6,
-      }}
-    >
-      {CONDS.map(c => (
-        <button
-          key={c.id}
-          onClick={() => { onSelect(c.id); onClose(); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '7px 8px',
-            borderRadius: 8,
-            fontSize: 11,
-            fontWeight: 700,
-            border: `2px solid ${current === c.id ? c.stroke : '#e2e8f0'}`,
-            background: current === c.id ? c.fill : '#fafafa',
-            color: '#374151',
-            cursor: 'pointer',
-            transition: 'all 0.1s',
-          }}
+      <div className={`relative transition-all duration-200 ${isSelected ? 'scale-110 -translate-y-1' : isEditable ? 'hover:scale-105' : ''}`}>
+        <svg
+          width={svgW}
+          height={svgH}
+          viewBox="0 0 30 50"
+          className="overflow-visible drop-shadow-sm"
         >
-          <span
-            style={{
-              width: 9,
-              height: 9,
-              borderRadius: 2,
-              flexShrink: 0,
-              background: c.fill,
-              border: `1.5px solid ${c.stroke}`,
-              display: 'inline-block',
-            }}
+          <defs>
+            <linearGradient id={`tg-${id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={isSelected ? '#ede9fe' : hasCondition ? cond.fill : '#ffffff'} />
+              <stop offset="100%" stopColor={isSelected ? '#ddd6fe' : hasCondition ? cond.fill : '#f1f5f9'} />
+            </linearGradient>
+          </defs>
+          <path
+            d={getToothShape(id)}
+            fill={`url(#tg-${id})`}
+            stroke={isSelected ? '#8b5cf6' : hasCondition ? cond.stroke : hasTreatment ? '#f59e0b' : '#cbd5e1'}
+            strokeWidth={isSelected ? 2.5 : 1.5}
+            className="transition-all duration-200"
           />
-          {c.label}
-        </button>
-      ))}
+        </svg>
+        {hasTreatment && (
+          <div className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border-2 border-white shadow-sm animate-pulse" />
+        )}
+      </div>
+      <span className={`mt-0.5 text-[9px] font-black transition-colors ${isSelected ? 'text-violet-700' : 'text-slate-400'}`}>
+        {id}
+      </span>
     </div>
-  </div>
-);
+  );
+};
 
-// ══════════════════════════════════════════════════════════════════════
+// ======================================================================
 // MAIN COMPONENT
-// ══════════════════════════════════════════════════════════════════════
-type Mode = 'adult' | 'child';
-
+// ======================================================================
 export const Odontogram: React.FC<OdontogramProps> = ({
   patientId, isEditable, onTreatmentsChange,
 }) => {
   const { api } = useAppContext();
 
-  const [mode, setMode]             = useState<Mode>('adult');
-  const [odoState, setOdoState]     = useState<OdoState>({});
-  const [treatments, setTreatments] = useState<PatientTreatment[]>([]);
-  const [services, setServices]     = useState<Service[]>([]);
-  const [searchTerm, setSearch]       = useState('');
-  const [isSaving, setSaving]         = useState(false);
-  const [isSavingBudget, setSavingBudget] = useState(false);
-
-  // Which surface on which tooth is currently selected for editing
-  const [activeTooth, setActiveTooth] = useState<number | null>(null);
-  const [activeSurf,  setActiveSurf]  = useState<Surf | null>(null);
+  const [selectedTeeth, setSelectedTeeth]         = useState<number[]>([]);
+  const [odoState, setOdoState]                   = useState<OdoState>({});
+  const [treatments, setTreatments]               = useState<PatientTreatment[]>([]);
+  const [services, setServices]                   = useState<Service[]>([]);
+  const [searchTerm, setSearchTerm]               = useState('');
+  const [selectedForBudget, setSelectedForBudget] = useState<string[]>([]);
+  const [isSaving, setIsSaving]                   = useState(false);
+  const [isSavingBudget, setIsSavingBudget]       = useState(false);
 
   // Load services
   useEffect(() => {
@@ -511,16 +158,17 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       .catch((e: unknown) => console.error('services:', e));
   }, [api]);
 
-  // Load persisted odontogram state (tooth conditions) from DB
+  // Load persisted tooth conditions (current logic kept)
   useEffect(() => {
     if (!patientId || !api?.odontogram?.get) return;
     api.odontogram.get(patientId)
       .then((data: any) => {
         if (data?.teethState) {
           try {
-            const parsed: OdoState = typeof data.teethState === 'string'
-              ? JSON.parse(data.teethState)
-              : data.teethState;
+            const parsed: OdoState =
+              typeof data.teethState === 'string'
+                ? JSON.parse(data.teethState)
+                : data.teethState;
             setOdoState(parsed || {});
           } catch (e) {
             console.error('Error parsing odontogram state:', e);
@@ -530,7 +178,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       .catch((e: unknown) => console.error('odontogram load:', e));
   }, [patientId, api]);
 
-  // Load treatments & seed odontogram state (treatments complement saved conditions)
+  // Load treatments
   useEffect(() => {
     if (!patientId || !api?.treatments?.getByPatient) return;
     api.treatments.getByPatient(patientId)
@@ -538,111 +186,60 @@ export const Odontogram: React.FC<OdontogramProps> = ({
         const list = data || [];
         setTreatments(list);
         onTreatmentsChange?.(list);
-
-        // Seed visual state from treatments for teeth that have no manually saved condition.
-        // Saved conditions (loaded via api.odontogram.get) always take priority.
-        const init: OdoState = {};
-        list.forEach(t => {
-          if (!t.toothId) return;
-          const s = (t as any).surface as Surf | undefined;
-          const c: Cond = t.status === 'COMPLETADO' ? 'filled' : 'caries';
-          if (!init[t.toothId]) init[t.toothId] = {};
-          if (s) {
-            init[t.toothId][s] = c;
-          } else {
-            (['V', 'L', 'M', 'D', 'O'] as Surf[]).forEach(x => {
-              init[t.toothId!][x] = c;
-            });
-          }
-        });
-        // Merge: persisted state (prev) wins over treatment-derived state (init)
-        setOdoState(prev => {
-          const merged: OdoState = { ...init };
-          (Object.keys(prev) as unknown as number[]).forEach(toothKey => {
-            const k = Number(toothKey);
-            merged[k] = { ...(init[k] ?? {}), ...prev[k] };
-          });
-          return merged;
-        });
       })
       .catch((e: unknown) => console.error('treatments:', e));
   }, [patientId, api]);
 
-  // ── Click a surface → toggle selection ──────────────────────────────
-  const handleSurf = (toothId: number, s: Surf) => {
+  const handleToothClick = (toothId: number, e: React.MouseEvent) => {
     if (!isEditable) return;
-    if (activeTooth === toothId && activeSurf === s) {
-      setActiveTooth(null);
-      setActiveSurf(null);
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedTeeth(prev =>
+        prev.includes(toothId) ? prev.filter(id => id !== toothId) : [...prev, toothId],
+      );
     } else {
-      setActiveTooth(toothId);
-      setActiveSurf(s);
+      setSelectedTeeth(prev =>
+        prev.length === 1 && prev[0] === toothId ? [] : [toothId],
+      );
     }
   };
 
-  // ── Select a condition from the picker ──────────────────────────────
-  const handleCondSelect = async (cond: Cond) => {
-    if (!activeTooth || !activeSurf) return;
-
-    // Compute new state synchronously before any async calls
-    let newOdoState: OdoState;
-    if (cond === 'missing') {
-      newOdoState = {
-        ...odoState,
-        [activeTooth]: { V: 'missing', L: 'missing', M: 'missing', D: 'missing', O: 'missing' },
-      };
-    } else {
-      const tooth = { ...(odoState[activeTooth] ?? {}) };
-      newOdoState = { ...odoState, [activeTooth]: { ...tooth, [activeSurf]: cond } };
-    }
-
-    setOdoState(newOdoState);
-    setActiveTooth(null);
-    setActiveSurf(null);
-
-    // Persist tooth conditions to DB
-    try {
-      if (api?.odontogram?.save) {
-        await api.odontogram.save(patientId, newOdoState);
-      }
-    } catch (e) {
-      console.error('Error saving odontogram state:', e);
-    }
-  };
-
-  // ── Treatment helpers ────────────────────────────────────────────────
   const handleAddTreatment = (service: Service) => {
-    if (!activeTooth) {
-      alert('Selecciona primero un diente en el odontograma');
-      return;
-    }
-    const newT: PatientTreatment = {
-      id: `temp-${Date.now()}-${activeTooth}`,
+    if (!selectedTeeth.length) { alert('Selecciona al menos un diente'); return; }
+    const newTs: PatientTreatment[] = selectedTeeth.map(toothId => ({
+      id: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       patientId,
       serviceId: service.id,
       serviceName: service.name,
-      toothId: activeTooth,
+      toothId,
       price: service.final_price,
       status: 'PENDIENTE',
       createdAt: new Date().toISOString(),
-    };
-    const updated = [...treatments, newT];
+    }));
+    const updated = [...treatments, ...newTs];
     setTreatments(updated);
     onTreatmentsChange?.(updated);
-    setSearch('');
+    setSelectedTeeth([]);
+    setSearchTerm('');
   };
 
-  const handleDelete = (id: string) => {
-    const updated = treatments.filter(t => t.id !== id);
-    setTreatments(updated);
-    onTreatmentsChange?.(updated);
+  const handleDeleteTreatment = async (treatmentId: string) => {
+    if (treatmentId.startsWith('temp-')) {
+      const updated = treatments.filter(t => t.id !== treatmentId);
+      setTreatments(updated); onTreatmentsChange?.(updated); return;
+    }
+    try {
+      await api.treatments.delete(treatmentId);
+      const updated = treatments.filter(t => t.id !== treatmentId);
+      setTreatments(updated); onTreatmentsChange?.(updated);
+    } catch (e) { console.error(e); }
   };
 
-  const handleSave = async () => {
+  // Save treatments — current logic preserved
+  const handleSaveTreatments = async () => {
     const pending = treatments.filter(t => t.id.startsWith('temp-'));
     if (!pending.length) return;
     try {
-      setSaving(true);
+      setIsSaving(true);
       await api.treatments.createBatch(patientId, pending);
       const data = await api.treatments.getByPatient(patientId);
       setTreatments(data || []);
@@ -650,14 +247,15 @@ export const Odontogram: React.FC<OdontogramProps> = ({
     } catch (e: unknown) {
       console.error(e);
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
+  // Save budget — current logic preserved
   const handleSaveBudget = async () => {
     if (!treatments.length) return;
     try {
-      setSavingBudget(true);
+      setIsSavingBudget(true);
       const items = treatments.map(t => ({
         name: t.serviceName || 'Tratamiento',
         price: t.price ?? 0,
@@ -665,627 +263,238 @@ export const Odontogram: React.FC<OdontogramProps> = ({
         quantity: 1,
       }));
       await api.budget.create(patientId, items, 'Presupuesto Odontograma');
-      alert('✅ Presupuesto guardado correctamente');
+      alert('\u2705 Presupuesto guardado correctamente');
     } catch (e: unknown) {
       console.error('Error saving budget:', e);
       alert('Error al guardar el presupuesto');
     } finally {
-      setSavingBudget(false);
+      setIsSavingBudget(false);
     }
   };
 
-  const filtered   = services.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const getToothTreatments = (id: number) => treatments.filter(t => t.toothId === id);
+  const filteredServices    = services.filter(s =>
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
   const tempCount  = treatments.filter(t => t.id.startsWith('temp-')).length;
   const totalPrice = treatments.reduce((sum, t) => sum + (t.price ?? 0), 0);
 
-  const arcs = mode === 'adult' ? ADULT : CHILD;
-
-  // ── Render helpers ────────────────────────────────────────────────────
-  const renderTooth = (id: number, isUpper: boolean) => (
-    <ToothCell
+  const toothEl = (id: number, isChild = false) => (
+    <Tooth
       key={id}
       id={id}
-      isUpper={isUpper}
+      treatments={getToothTreatments(id)}
+      condition={getDominantCondition(odoState[id] ?? {})}
+      isSelected={selectedTeeth.includes(id)}
+      isChild={isChild}
       isEditable={isEditable}
-      surfMap={odoState[id] ?? {}}
-      activeTooth={activeTooth}
-      activeSurf={activeSurf}
-      onSurf={handleSurf}
+      onClick={e => handleToothClick(id, e)}
     />
   );
 
-  // One complete arcade row (left quadrant + midline divider + right quadrant)
-  const renderArcade = (
-    left: number[],
-    right: number[],
-    isUpper: boolean,
-  ) => (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'nowrap',
-        gap: 2,
-        overflow: 'visible',
-        padding: '4px 0',
-      }}
-    >
-      {left.map(id => renderTooth(id, isUpper))}
-
-      {/* Vertical midline divider */}
-      <div
-        style={{
-          width: 2,
-          height: 64,
-          background: 'linear-gradient(to bottom, #e2e8f0, #94a3b8, #e2e8f0)',
-          margin: '0 6px',
-          flexShrink: 0,
-          borderRadius: 2,
-          opacity: 0.8,
-        }}
-      />
-
-      {right.map(id => renderTooth(id, isUpper))}
-    </div>
-  );
-
-  // ── Labels ──────────────────────────────────────────────────────────
-  const quarterLabel = (a: string, b: string) => (
-    <div
-      style={{
-        display: 'flex',
-        gap: 6,
-        justifyContent: 'center',
-        width: '100%',
-      }}
-    >
-      {[a, b].map(txt => (
-        <span
-          key={txt}
-          style={{
-            fontSize: 9,
-            fontWeight: 800,
-            color: '#94a3b8',
-            letterSpacing: 2,
-            textTransform: 'uppercase' as const,
-          }}
-        >
-          {txt}
-        </span>
-      ))}
-    </div>
-  );
-
-  const jawLabel = (text: string) => (
-    <p
-      style={{
-        fontSize: 9,
-        fontWeight: 800,
-        color: '#94a3b8',
-        letterSpacing: 3,
-        textTransform: 'uppercase',
-        margin: 0,
-      }}
-    >
-      {text}
-    </p>
-  );
-
-  // ════════════════════════════════════════════════════════════════════
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="w-full space-y-6">
 
-      {/* ── HEADER ────────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-end',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
-        <div>
-          <h3 style={{ fontSize: 18, fontWeight: 900, color: '#0f172a', margin: 0 }}>
-            Odontograma FDI
-          </h3>
-          <p style={{ fontSize: 11, color: '#94a3b8', margin: '4px 0 0' }}>
-            {mode === 'adult'
-              ? 'Dentición permanente · 32 piezas (cuadrantes 1–4)'
-              : 'Dentición temporal · 20 piezas (cuadrantes 5–8)'}
-          </p>
+      {/* ODONTOGRAM BOARD */}
+      <div className="bg-gradient-to-br from-slate-50 via-white to-blue-50/30 rounded-[2rem] p-8 border border-slate-200/80 shadow-xl relative overflow-hidden">
+
+        <div className="absolute inset-0 opacity-[0.015] pointer-events-none">
+          <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)', backgroundSize: '40px 40px' }} />
         </div>
 
-        {/* ── ADULT / CHILD TOGGLE ──────────────────────────────── */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 4,
-            padding: 4,
-            background: '#f1f5f9',
-            borderRadius: 10,
-            border: '1px solid #e2e8f0',
-          }}
-        >
-          {(['adult', 'child'] as Mode[]).map(m => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m);
-                setActiveTooth(null);
-                setActiveSurf(null);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 16px',
-                borderRadius: 7,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: 'pointer',
-                border: mode === m ? '1px solid #e2e8f0' : '1px solid transparent',
-                background: mode === m ? 'white' : 'transparent',
-                color: mode === m ? (m === 'adult' ? '#5b21b6' : '#be185d') : '#64748b',
-                boxShadow: mode === m ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                transition: 'all 0.15s',
-              }}
-            >
-              {m === 'adult' ? <User size={14} /> : <Baby size={14} />}
-              {m === 'adult' ? 'Adulto' : 'Niño'}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── ODONTOGRAM BOARD ──────────────────────────────────────── */}
-      <div
-        style={{
-          background: 'white',
-          border: '1px solid #e2e8f0',
-          borderRadius: 16,
-          boxShadow: '0 2px 16px rgba(0,0,0,0.06)',
-          padding: '20px 16px',
-        }}
-      >
-        {/* Scrollable container — teeth NEVER wrap */}
-        <div style={{ overflowX: 'auto' }}>
-          <div
-            style={{
-              minWidth: 'max-content',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 0,
-            }}
-          >
-            {/* Top quadrant labels */}
-            {quarterLabel(
-              `${mode === 'adult' ? 'Q1' : 'Q5'} (Derecho paciente)`,
-              `(Izquierdo paciente) ${mode === 'adult' ? 'Q2' : 'Q6'}`,
-            )}
-
-            {/* SUPERIOR label */}
-            <div style={{ marginTop: 6, marginBottom: 8 }}>
-              {jawLabel('▲ MAXILAR SUPERIOR')}
-            </div>
-
-            {/* UPPER ARCADE */}
-            {renderArcade(arcs.upperLeft, arcs.upperRight, true)}
-
-            {/* Horizontal midline */}
-            <div
-              style={{
-                position: 'relative',
-                width: '100%',
-                margin: '12px 0',
-              }}
-            >
-              <div style={{ borderTop: '1.5px dashed #e2e8f0' }} />
-              <span
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: 0,
-                  transform: 'translate(-50%, -50%)',
-                  background: 'white',
-                  padding: '0 10px',
-                  fontSize: 8,
-                  fontWeight: 800,
-                  color: '#cbd5e1',
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                LÍNEA MEDIA
-              </span>
-            </div>
-
-            {/* LOWER ARCADE */}
-            {renderArcade(arcs.lowerLeft, arcs.lowerRight, false)}
-
-            {/* INFERIOR label */}
-            <div style={{ marginTop: 8, marginBottom: 6 }}>
-              {jawLabel('▼ MAXILAR INFERIOR')}
-            </div>
-
-            {/* Bottom quadrant labels */}
-            {quarterLabel(
-              `${mode === 'adult' ? 'Q4' : 'Q8'} (Derecho paciente)`,
-              `(Izquierdo paciente) ${mode === 'adult' ? 'Q3' : 'Q7'}`,
-            )}
+        {/* Header */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 mb-8">
+          <div>
+            <h3 className="text-xl font-black text-slate-900">Odontograma</h3>
+            <p className="text-xs text-slate-400 font-semibold mt-1">Dentici\u00f3n permanente + temporal \u00b7 FDI</p>
           </div>
-        </div>
-
-        {/* ── CONDITION PICKER — inline below the board ─────────── */}
-        {activeTooth && activeSurf && isEditable && (
-          <ConditionPicker
-            toothId={activeTooth}
-            surf={activeSurf}
-            current={odoState[activeTooth]?.[activeSurf] ?? 'healthy'}
-            onSelect={handleCondSelect}
-            onClose={() => {
-              setActiveTooth(null);
-              setActiveSurf(null);
-            }}
-          />
-        )}
-
-        {/* ── LEGEND ────────────────────────────────────────────── */}
-        <div
-          style={{
-            marginTop: 16,
-            paddingTop: 12,
-            borderTop: '1px solid #f1f5f9',
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 10,
-            justifyContent: 'center',
-          }}
-        >
-          {CONDS.map(c => (
-            <span
-              key={c.id}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                fontSize: 10,
-                fontWeight: 600,
-                color: '#475569',
-              }}
+          {isEditable && tempCount > 0 && (
+            <button
+              onClick={handleSaveTreatments}
+              disabled={isSaving}
+              className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-6 py-3 rounded-xl text-sm font-black uppercase flex items-center gap-2 shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-all disabled:opacity-50"
             >
-              <span
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 2,
-                  flexShrink: 0,
-                  background: c.fill,
-                  border: `1.5px solid ${c.stroke}`,
-                  display: 'inline-block',
-                }}
-              />
-              {c.label}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* ── HELP TIP ──────────────────────────────────────────────── */}
-      {isEditable && !activeTooth && (
-        <div
-          style={{
-            background: '#f5f3ff',
-            border: '1px solid #ddd6fe',
-            borderRadius: 10,
-            padding: '10px 14px',
-          }}
-        >
-          <p style={{ fontSize: 12, color: '#5b21b6', margin: 0, fontWeight: 600 }}>
-            💡 Haz clic en cualquier cara del diente para asignar su estado.
-            Caras disponibles:{' '}
-            <strong>V</strong> Vestibular ·{' '}
-            <strong>L</strong> Lingual ·{' '}
-            <strong>M</strong> Mesial ·{' '}
-            <strong>D</strong> Distal ·{' '}
-            <strong>O</strong> Oclusal.
-          </p>
-        </div>
-      )}
-
-      {/* ── TREATMENT PANEL ───────────────────────────────────────── */}
-      {isEditable && (
-        <div
-          style={{
-            background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: 16,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
-            padding: 20,
-          }}
-        >
-          <h4
-            style={{
-              fontSize: 14,
-              fontWeight: 900,
-              color: '#0f172a',
-              margin: '0 0 4px',
-            }}
-          >
-            Añadir Tratamiento
-          </h4>
-          <p
-            style={{
-              fontSize: 11,
-              color: activeTooth ? '#5b21b6' : '#94a3b8',
-              fontWeight: 600,
-              margin: '0 0 12px',
-            }}
-          >
-            {activeTooth
-              ? `Diente seleccionado: ${activeTooth}`
-              : 'Selecciona un diente en el odontograma y busca el tratamiento'}
-          </p>
-
-          <input
-            type="text"
-            placeholder="Buscar tratamiento (limpieza, corona, endodoncia…)"
-            value={searchTerm}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              boxSizing: 'border-box',
-              border: '1.5px solid #e2e8f0',
-              borderRadius: 10,
-              fontSize: 13,
-              fontWeight: 600,
-              outline: 'none',
-              background: '#f8fafc',
-            }}
-          />
-
-          {searchTerm.length > 0 && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
-                gap: 8,
-                marginTop: 10,
-                maxHeight: 200,
-                overflowY: 'auto',
-              }}
-            >
-              {filtered.length === 0 ? (
-                <p
-                  style={{
-                    color: '#94a3b8',
-                    fontSize: 13,
-                    gridColumn: '1/-1',
-                    textAlign: 'center',
-                    padding: '16px 0',
-                  }}
-                >
-                  Sin resultados
-                </p>
-              ) : (
-                filtered.map(s => (
-                  <button
-                    key={s.id}
-                    onClick={() => handleAddTreatment(s)}
-                    disabled={!activeTooth}
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border: '1.5px solid #e2e8f0',
-                      background: 'white',
-                      textAlign: 'left',
-                      cursor: activeTooth ? 'pointer' : 'not-allowed',
-                      opacity: activeTooth ? 1 : 0.4,
-                      transition: 'all 0.1s',
-                    }}
-                  >
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#0f172a' }}>
-                      {s.name}
-                    </p>
-                    <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 700, color: '#7c3aed' }}>
-                      {s.final_price}€
-                    </p>
-                  </button>
-                ))
-              )}
-            </div>
+              <Save size={18} />
+              {isSaving ? 'Guardando\u2026' : `Guardar (${tempCount})`}
+            </button>
           )}
         </div>
-      )}
 
-      {/* ── TREATMENTS LIST ───────────────────────────────────────── */}
-      {treatments.length > 0 && (
-        <div
-          style={{
-            background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: 16,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.05)',
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 8,
-              marginBottom: 12,
-            }}
-          >
-            <h4
-              style={{
-                fontSize: 14,
-                fontWeight: 900,
-                color: '#0f172a',
-                margin: 0,
-              }}
-            >
-              Tratamientos ({treatments.length})
-            </h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 17, fontWeight: 900, color: '#0f172a' }}>
-                {totalPrice.toFixed(2)} €
-              </span>
-              {isEditable && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {tempCount > 0 && (
-                    <button
-                      onClick={handleSave}
-                      disabled={isSaving}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '7px 14px', borderRadius: 8, border: 'none',
-                        background: '#16a34a', color: 'white',
-                        fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                        opacity: isSaving ? 0.6 : 1,
-                      }}
-                    >
-                      <Save size={13} />
-                      {isSaving ? 'Guardando…' : `Guardar Tratamiento (${tempCount})`}
-                    </button>
-                  )}
-                  <button
-                    onClick={handleSaveBudget}
-                    disabled={isSavingBudget || !treatments.length}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      padding: '7px 14px', borderRadius: 8, border: 'none',
-                      background: '#7c3aed', color: 'white',
-                      fontSize: 12, fontWeight: 700, cursor: !treatments.length ? 'not-allowed' : 'pointer',
-                      opacity: (isSavingBudget || !treatments.length) ? 0.5 : 1,
-                    }}
-                  >
-                    <DollarSign size={13} />
-                    {isSavingBudget ? 'Guardando…' : 'Guardar Presupuesto'}
-                  </button>
-                </div>
-              )}
+        {/* Teeth grid */}
+        <div className="relative z-10 bg-white/70 backdrop-blur-sm rounded-3xl p-6 border border-slate-100 shadow-inner overflow-x-auto">
+          <div className="flex flex-col items-center gap-2 min-w-max mx-auto">
+
+            {/* Row 1 - Adult upper: Q1 + Q2 */}
+            <div className="flex items-end justify-center gap-6">
+              <div className="flex items-end gap-0.5">{ADULT_Q.Q1.map(id => toothEl(id))}</div>
+              <div className="flex items-end gap-0.5">{ADULT_Q.Q2.map(id => toothEl(id))}</div>
             </div>
+
+            {/* Row 2 - Child upper: Q5 + Q6 */}
+            <div className="flex items-end justify-center gap-6 px-16">
+              <div className="flex items-end gap-0.5">{CHILD_Q.Q5.map(id => toothEl(id, true))}</div>
+              <div className="flex items-end gap-0.5">{CHILD_Q.Q6.map(id => toothEl(id, true))}</div>
+            </div>
+
+            {/* Midline */}
+            <div className="w-full max-w-xl h-px bg-slate-200 my-1" />
+
+            {/* Row 3 - Child lower: Q8 + Q7 */}
+            <div className="flex items-start justify-center gap-6 px-16">
+              <div className="flex items-start gap-0.5">{CHILD_Q.Q8.map(id => toothEl(id, true))}</div>
+              <div className="flex items-start gap-0.5">{CHILD_Q.Q7.map(id => toothEl(id, true))}</div>
+            </div>
+
+            {/* Row 4 - Adult lower: Q4 + Q3 */}
+            <div className="flex items-start justify-center gap-6">
+              <div className="flex items-start gap-0.5">{ADULT_Q.Q4.map(id => toothEl(id))}</div>
+              <div className="flex items-start gap-0.5">{ADULT_Q.Q3.map(id => toothEl(id))}</div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Selected teeth banner */}
+        {selectedTeeth.length > 0 && (
+          <div className="relative z-10 mt-6 mx-auto max-w-2xl p-4 bg-gradient-to-r from-violet-50 to-purple-50 rounded-2xl border-2 border-violet-200 shadow-lg">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-black text-violet-900">
+                Seleccionados:&nbsp;<span className="text-violet-600">{selectedTeeth.join(', ')}</span>
+              </p>
+              <button
+                onClick={() => setSelectedTeeth([])}
+                className="text-xs font-bold text-violet-600 hover:text-violet-800 flex items-center gap-1"
+              >
+                <X size={14} /> Limpiar
+              </button>
+            </div>
+            <p className="text-xs text-violet-700">\ud83d\udc47 Busca un tratamiento abajo para asignarlo</p>
+          </div>
+        )}
+
+        {/* Search treatment */}
+        {isEditable && (
+          <div className="relative z-10 mt-8 pt-6 border-t border-slate-200/50">
+            <label className="text-xs font-black uppercase text-slate-400 mb-3 block">\ud83d\udd0d Buscar Tratamiento</label>
+            <div className="relative mb-4">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Ej: Limpieza, Extracci\u00f3n, Corona\u2026"
+                className="w-full bg-white border border-slate-200 rounded-xl pl-12 pr-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 transition-all"
+              />
+            </div>
+            {searchTerm.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                {filteredServices.length === 0 ? (
+                  <div className="col-span-full text-center p-6 text-slate-400 text-sm">Sin resultados</div>
+                ) : (
+                  filteredServices.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => handleAddTreatment(s)}
+                      disabled={selectedTeeth.length === 0}
+                      className="group p-4 bg-white border-2 border-slate-200 rounded-xl hover:border-violet-400 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                    >
+                      <p className="text-sm font-black text-slate-900 mb-1">{s.name}</p>
+                      <p className="text-xs font-bold text-violet-600">{s.final_price}\u20ac</p>
+                      <div className="mt-2 flex items-center gap-1 text-xs text-slate-500 group-hover:text-violet-600">
+                        <Plus size={12} /><span>A\u00f1adir</span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* TREATMENTS TABLE */}
+      {treatments.length > 0 && (
+        <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-lg">
+          <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+            <h4 className="text-lg font-black text-slate-900">\ud83d\udccb Tratamientos ({treatments.length})</h4>
+            {isEditable && (
+              <div className="flex gap-3 flex-wrap">
+                {tempCount > 0 && (
+                  <button
+                    onClick={handleSaveTreatments}
+                    disabled={isSaving}
+                    className="bg-gradient-to-r from-green-600 to-green-700 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-lg transition-all disabled:opacity-50"
+                  >
+                    <Save size={14} />
+                    {isSaving ? 'Guardando\u2026' : `Guardar (${tempCount})`}
+                  </button>
+                )}
+                <button
+                  onClick={handleSaveBudget}
+                  disabled={isSavingBudget}
+                  className="bg-gradient-to-r from-violet-600 to-purple-600 text-white px-5 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 hover:shadow-xl transition-all disabled:opacity-50"
+                >
+                  <FileText size={14} />
+                  {isSavingBudget ? 'Guardando\u2026' : 'Guardar Presupuesto'}
+                </button>
+              </div>
+            )}
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-              maxHeight: 280,
-              overflowY: 'auto',
-            }}
-          >
+          <div className="grid grid-cols-12 gap-4 pb-3 border-b border-slate-200 text-[10px] font-black uppercase text-slate-400">
+            <div className="col-span-1">
+              <input type="checkbox"
+                checked={selectedForBudget.length === treatments.length && treatments.length > 0}
+                onChange={e => e.target.checked ? setSelectedForBudget(treatments.map(t => t.id)) : setSelectedForBudget([])}
+                className="w-4 h-4 rounded cursor-pointer"
+              />
+            </div>
+            <div className="col-span-1">Diente</div>
+            <div className="col-span-5">Tratamiento</div>
+            <div className="col-span-2">Precio</div>
+            <div className="col-span-2">Estado</div>
+            <div className="col-span-1 text-right">\u2013</div>
+          </div>
+
+          <div className="space-y-2 mt-4">
             {treatments.map(t => (
-              <div
-                key={t.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '9px 12px',
-                  borderRadius: 10,
-                  background: '#f8fafc',
-                  border: '1px solid #f1f5f9',
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    minWidth: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 900,
-                      color: '#7c3aed',
-                      minWidth: 24,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {t.toothId ?? '–'}
-                  </span>
-                  <span
-                    style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}
-                  >
-                    {t.serviceName}
-                  </span>
+              <div key={t.id} className="grid grid-cols-12 gap-4 items-center p-4 bg-slate-50 rounded-xl text-sm border border-slate-100 hover:border-violet-200 transition-colors">
+                <div className="col-span-1">
+                  <input type="checkbox"
+                    checked={selectedForBudget.includes(t.id)}
+                    onChange={e => e.target.checked
+                      ? setSelectedForBudget(prev => [...prev, t.id])
+                      : setSelectedForBudget(prev => prev.filter(id => id !== t.id))}
+                    className="w-4 h-4 rounded cursor-pointer"
+                  />
+                </div>
+                <div className="col-span-1 font-black text-violet-600 text-center text-lg">{t.toothId ?? '\u2013'}</div>
+                <div className="col-span-5 font-bold text-slate-900">
+                  {t.serviceName}
                   {t.id.startsWith('temp-') && (
-                    <span
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 700,
-                        padding: '2px 7px',
-                        borderRadius: 20,
-                        background: '#fef9c3',
-                        color: '#92400e',
-                      }}
-                    >
-                      Sin guardar
-                    </span>
+                    <span className="ml-2 text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Sin guardar</span>
                   )}
-                  <span
-                    style={{
-                      fontSize: 9,
-                      fontWeight: 700,
-                      padding: '2px 7px',
-                      borderRadius: 20,
-                      background:
-                        t.status === 'COMPLETADO' ? '#dcfce7' : '#f1f5f9',
-                      color:
-                        t.status === 'COMPLETADO' ? '#166534' : '#64748b',
-                    }}
-                  >
+                </div>
+                <div className="col-span-2 font-black text-slate-900">{(t.price ?? 0).toFixed(2)}\u20ac</div>
+                <div className="col-span-2">
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${t.status === 'COMPLETADO' ? 'bg-green-100 text-green-700' : t.status === 'EN_PROCESO' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
                     {t.status}
                   </span>
                 </div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    flexShrink: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 900,
-                      color: '#0f172a',
-                    }}
-                  >
-                    {(t.price ?? 0).toFixed(2)} €
-                  </span>
+                <div className="col-span-1 flex justify-end">
                   {isEditable && (
-                    <button
-                      onClick={() => handleDelete(t.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: '#f87171',
-                        padding: '3px',
-                        borderRadius: 6,
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Trash2 size={14} />
+                    <button onClick={() => handleDeleteTreatment(t.id)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-colors">
+                      <Trash2 size={16} />
                     </button>
                   )}
                 </div>
               </div>
             ))}
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-slate-200 flex justify-between items-center">
+            <p className="text-sm font-bold text-slate-600">Total:</p>
+            <p className="text-2xl font-black text-slate-900">{totalPrice.toFixed(2)}\u20ac</p>
           </div>
         </div>
       )}
