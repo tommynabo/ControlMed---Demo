@@ -383,8 +383,8 @@ const Agenda: React.FC = () => {
             setSelectedBudgetItems([]);
         }
 
-        const dateObj = new Date(appt.date);
-        setBookingDate(formatDateLocal(dateObj));
+        // Extract date portion directly from ISO string to avoid UTC→local timezone shift
+        setBookingDate(appt.date.split('T')[0]);
         setBookingTime(appt.time);
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
@@ -521,8 +521,8 @@ const Agenda: React.FC = () => {
             const createdAppt = await api.appointments.create(newAppt);
             // Optimistic update: add immediately so it shows without waiting for refetch
             addAppointment(createdAppt);
-            // Background sync to ensure consistency
-            refreshAppointments();
+            // Force cache invalidation so the agenda refetches from server
+            await refreshAppointments();
             
             setIsAppointmentModalOpen(false);
             setActiveSlot(null);
@@ -663,8 +663,8 @@ const Agenda: React.FC = () => {
         const duration = selectedAppt.duration || 30;
         const observations = selectedAppt.observations || '';
         
-        const dateObj = new Date(selectedAppt.date);
-        setBookingDate(formatDateLocal(dateObj));
+        // Extract date portion directly from ISO string to avoid UTC→local timezone shift
+        setBookingDate(selectedAppt.date.split('T')[0]);
         setBookingTime(selectedAppt.time);
 
         setApptSearch(patientName);
@@ -1197,20 +1197,37 @@ const Agenda: React.FC = () => {
                                                 return (TIME_SLOTS.length - 1) * SLOT_H;
                                             };
 
+                                            // Helper: extract date string safely from ISO without timezone shift
+                                            const apptDateStr = (a: Appointment) => a.date.split('T')[0];
+                                            // Helper: exclude only truly cancelled appointments (show all other statuses)
+                                            const isVisible = (a: Appointment) => {
+                                                const s = (a.status || '').toLowerCase();
+                                                return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada';
+                                            };
+
                                             // Build columns
                                             const columns: Appointment[][] = [];
+                                            let unassignedAppts: Appointment[] = [];
 
                                             if (viewMode === 'daily') {
                                                 const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
                                                 if (selectedDoctorId === 'all') {
                                                     doctorsOnDuty.forEach(doc => {
                                                         columns.push(appointments.filter(a =>
-                                                            (a.date === dateStr || a.date.startsWith(dateStr)) && a.doctorId === doc.id
+                                                            isVisible(a) && apptDateStr(a) === dateStr && a.doctorId === doc.id
                                                         ));
                                                     });
+                                                    // Collect orphan appointments (no valid doctorId) for the current day
+                                                    const knownDoctorIds = new Set(doctors.map(d => d.id));
+                                                    unassignedAppts = appointments.filter(a =>
+                                                        isVisible(a) && apptDateStr(a) === dateStr && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
+                                                    );
+                                                    if (unassignedAppts.length > 0) {
+                                                        unassignedAppts.forEach(a => console.warn('[Agenda] Cita huérfana (sin doctor válido):', a.id, a));
+                                                    }
                                                 } else {
                                                     columns.push(appointments.filter(a =>
-                                                        (a.date === dateStr || a.date.startsWith(dateStr)) &&
+                                                        isVisible(a) && apptDateStr(a) === dateStr &&
                                                         (a.doctorId === selectedDoctorId || selectedDoctorId === 'all')
                                                     ));
                                                 }
@@ -1222,7 +1239,7 @@ const Agenda: React.FC = () => {
                                                     d.setDate(diff);
                                                     const ds = formatDateLocal(d);
                                                     columns.push(appointments.filter(a =>
-                                                        (a.date === ds || a.date.startsWith(ds)) &&
+                                                        isVisible(a) && apptDateStr(a) === ds &&
                                                         (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)
                                                     ));
                                                 }
@@ -1694,12 +1711,14 @@ const Agenda: React.FC = () => {
 
                                             console.log('📝 Updating appointment:', updatePayload);
 
-                                            // VALIDATION: Doctor availability
+                                            // VALIDATION: Doctor availability — warn but do not block
                                             const checkDate = new Date(updatePayload.date);
                                             const availSlots = getAvailableTimeSlots(checkDate, updatePayload.doctorId);
                                             if (!availSlots.includes(updatePayload.time)) {
-                                                toast.error("El doctor no trabaja en este horario seleccionado.");
-                                                return;
+                                                const proceed = window.confirm(
+                                                    "⚠️ Este horario está fuera del horario configurado para este doctor.\n\n¿Deseas guardar la cita de todas formas?"
+                                                );
+                                                if (!proceed) return;
                                             }
 
                                             const result = await api.appointments.update(selectedAppt.id, updatePayload);

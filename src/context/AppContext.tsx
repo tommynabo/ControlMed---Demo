@@ -214,6 +214,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
     const refreshAppointments = async () => {
         await queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        await queryClient.invalidateQueries({ queryKey: ['calendar'] });
     };
     const refreshInvoices = async () => {
         await queryClient.invalidateQueries({ queryKey: ['invoices'] });
