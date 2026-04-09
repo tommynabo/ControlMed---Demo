@@ -222,6 +222,7 @@ export const api = {
             treatmentName?: string;
             doctorId: string;
             notes?: string;
+            budgetId?: string;
         }) => {
             const res = await fetch(`${API_URL}/payments/transfer`, {
                 method: 'POST',

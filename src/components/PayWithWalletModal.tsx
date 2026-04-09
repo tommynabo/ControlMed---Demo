@@ -14,6 +14,8 @@ interface PayWithWalletModalProps {
 export const PayWithWalletModal: React.FC<PayWithWalletModalProps> = ({ isOpen, onClose, patient, treatments, onPaymentComplete }) => {
     const [doctors, setDoctors] = useState<Doctor[]>([]);
     const [selectedDoctorId, setSelectedDoctorId] = useState('');
+    const [budgets, setBudgets] = useState<any[]>([]);
+    const [selectedBudgetId, setSelectedBudgetId] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
 
     // Calculate total. Treatments might be grouped, so check if they have 'count'.
@@ -26,9 +28,11 @@ export const PayWithWalletModal: React.FC<PayWithWalletModalProps> = ({ isOpen, 
     useEffect(() => {
         if (isOpen) {
             api.doctors.getAll().then(setDoctors).catch(console.error);
+            api.budget.getByPatient(patient.id).then(setBudgets).catch(console.error);
             setSelectedDoctorId('');
+            setSelectedBudgetId('');
         }
-    }, [isOpen]);
+    }, [isOpen, patient.id]);
 
     const handlePay = async () => {
         if (!selectedDoctorId) {
@@ -75,7 +79,8 @@ export const PayWithWalletModal: React.FC<PayWithWalletModalProps> = ({ isOpen, 
                     patientId: patient.id,
                     amount: totalAmount,
                     treatmentIds: allIds,
-                    doctorId: selectedDoctorId
+                    doctorId: selectedDoctorId,
+                    budgetId: selectedBudgetId || undefined
                 })
             });
 
@@ -145,6 +150,24 @@ export const PayWithWalletModal: React.FC<PayWithWalletModalProps> = ({ isOpen, 
                             ))}
                         </select>
                     </div>
+                </div>
+
+                <div className="mb-8">
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-2 ml-2 block">
+                        Asociar a Presupuesto (Opcional)
+                    </label>
+                    <select
+                        value={selectedBudgetId}
+                        onChange={(e) => setSelectedBudgetId(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none"
+                    >
+                        <option value="">-- Seleccionar Presupuesto --</option>
+                        {budgets.filter(b => b.status === 'APPROVED' || b.status === 'ACCEPTED' || b.status === 'PENDING').map(b => (
+                            <option key={b.id} value={b.id}>
+                                {b.title || 'Presupuesto'} ({b.totalAmount}€)
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
                 <button

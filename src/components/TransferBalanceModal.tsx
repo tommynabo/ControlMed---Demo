@@ -37,6 +37,8 @@ export const TransferBalanceModal: React.FC<TransferBalanceModalProps> = ({
     onTransferComplete
 }) => {
     const [advanceData, setAdvanceData] = useState<AdvanceBalanceData | null>(null);
+    const [budgets, setBudgets] = useState<any[]>([]);
+    const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -59,6 +61,7 @@ export const TransferBalanceModal: React.FC<TransferBalanceModalProps> = ({
     useEffect(() => {
         if (isOpen && patient.id) {
             setLoading(true);
+            api.budget.getByPatient(patient.id).then(setBudgets).catch(console.error);
             api.payments.getAdvanceBalance(patient.id)
                 .then(data => {
                     setAdvanceData(data);
@@ -79,6 +82,7 @@ export const TransferBalanceModal: React.FC<TransferBalanceModalProps> = ({
             setTransferAmount('');
             setSelectedTreatments([]);
             setSelectedDoctorId('');
+            setSelectedBudgetId('');
             setCustomConcept('');
             setNotes('');
         }
@@ -164,6 +168,7 @@ export const TransferBalanceModal: React.FC<TransferBalanceModalProps> = ({
                             treatmentId: treatment.id,
                             treatmentName: treatment.serviceName,
                             doctorId: selectedDoctorId,
+                            budgetId: selectedBudgetId || undefined,
                             notes: notes || `Pago automático desde saldo`
                         });
                     }
@@ -177,6 +182,7 @@ export const TransferBalanceModal: React.FC<TransferBalanceModalProps> = ({
                             treatmentId: treatment.id,
                             treatmentName: treatment.serviceName,
                             doctorId: selectedDoctorId,
+                            budgetId: selectedBudgetId || undefined,
                             notes: notes || `Pago tratamiento: ${treatment.serviceName}`
                         });
                     }
@@ -190,6 +196,7 @@ export const TransferBalanceModal: React.FC<TransferBalanceModalProps> = ({
                     treatmentId: undefined,
                     treatmentName: customConcept || 'Transferencia genérica',
                     doctorId: selectedDoctorId,
+                    budgetId: selectedBudgetId || undefined,
                     notes
                 });
             }
@@ -342,6 +349,25 @@ export const TransferBalanceModal: React.FC<TransferBalanceModalProps> = ({
                                                 ))}
                                             </select>
                                         </div>
+                                    </div>
+
+                                    {/* Presupuesto */}
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
+                                            Asociar a Presupuesto (Opcional)
+                                        </label>
+                                        <select
+                                            value={selectedBudgetId}
+                                            onChange={(e) => setSelectedBudgetId(e.target.value)}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-emerald-100"
+                                        >
+                                            <option value="">-- Seleccionar Presupuesto --</option>
+                                            {budgets.filter(b => b.status === 'APPROVED' || b.status === 'ACCEPTED' || b.status === 'PENDING').map(b => (
+                                                <option key={b.id} value={b.id}>
+                                                    {b.title || 'Presupuesto'} ({b.totalAmount}€)
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
 
                                     {/* Custom Concept */}

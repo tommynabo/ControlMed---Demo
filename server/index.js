@@ -992,7 +992,8 @@ const normalizePatient = (patient) => {
                         return [];
                     }
                 })()
-                : [])
+                : []),
+        historyNumber: patient.historyNumber || patient.history_number || patient.historynumber
     };
 };
 
@@ -2355,7 +2356,7 @@ app.post('/api/finance/invoices/export/batch', async (req, res) => {
 
 app.post('/api/finance/pay-with-wallet', async (req, res) => {
     try {
-        const { patientId, amount, treatmentIds, doctorId } = req.body;
+        const { patientId, amount, treatmentIds, doctorId, budgetId } = req.body;
 
         console.log(`💰 Paying with wallet: ${amount}€ for Patient ${patientId}`);
 
@@ -2381,6 +2382,7 @@ app.post('/api/finance/pay-with-wallet', async (req, res) => {
             amount,
             method: 'wallet',
             type: 'DIRECT_CHARGE', // Or specific type
+            budgetId: budgetId || null,
             notes: `Pago con Saldo a favor. Doctor: ${doctorId || 'N/A'}`,
             createdAt: new Date().toISOString()
         }]);
@@ -3158,7 +3160,7 @@ app.post('/api/payments/transfer', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { patientId, sourcePaymentId, amount, treatmentId, treatmentName, doctorId, notes } = req.body;
+        const { patientId, sourcePaymentId, amount, treatmentId, treatmentName, doctorId, notes, budgetId } = req.body;
 
         if (!patientId || !sourcePaymentId || !amount || !doctorId) {
             return res.status(400).json({ error: 'Campos requeridos: patientId, sourcePaymentId, amount, doctorId' });
@@ -3191,6 +3193,7 @@ app.post('/api/payments/transfer', async (req, res) => {
                 type: 'TRANSFER', // Nuevo tipo: transferencia de saldo
                 sourcePaymentId, // Referencia al pago original
                 treatmentId: treatmentId || null,
+                budgetId: budgetId || null,
                 doctorId, // Para calcular comisión
                 notes: notes || `Transferencia de anticipo a: ${treatmentName || 'Tratamiento'}`,
                 createdAt: new Date().toISOString()

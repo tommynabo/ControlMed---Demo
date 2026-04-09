@@ -365,7 +365,7 @@ const Patients: React.FC = () => {
 
             const budgetNum = budget.number || budget.id?.substring(0, 6).toUpperCase() || '—';
             const budgetDate = new Date(budget.createdAt || budget.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const patientNH = selectedPatient?.id?.substring(0, 6).toUpperCase() || '—';
+            const patientNH = selectedPatient?.historyNumber || selectedPatient?.id?.substring(0, 6).toUpperCase() || '—';
 
             const itemsHtml = items.map((item: any, idx: number) => {
                 const qty = Number(item.quantity) || 1;
@@ -1174,15 +1174,13 @@ const Patients: React.FC = () => {
 
                                 <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm grid grid-cols-2 gap-8">
                                     {/* History Number Badge */}
-                                    {selectedPatient.historyNumber && (
-                                        <div className="col-span-2 flex items-center gap-3 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl border border-blue-100">
-                                            <div className="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black text-sm">#</div>
-                                            <div>
-                                                <p className="text-[10px] font-bold uppercase text-blue-400">Número de Historia</p>
-                                                <p className="text-lg font-black text-blue-900">{selectedPatient.historyNumber}</p>
-                                            </div>
+                                    <div className="col-span-2 flex items-center gap-3 bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl border border-blue-100">
+                                        <div className="w-10 h-10 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black text-sm">#</div>
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase text-blue-400">Número de Historia Clínica (NHC)</p>
+                                            <p className="text-lg font-black text-blue-900">{selectedPatient.historyNumber || <span className="text-slate-400 text-sm font-bold italic">Sin asignar</span>}</p>
                                         </div>
-                                    )}
+                                    </div>
                                     <div className="col-span-2 grid grid-cols-3 gap-4">
                                         <div className="col-span-3 mb-2">
                                             <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Nombre Completo (Auto-generado)</label>

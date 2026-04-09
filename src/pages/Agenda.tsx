@@ -1424,9 +1424,27 @@ const Agenda: React.FC = () => {
                                     </div>
                                 </div>
                              ) : (
-                                <p className="text-sm text-slate-500">
-                                    {activeSlot?.time} - {viewMode === 'daily' ? currentDate.toLocaleDateString() : 'Día ' + activeSlot?.dayIdx}
-                                </p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-400">Fecha</label>
+                                        <input
+                                            type="date"
+                                            className="w-full bg-slate-50 p-2 rounded-xl border border-slate-200 mt-1 outline-none font-bold text-xs"
+                                            value={bookingDate}
+                                            onChange={(e) => setBookingDate(e.target.value)}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold uppercase text-slate-400">Hora</label>
+                                        <input
+                                            type="time"
+                                            className="w-full bg-slate-50 p-2 rounded-xl border border-slate-200 mt-1 outline-none font-bold text-xs"
+                                            value={bookingTime}
+                                            onChange={(e) => setBookingTime(e.target.value)}
+                                            step="300"
+                                        />
+                                    </div>
+                                </div>
                              )}
 
                             {/* Patient Search in Modal */}

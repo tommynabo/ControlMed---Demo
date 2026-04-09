@@ -2,6 +2,8 @@ import React from 'react';
 import { X, User, Calendar, Clock, FileText, Eye } from 'lucide-react';
 import { Appointment, Patient } from '../../types';
 import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
+import { toast } from 'react-hot-toast';
 
 interface AppointmentModalProps {
     isOpen: boolean;
@@ -17,6 +19,29 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     patient
 }) => {
     const navigate = useNavigate();
+    const { api, refreshAppointments } = useAppContext();
+    const [time, setTime] = React.useState(appointment?.time || '10:00');
+
+    React.useEffect(() => {
+        if (appointment) {
+            setTime(appointment.time);
+        }
+    }, [appointment]);
+
+    const handleTimeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newTime = e.target.value;
+        setTime(newTime);
+        if (appointment) {
+            try {
+                await api.appointments.update(appointment.id, { time: newTime });
+                await refreshAppointments();
+                toast.success('Hora actualizada');
+            } catch (error) {
+                toast.error('Error al actualizar hora');
+                setTime(appointment.time); // revert to original
+            }
+        }
+    };
 
     if (!isOpen || !appointment || !patient) return null;
 
@@ -57,6 +82,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                         <div className="flex-1">
                             <h3 className="text-xl font-black text-slate-900">{patient.name}</h3>
                             <div className="space-y-1 mt-2">
+                                <p className="text-sm text-slate-600 font-medium">
+                                    <strong>NHC:</strong> {patient.historyNumber || <span className="text-slate-400 italic">Sin asignar</span>}
+                                </p>
                                 <p className="text-sm text-slate-600 font-medium">
                                     <strong>DNI:</strong> {patient.dni}
                                 </p>
@@ -99,7 +127,12 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                             </div>
                             <div>
                                 <p className="text-xs font-bold text-slate-400 uppercase">Hora</p>
-                                <p className="text-sm font-black text-slate-900">{appointment.time}</p>
+                                <input 
+                                    type="time" 
+                                    value={time} 
+                                    onChange={handleTimeChange}
+                                    className="text-sm font-black text-slate-900 bg-transparent border-b border-slate-300 focus:outline-none focus:border-purple-500 w-full"
+                                />
                             </div>
                         </div>
 
