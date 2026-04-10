@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import {
-    ChevronLeft, ChevronRight, Search, Plus, Calendar, User, Clock, CheckCircle2, ExternalLink,
-    Lock, Unlock, Eye, EyeOff, Save, X, AlertTriangle, Sparkles
-} from 'lucide-react';
+import { RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X, Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../services/supabase';
 import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
 import { Appointment, Doctor, AgendaClosure } from '../../types';
 import toast from 'react-hot-toast';
@@ -31,6 +30,7 @@ const Agenda: React.FC = () => {
         appointments, addAppointment, setAppointments, patients, currentUser, currentUserRole, api, setSelectedPatient, doctors, refreshAppointments
     } = useAppContext();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -58,6 +58,15 @@ const Agenda: React.FC = () => {
     // Multi-treatment state
     const [treatmentToAdd, setTreatmentToAdd] = useState<string>('');
     const [selectedTreatmentsList, setSelectedTreatmentsList] = useState<Array<{id: string, name: string, price: number}>>([]);
+
+    // 🆕 Feature 1: Real DB Services search state
+    const [dbServices, setDbServices] = useState<Array<{id: string, name: string, final_price: number, specialty_name?: string}>>([]);
+    const [bookingServiceSearch, setBookingServiceSearch] = useState<string>('');
+    const [selectedDbServices, setSelectedDbServices] = useState<Array<{id: string, name: string, price: number}>>([]);
+    const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+
+    // 🆕 Feature 2: Revisión toggle state
+    const [bookingIsRevision, setBookingIsRevision] = useState<boolean>(false);
 
     // Budget & Patient State
     const [bookingPatientId, setBookingPatientId] = useState<string>('');
@@ -119,8 +128,28 @@ const Agenda: React.FC = () => {
 
         // Reload schedules every 5 seconds to catch changes from Settings
         const interval = setInterval(loadSchedules, 5000);
-        return () => clearInterval(interval);
-    }, [api]);
+
+        // Supabase Realtime Listener (Agenda-specific)
+        let channel: ReturnType<typeof supabase.channel> | null = null;
+        try {
+            channel = supabase.channel('agenda-appointments')
+                .on(
+                    'postgres_changes',
+                    { event: '*', schema: 'public', table: 'Appointment' },
+                    () => {
+                        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                    }
+                )
+                .subscribe();
+        } catch (e) {
+            console.warn('Could not subscribe to realtime:', e);
+        }
+
+        return () => {
+            clearInterval(interval);
+            if (channel) supabase.removeChannel(channel);
+        };
+    }, [api, queryClient]);
 
     // Fetch Budgets
     React.useEffect(() => {
@@ -132,6 +161,13 @@ const Agenda: React.FC = () => {
             setPatientBudgets([]);
         }
     }, [bookingPatientId]);
+
+    // 🆕 Load real DB Services catalog for searchable selector
+    useEffect(() => {
+        api.services.getAll()
+            .then((data: any[]) => setDbServices(data || []))
+            .catch((err: any) => console.warn('Could not load DB services catalog:', err));
+    }, [api]);
 
     // Load Agenda Closures (Feature 4)
     useEffect(() => {
@@ -168,6 +204,8 @@ const Agenda: React.FC = () => {
     };
 
     const handleCloseAgenda = async () => {
+        if (isBooking) return;
+        setIsBooking(true);
         const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
         try {
             await api.agendaClosures.create({
@@ -183,6 +221,8 @@ const Agenda: React.FC = () => {
             alert('✅ Agenda cerrada correctamente');
         } catch (e: any) {
             alert('Error: ' + (e.message || e));
+        } finally {
+            setIsBooking(false);
         }
     };
 
@@ -355,12 +395,12 @@ const Agenda: React.FC = () => {
         e.stopPropagation();
         setSelectedAppt(appt);
 
-        // Pre-fill modal for viewing details — fallback to joined data for orphan appointments
-        const patientName = patients.find(p => p.id === appt.patientId)?.name || (appt as any).patient?.name || '⚠️ Desconocido';
+        // Pre-fill modal for viewing details
+        const patientName = patients.find(p => p.id === appt.patientId)?.name || (appt as any).patient?.name || '';
         setApptSearch(patientName);
         setBookingPatientId(appt.patientId || ''); // Set Patient ID for budgets
         setBookingDoctorId(appt.doctorId || '');
-        setBookingTreatment(typeof appt.treatment === 'string' ? appt.treatment : (appt.treatment as any)?.id || '');
+        setBookingTreatment(typeof appt.treatment === 'string' ? appt.treatment : (appt.treatment as any)?.id || (appt as any).treatmentName || '');
         setBookingBudgetId((appt as any).budgetId || ''); // Set Budget ID
         setBookingPrice((appt as any).amount || 0);
         setBookingDuration(appt.duration || 30);
@@ -384,9 +424,35 @@ const Agenda: React.FC = () => {
         }
 
         // Extract date portion directly from ISO string to avoid UTC→local timezone shift
-        setBookingDate(appt.date.split('T')[0]);
-        setBookingTime(appt.time);
-        setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
+        const rawDate = appt.date ? String(appt.date) : formatDateLocal(new Date());
+        setBookingDate(rawDate.includes('T') ? rawDate.split('T')[0] : rawDate.split(' ')[0]);
+        setBookingTime(appt.time || '08:00');
+        // 🆕 Populate new feature states from existing appointment
+        setBookingIsRevision(!!(appt.isRevision || (appt as any).is_revision));
+        
+        // Populate services from DB catalogue if IDs exist
+        const initialServices: any[] = [];
+        const apptServiceIds = (appt as any).serviceIds || [];
+        if (apptServiceIds.length > 0) {
+            apptServiceIds.forEach((sid: string) => {
+                const svc = dbServices.find(s => s.id === sid);
+                if (svc) initialServices.push({ id: svc.id, name: svc.name, price: svc.final_price || 0 });
+            });
+        }
+        
+        // If no services were found by ID but there is a treatment name, 
+        // populate as custom entries so the edit modal shows the treatments
+        if (initialServices.length === 0 && bookingTreatment) {
+            const names = bookingTreatment.split(',').map((n: string) => n.trim()).filter(Boolean);
+            names.forEach((name: string, i: number) => {
+                initialServices.push({ id: `custom-existing-${i}`, name, price: 0 });
+            });
+        }
+        
+        setSelectedDbServices(initialServices);
+        setBookingServiceSearch('');
+        setShowServiceDropdown(false);
+        setActiveSlot({ time: appt.time || '08:00', dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
     };
 
@@ -410,40 +476,85 @@ const Agenda: React.FC = () => {
         setIsDuplicating(false);
         setBookingDate(formatDateLocal(currentDate));
         setBookingTime('08:00');
+        // 🆕 Reset new feature states
+        setBookingIsRevision(false);
+        setSelectedDbServices([]);
+        setBookingServiceSearch('');
+        setShowServiceDropdown(false);
     };
 
     // Multi-treatment handlers
-    const handleAddTreatmentToList = () => {
-        if (!treatmentToAdd) return;
-        const svc = DENTAL_SERVICES.find(s => s.id === treatmentToAdd);
-        if (!svc) return;
-
-        let itemsToAdd: any[] = [];
-        if (svc.id === 'pack-1') {
-            itemsToAdd = [
-                { id: 'srv-11', name: 'Primera visita', price: 0 },
-                { id: 'srv-12', name: 'OPG', price: 45 }
-            ];
-        } else if (svc.id === 'pack-2') {
-            itemsToAdd = [
-                { id: 'srv-11', name: 'Primera visita', price: 0 },
-                { id: 'srv-12', name: 'OPG', price: 15 },
-                { id: 'srv-13', name: 'Tartrectomía', price: 45 }
-            ];
-        } else {
-            itemsToAdd = [{ id: svc.id, name: svc.name, price: svc.price }];
+    const handlePushTreatment = (svc: { id: string, name: string, price: number }) => {
+        // Prevent duplicates by ID (if it has one)
+        if (svc.id && !svc.id.startsWith('custom-') && selectedDbServices.some(s => s.id === svc.id)) {
+            toast.error('Este servicio ya ha sido añadido');
+            return;
         }
-
-        const newList = [...selectedTreatmentsList, ...itemsToAdd];
-        setSelectedTreatmentsList(newList);
+        
+        const newList = [...selectedDbServices, svc];
+        setSelectedDbServices(newList);
         setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
-        setTreatmentToAdd('');
+        setBookingTreatment(newList.map(t => t.name).join(', '));
+        setBookingServiceSearch('');
+        setShowServiceDropdown(false);
+    };
+
+    const handleAddTreatmentToList = () => {
+        const query = bookingServiceSearch.trim();
+        if (!query) return;
+
+        // Si el texto coincide exactamente con un servicio de la DB, lo añadimos como tal
+        const existingSvc = dbServices.find(s => s.name.toLowerCase() === query.toLowerCase());
+        
+        if (existingSvc) {
+            handlePushTreatment({
+                id: existingSvc.id,
+                name: existingSvc.name,
+                price: existingSvc.final_price || 0
+            });
+        } else {
+            // Si no existe, es un tratamiento personalizado a COSTE CERO
+            handlePushTreatment({
+                id: `custom-${Date.now()}`,
+                name: query,
+                price: 0
+            });
+            toast.success(`Añadido: ${query} (Coste 0€)`);
+        }
     };
 
     const handleRemoveTreatmentFromList = (idx: number) => {
-        const newList = selectedTreatmentsList.filter((_, i) => i !== idx);
-        setSelectedTreatmentsList(newList);
+        const newList = selectedDbServices.filter((_, i) => i !== idx);
+        setSelectedDbServices(newList);
         setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+        setBookingTreatment(newList.map(t => t.name).join(', '));
+    };
+
+    const checkOverlap = (dateStr: string, timeStr: string, durationMin: number, doctorId: string, excludeApptId?: string) => {
+        if (!doctorId || doctorId === 'all') return false;
+        const [h2, m2] = timeStr.split(':').map(Number);
+        const start2 = h2 * 60 + m2;
+        const end2 = start2 + (durationMin || 30);
+        const date2 = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+
+        return appointments.some(a => {
+            if (a.id === excludeApptId) return false;
+            if (!a.time || !a.date) return false;
+            if (a.status === 'Cancelled' || a.status === 'Anulada') return false;
+            if (a.doctorId !== doctorId) return false;
+            
+            const [h1, m1] = (a.time || '00:00').split(':').map(Number);
+            const start1 = h1 * 60 + m1;
+            const end1 = start1 + (a.duration || 30);
+            
+            const rawDate1 = String(a.date);
+            const date1 = rawDate1.includes('T') ? rawDate1.split('T')[0] : rawDate1.split(' ')[0];
+            
+            if (date1 === date2) {
+                return Math.max(start1, start2) < Math.min(end1, end2);
+            }
+            return false;
+        });
     };
 
     // Handle Booking
@@ -494,17 +605,26 @@ const Agenda: React.FC = () => {
         // Force date to be treated as UTC midnight of the selected day to avoid timezone shifts
         const isoDate = `${bookingDate}T00:00:00.000Z`;
 
+        // Check for overlaps before saving
+        if (checkOverlap(isoDate, bookingTime, bookingDuration || 30, bookingDoctorId, selectedAppt?.id)) {
+            toast.error(`El doctor ya tiene una cita reservada en este horario. Revisa la disponibilidad.`, {
+                style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' },
+                icon: '🚫'
+            });
+            return;
+        }
+
         const newAppt: any = {
             date: isoDate, // Send full ISO at UTC midnight
             time: bookingTime,
             patientId: patient.id,
             doctorId: bookingDoctorId,
-            treatmentId: !bookingBudgetId && selectedTreatmentsList.length > 0 ? selectedTreatmentsList[0].id : null,
-            treatmentName: !bookingBudgetId && selectedTreatmentsList.length > 0
-                ? selectedTreatmentsList.map(t => t.name).join(', ')
-                : null,
-            treatmentIds: !bookingBudgetId && selectedTreatmentsList.length > 1
-                ? selectedTreatmentsList.map(t => t.id)
+            treatmentName: !bookingBudgetId && selectedDbServices.length > 0 
+                ? selectedDbServices.map(t => t.name).join(', ')
+                : (bookingTreatment || null),
+            // 🆕 Real DB service IDs (filter out custom ones)
+            serviceIds: selectedDbServices.length > 0 
+                ? selectedDbServices.filter(s => !s.id.startsWith('custom-')).map(s => s.id) 
                 : null,
             budgetId: bookingBudgetId || null,
             budgetItemId: bookingBudgetItemId || null,
@@ -513,7 +633,9 @@ const Agenda: React.FC = () => {
             observations: bookingObservation || null,
             visitDetails: bookingVisitDetails || null,
             status: 'Scheduled',
-            duration: bookingDuration
+            duration: bookingDuration,
+            // 🆕 Revisión tag
+            isRevision: bookingIsRevision
         };
 
         try {
@@ -537,6 +659,10 @@ const Agenda: React.FC = () => {
             setBookingVisitDetails('');
             setBookingPrice(0);
             setBookingDuration(30);
+            // 🆕 Reset new states
+            setBookingIsRevision(false);
+            setSelectedDbServices([]);
+            setBookingServiceSearch('');
             toast.success("Cita guardada correctamente.");
         } catch (e: any) {
             console.error(e);
@@ -575,11 +701,19 @@ const Agenda: React.FC = () => {
 
         const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}T00:00:00.000Z`;
 
+        const newDrId = drId || draggingAppt.doctorId;
+        if (checkOverlap(dateStr, time, draggingAppt.duration || 30, newDrId, draggingAppt.id)) {
+            toast.error(`No se puede mover aquí: El doctor ya tiene cita en ese horario.`);
+            setDraggingAppt(null);
+            setDragOverSlot(null);
+            return;
+        }
+
         try {
             const updated = await api.appointments.update(draggingAppt.id, {
                 date: dateStr,
                 time: time,
-                doctorId: drId || draggingAppt.doctorId
+                doctorId: newDrId
             });
 
             setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
@@ -625,6 +759,13 @@ const Agenda: React.FC = () => {
             const newDuration = Math.max(5, (appt.duration || 30) + deltaMins);
 
             if (newDuration !== appt.duration) {
+                // Pre-check for overlapping extension
+                if (checkOverlap(appt.date, appt.time, newDuration, appt.doctorId, appt.id)) {
+                    toast.error(`La nueva duración choca con otra cita del doctor.`);
+                    setResizingAppt(null);
+                    return;
+                }
+
                 try {
                     const updated = await api.appointments.update(appt.id, {
                         duration: newDuration
@@ -647,9 +788,18 @@ const Agenda: React.FC = () => {
             { id: 'srv-12', name: 'OPG', price: 30 },
             { id: 'srv-13', name: 'Tartrectomía', price: 50 }
         ];
-        setSelectedTreatmentsList(pack);
-        setBookingPrice(80);
-        setBookingDuration(60);
+        
+        const newList = [...selectedDbServices];
+        pack.forEach(p => {
+            if (!newList.some(existing => existing.id === p.id)) {
+                newList.push(p);
+            }
+        });
+        
+        setSelectedDbServices(newList);
+        setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+        setBookingTreatment(newList.map(t => t.name).join(', '));
+        toast.success("Pack Primera Visita añadido");
     };
 
     const handleDuplicate = () => {
@@ -679,6 +829,36 @@ const Agenda: React.FC = () => {
         setSelectedAppt(null); // Switch to "New" mode visually
         setActiveSlot(null);
     };
+
+    // Calculate Unassigned appointments for the current view
+    const apptDateStrFilter = (a: Appointment) => {
+        if (!a.date) return '';
+        const d = String(a.date);
+        return d.includes('T') ? d.split('T')[0] : d.split(' ')[0];
+    };
+    const isVisibleFilter = (a: Appointment) => {
+        if (!a.date) return false;
+        const s = (a.status || '').toLowerCase();
+        return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada';
+    };
+    const knownDoctorIds = new Set(doctors.map(d => d.id));
+    let unassignedApptsToShow: Appointment[] = [];
+    if (viewMode === 'daily') {
+        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+        unassignedApptsToShow = appointments.filter(a =>
+            isVisibleFilter(a) && apptDateStrFilter(a) === dateStr && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
+        );
+    } else {
+        const weekDates = Array.from({ length: 7 }).map((_, i) => {
+            const d = new Date(currentDate);
+            const dow = d.getDay();
+            d.setDate(d.getDate() - dow + (dow === 0 ? -6 : 1) + i);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        });
+        unassignedApptsToShow = appointments.filter(a =>
+            isVisibleFilter(a) && weekDates.includes(apptDateStrFilter(a)) && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -872,11 +1052,35 @@ const Agenda: React.FC = () => {
                             <button onClick={() => setShowClosureModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-500">
                                 Cancelar
                             </button>
-                            <button onClick={handleCloseAgenda} className="flex-1 bg-red-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-red-700 transition-colors">
-                                Cerrar Agenda
+                            <button onClick={handleCloseAgenda} disabled={isBooking} className="flex-1 bg-red-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                                {isBooking ? <><Loader2 className="animate-spin w-4 h-4" /> Cerrando...</> : 'Cerrar Agenda'}
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Unassigned Appointments Warning Strip */}
+            {unassignedApptsToShow.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-4 overflow-x-auto shadow-sm items-center">
+                    <div className="flex-shrink-0 flex items-center gap-2 text-amber-700 font-black whitespace-nowrap">
+                        <AlertTriangle size={20} />
+                        CITAS SIN ASIGNAR ({unassignedApptsToShow.length}):
+                    </div>
+                    {unassignedApptsToShow.map(a => {
+                        const patName = patients.find(p => p.id === a.patientId)?.name || '⚠️ Paciente Eliminado';
+                        return (
+                            <div key={a.id} className="bg-white border border-amber-200 p-3 rounded-xl flex-shrink-0 min-w-[200px] hover:shadow-md transition-shadow cursor-pointer"
+                                onClick={() => { setSelectedAppt(a); setIsAppointmentModalOpen(true); }}
+                            >
+                                <div className="text-xs font-black text-slate-900 truncate">{patName}</div>
+                                <div className="text-[10px] text-amber-600 font-bold mt-0.5">{apptDateStrFilter(a)} a las {a.time} - {a.duration || 30} min</div>
+                                <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                                    <Edit3 size={10} /> Clic para asignar doctor
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
@@ -1198,8 +1402,19 @@ const Agenda: React.FC = () => {
                                             };
 
                                             // Helper: extract date string safely from ISO without timezone shift
-                                            const apptDateStr = (a: Appointment) => a.date.split('T')[0];
-                                            // ALL appointments are visible — cancelled ones render with strikethrough styling
+                                            // DEFENSIVE: handle null/undefined/malformed dates
+                                            const apptDateStr = (a: Appointment) => {
+                                                if (!a.date) return '';
+                                                const d = String(a.date);
+                                                return d.includes('T') ? d.split('T')[0] : d.split(' ')[0];
+                                            };
+                                            // Helper: show ALL appointments EXCEPT truly cancelled ones
+                                            // INCLUSIVE: appointments with missing fields are still visible
+                                            const isVisible = (a: Appointment) => {
+                                                if (!a.date || !a.time) return false; // Cannot render without date+time
+                                                const s = (a.status || '').toLowerCase();
+                                                return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada';
+                                            };
 
                                             // Build columns
                                             const columns: Appointment[][] = [];
@@ -1210,26 +1425,17 @@ const Agenda: React.FC = () => {
                                                 if (selectedDoctorId === 'all') {
                                                     doctorsOnDuty.forEach(doc => {
                                                         columns.push(appointments.filter(a =>
-                                                            apptDateStr(a) === dateStr && a.doctorId === doc.id
+                                                            isVisible(a) && apptDateStr(a) === dateStr && a.doctorId === doc.id
                                                         ));
                                                     });
                                                     // Collect orphan appointments (no valid doctorId) for the current day
                                                     const knownDoctorIds = new Set(doctors.map(d => d.id));
                                                     unassignedAppts = appointments.filter(a =>
-                                                        apptDateStr(a) === dateStr && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
+                                                        isVisible(a) && apptDateStr(a) === dateStr && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
                                                     );
-                                                    if (unassignedAppts.length > 0) {
-                                                        // Show orphan appointments in the first column so they are never invisible
-                                                        if (columns.length > 0) {
-                                                            columns[0] = [...columns[0], ...unassignedAppts];
-                                                        } else {
-                                                            columns.push(unassignedAppts);
-                                                        }
-                                                        unassignedAppts.forEach(a => console.warn('[Agenda] Cita huérfana (sin doctor válido):', a.id, a));
-                                                    }
                                                 } else {
                                                     columns.push(appointments.filter(a =>
-                                                        apptDateStr(a) === dateStr &&
+                                                        isVisible(a) && apptDateStr(a) === dateStr &&
                                                         (a.doctorId === selectedDoctorId || selectedDoctorId === 'all')
                                                     ));
                                                 }
@@ -1241,89 +1447,108 @@ const Agenda: React.FC = () => {
                                                     d.setDate(diff);
                                                     const ds = formatDateLocal(d);
                                                     columns.push(appointments.filter(a =>
-                                                        apptDateStr(a) === ds &&
+                                                        isVisible(a) && apptDateStr(a) === ds &&
                                                         (selectedDoctorId === 'all' || a.doctorId === selectedDoctorId)
                                                     ));
                                                 }
                                             }
 
-                                            return columns.map((colAppts, colIdx) => {
-                                                const sorted = [...colAppts].sort((a, b) => a.time.localeCompare(b.time));
-                                                return (
-                                                    <div key={colIdx} className="flex-1 relative h-full pointer-events-none border-r border-transparent">
-                                                        {sorted.map(appt => {
-                                                            const top = timeToTop(appt.time);
-                                                            const height = (appt.duration || 30) * PX_PER_MIN;
+                                            return (
+                                                <>
+                                                    {unassignedAppts.length > 0 && (
+                                                        <div className="absolute top-2 left-2 right-2 z-50 bg-red-100 border border-red-200 text-red-700 p-2 rounded text-[10px] font-bold">
+                                                            ⚠️ {unassignedAppts.length} cita(s) sin doctor asignado
+                                                        </div>
+                                                    )}
+                                                    {columns.map((colAppts, colIdx) => {
+                                                        const sorted = [...colAppts].sort((a, b) => (a.time || '00:00').localeCompare(b.time || '00:00'));
+                                                        return (
+                                                            <div key={colIdx} className="flex-1 relative h-full pointer-events-none border-r border-transparent">
+                                                                {sorted.map(appt => {
+                                                                    const safeTime = appt.time || '08:00';
+                                                                    const top = timeToTop(safeTime);
+                                                                    const height = (appt.duration || 30) * PX_PER_MIN;
 
-                                                            const [ah, am] = appt.time.split(':').map(Number);
-                                                            const startMin = ah * 60 + am;
+                                                                    const [ah, am] = safeTime.split(':').map(Number);
+                                                                    const startMin = ah * 60 + am;
 
-                                                            // Build the full overlap group (all appointments that overlap with this one)
-                                                            const overlapGroup = sorted.filter(o => {
-                                                                const [oh, om] = o.time.split(':').map(Number);
-                                                                const oStart = oh * 60 + om;
-                                                                const oEnd = oStart + (o.duration || 30);
-                                                                const myEnd = startMin + (appt.duration || 30);
-                                                                return startMin < oEnd && myEnd > oStart;
-                                                            });
+                                                                    // Build the full overlap group (all appointments that overlap with this one)
+                                                                    const overlapGroup = sorted.filter(o => {
+                                                                        const [oh, om] = (o.time || '08:00').split(':').map(Number);
+                                                                        const oStart = oh * 60 + om;
+                                                                        const oEnd = oStart + (o.duration || 30);
+                                                                        const myEnd = startMin + (appt.duration || 30);
+                                                                        return startMin < oEnd && myEnd > oStart;
+                                                                    });
 
-                                                            let width = '100%', left = '0%';
-                                                            if (overlapGroup.length > 1) {
-                                                                const myIdx = overlapGroup.findIndex(o => o.id === appt.id);
-                                                                const pct = 100 / overlapGroup.length;
-                                                                width = `${pct}%`;
-                                                                left = `${pct * myIdx}%`;
-                                                            }
+                                                                    let width = '100%', left = '0%';
+                                                                    if (overlapGroup.length > 1) {
+                                                                        const myIdx = overlapGroup.findIndex(o => o.id === appt.id);
+                                                                        const pct = 100 / overlapGroup.length;
+                                                                        width = `${pct}%`;
+                                                                        left = `${pct * myIdx}%`;
+                                                                    }
 
-                                                            return (
-                                                                <div
-                                                                    key={appt.id}
-                                                                    draggable={currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR'}
-                                                                    onDragStart={(e) => handleDragStart(e, appt)}
-                                                                    onDragEnd={() => setDraggingAppt(null)}
-                                                                    onClick={(e) => handleAppointmentClick(e, appt)}
-                                                                    style={{ top: `${top}px`, height: `${height}px`, left, width, position: 'absolute' }}
-                                                                    className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all z-10 overflow-hidden flex flex-col justify-start group ${getAppointmentColors(appt.status, appt.paid)} ${draggingAppt?.id === appt.id ? 'opacity-40 scale-95 border-dashed grayscale shadow-none' : 'hover:scale-[1.01] hover:z-20 shadow-sm'}`}
-                                                                >
-                                                                    <div className="flex justify-between items-start mb-0.5">
-                                                                        <div className="flex items-center gap-1 min-w-0">
-                                                                            {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
-                                                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
-                                                                                    <div className="w-1 h-3 flex flex-col gap-0.5">
-                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
-                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
-                                                                                        <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
-                                                                                    </div>
+                                                                    return (
+                                                                        <div
+                                                                            key={appt.id}
+                                                                            draggable={currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR'}
+                                                                            onDragStart={(e) => handleDragStart(e, appt)}
+                                                                            onDragEnd={() => setDraggingAppt(null)}
+                                                                            onClick={(e) => handleAppointmentClick(e, appt)}
+                                                                            style={{ top: `${top}px`, height: `${height}px`, left, width, position: 'absolute' }}
+                                                                            className={`p-2 rounded-xl text-xs font-bold border shadow-sm cursor-pointer pointer-events-auto transition-all z-10 overflow-hidden flex flex-col justify-start group ${getAppointmentColors(appt.status, appt.paid)} ${draggingAppt?.id === appt.id ? 'opacity-40 scale-95 border-dashed grayscale shadow-none' : 'hover:scale-[1.01] hover:z-20 shadow-sm'}`}
+                                                                        >
+                                                                            <div className="flex justify-between items-start mb-0.5">
+                                                                                <div className="flex items-center gap-1 min-w-0">
+                                                                                    {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
+                                                                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+                                                                                            <div className="w-1 h-3 flex flex-col gap-0.5">
+                                                                                                <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                                <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                                <div className="w-full h-0.5 bg-current opacity-50 rounded-full" />
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || (appt as any).patient?.name || '⚠️ Paciente Eliminado'}</span>
                                                                                 </div>
-                                                                            )}
-                                                                            <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || 'Paciente'}</span>
-                                                                        </div>
-                                                                        {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
-                                                                    </div>
-                                                                    {(() => {
-                                                                        const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
-                                                                            ? (appt.treatment as any).name
-                                                                            : appt.treatment || (appt as any).treatmentName;
-                                                                        const budgetItems = (appt as any).budget?.items;
-                                                                        const displayTreatment = (budgetItems && budgetItems.length > 0)
-                                                                            ? budgetItems.map((item: any) => item.name).join(', ')
-                                                                            : treatmentText;
-                                                                        return appt.duration && appt.duration >= 15 && displayTreatment ? (
-                                                                            <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
-                                                                                {displayTreatment}
-                                                                            </span>
-                                                                        ) : null;
-                                                                    })()}
+                                                                                {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
+                                                                            </div>
+                                                                            {(() => {
+                                                                                const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
+                                                                                    ? (appt.treatment as any).name
+                                                                                    : appt.treatment || (appt as any).treatmentName;
+                                                                                const budgetItems = (appt as any).budget?.items;
+                                                                                const displayTreatment = (budgetItems && budgetItems.length > 0)
+                                                                                    ? budgetItems.map((item: any) => item.name).join(', ')
+                                                                                    : (treatmentText || 'Sin tratamiento');
+                                                                                
+                                                                                const docName = doctors.find(d => d.id === appt.doctorId)?.name || (appt as any).doctor?.name || 'Sin doctor';
+                                                                                const concatInfo = `${displayTreatment} | ${appt.time} | ${docName}`;
+
+                                                                                return (
+                                                                                    <div className="text-[10px] opacity-90 leading-tight mt-0.5 line-clamp-2" title={concatInfo}>
+                                                                                        {concatInfo}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
                                                                     {appt.duration && appt.duration >= 30 && appt.observations && (
                                                                         <p className="text-[9px] opacity-60 mt-0.5 line-clamp-2 leading-tight">
                                                                             {appt.observations}
                                                                         </p>
                                                                     )}
-                                                                    {/* Feature 7: Visit Details visible on card */}
+                                                                            {/* Feature 7: Visit Details visible on card */}
                                                                     {appt.duration && appt.duration >= 30 && (appt as any).visitDetails && (
                                                                         <p className="text-[9px] text-purple-500 opacity-80 mt-0.5 line-clamp-1 italic">
                                                                             📋 {(appt as any).visitDetails}
                                                                         </p>
+                                                                    )}
+
+                                                                    {/* 🆕 Feature: Revisión Badge */}
+                                                                    {(appt.isRevision || (appt as any).is_revision) && (
+                                                                        <div className="mt-0.5 inline-flex items-center gap-0.5 bg-cyan-500/20 border border-cyan-400/50 text-cyan-700 rounded-full px-1.5 py-0" style={{fontSize: '8px', fontWeight: 900}}>
+                                                                            ↩ REVISIÓN
+                                                                        </div>
                                                                     )}
 
                                                                     {/* RESIZE HANDLE */}
@@ -1338,7 +1563,9 @@ const Agenda: React.FC = () => {
                                                         })}
                                                     </div>
                                                 );
-                                            });
+                                            })}
+                                            </>
+                                            );
                                         })()}
                                     </div>
 
@@ -1464,8 +1691,8 @@ const Agenda: React.FC = () => {
                                         }
                                     }}
                                 />
-                                {/* Suggestions - Solo mostrar si NO hay paciente seleccionado */}
-                                {!selectedAppt && apptSearch.length > 0 && !bookingPatientId && (
+                                {/* Suggestions - Mostrar siempre que se esté buscando y no haya paciente seleccionado */}
+                                {apptSearch.length > 0 && !bookingPatientId && (
                                     <div className="mt-2 bg-white border border-slate-100 rounded-xl shadow-lg max-h-40 overflow-y-auto">
                                         {patients
                                             .filter(p => (p.name?.toLowerCase() || '').includes(apptSearch.toLowerCase()) || (p.dni || '').includes(apptSearch))
@@ -1508,7 +1735,7 @@ const Agenda: React.FC = () => {
                                         <option value="">-- Sin vincular --</option>
                                         {patientBudgets.map(b => (
                                             <option key={b.id} value={b.id}>
-                                                #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString()}
+                                                #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                                             </option>
                                         ))}
                                     </select>
@@ -1576,126 +1803,188 @@ const Agenda: React.FC = () => {
                                 </select>
                             </div>
 
-                            {/* Multi-Treatment Selection - Only show if NO budget is selected */}
+                            {/* Consolidation: Treatment/Service Selection */}
                             {!bookingBudgetId && (
-                                <div>
+                                <div className="space-y-3">
                                     <div className="flex justify-between items-center">
-                                        <label className="text-xs font-bold uppercase text-slate-400">Tratamientos</label>
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs font-bold uppercase text-slate-400">Tratamientos y Servicios</label>
+                                            <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-black">
+                                                {selectedDbServices.length}
+                                            </span>
+                                        </div>
                                         <button 
                                             onClick={handlePackPrimeraVisita}
-                                            className="text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                            className="text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg transition-colors"
                                         >
-                                            <Sparkles size={12} /> Pack Primera Visita
+                                            <Sparkles size={12} /> Pack 1ª Visita
                                         </button>
                                     </div>
-                                    <div className="flex gap-2 mt-2">
-                                        <select
-                                            className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold text-slate-600 text-sm"
-                                            value={treatmentToAdd}
-                                            onChange={(e) => setTreatmentToAdd(e.target.value)}
-                                            style={{ colorScheme: 'light' }}
-                                        >
-                                            <option value="">Añadir tratamiento...</option>
-                                            {DENTAL_SERVICES.map(t => (
-                                                <option key={t.id} value={t.id}>{t.name} — {t.price}€</option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            onClick={handleAddTreatmentToList}
-                                            disabled={!treatmentToAdd}
-                                            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-black disabled:opacity-40 hover:bg-slate-700 transition-colors"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                    {selectedTreatmentsList.length > 0 && (
-                                        <div className="mt-2 space-y-1">
-                                            {selectedTreatmentsList.map((t, i) => (
-                                                <div key={i} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
-                                                    <span className="text-xs font-bold text-blue-800">{t.name}</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-black text-blue-600">{t.price}€</span>
-                                                        <button
-                                                            onClick={() => handleRemoveTreatmentFromList(i)}
-                                                            className="w-5 h-5 flex items-center justify-center bg-blue-200 hover:bg-red-200 text-blue-700 hover:text-red-700 rounded-full text-xs font-black transition-colors"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
+
+                                    {/* Selected Items Chips */}
+                                    {selectedDbServices.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                                            {selectedDbServices.map((t, i) => (
+                                                <div key={i} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl pl-3 pr-1.5 py-1.5 shadow-sm group animate-in zoom-in-95 duration-200">
+                                                    <span className="text-xs font-bold text-slate-700">{t.name}</span>
+                                                    <span className="text-xs font-black text-blue-600">{t.price}€</span>
+                                                    <button
+                                                        onClick={() => handleRemoveTreatmentFromList(i)}
+                                                        className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-red-500 text-slate-400 hover:text-white rounded-lg transition-all"
+                                                    >
+                                                        <Plus size={12} className="rotate-45" />
+                                                    </button>
                                                 </div>
                                             ))}
-                                            <div className="text-right text-xs font-black text-blue-700 pr-1 pt-1">
-                                                Total: {selectedTreatmentsList.reduce((sum, t) => sum + t.price, 0).toFixed(2)}€
+                                            <div className="w-full text-right text-xs font-black text-blue-600 pt-1">
+                                                Subtotal: {selectedDbServices.reduce((sum, t) => sum + t.price, 0).toFixed(2)}€
                                             </div>
                                         </div>
                                     )}
+
+                                    {/* Unified Input + Add Button */}
+                                    <div className="relative group">
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar servicio o escribir texto libre..."
+                                                    value={bookingServiceSearch}
+                                                    onChange={e => {
+                                                        setBookingServiceSearch(e.target.value);
+                                                        setShowServiceDropdown(true);
+                                                    }}
+                                                    onFocus={() => setShowServiceDropdown(true)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            handleAddTreatmentToList();
+                                                        }
+                                                    }}
+                                                    className="w-full bg-slate-50 focus:bg-white pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none text-sm font-bold text-slate-700 transition-all placeholder:font-medium placeholder:text-slate-400"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={handleAddTreatmentToList}
+                                                disabled={!bookingServiceSearch.trim()}
+                                                className="px-6 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white rounded-2xl font-black text-xs uppercase shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
+                                            >
+                                                <Plus size={18} />
+                                                <span className="hidden sm:inline">Añadir</span>
+                                            </button>
+                                        </div>
+
+                                        {/* Dropdown Results */}
+                                        {showServiceDropdown && bookingServiceSearch.trim().length > 0 && (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl z-[120] max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                                                {/* Custom Entry Option */}
+                                                <div 
+                                                    onClick={handleAddTreatmentToList}
+                                                    className="flex items-center gap-3 px-5 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 transition-colors group"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                        <Sparkles size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-blue-600 group-hover:text-blue-700">Añadir "{bookingServiceSearch}"</p>
+                                                        <p className="text-[10px] text-slate-400 font-bold">Concepto libre a coste 0€</p>
+                                                    </div>
+                                                </div>
+
+                                                {(() => {
+                                                    const filtered = dbServices.filter(s =>
+                                                        s.name.toLowerCase().includes(bookingServiceSearch.toLowerCase()) ||
+                                                        (s.specialty_name || '').toLowerCase().includes(bookingServiceSearch.toLowerCase())
+                                                    ).filter(s => !selectedDbServices.some(sel => sel.id === s.id)).slice(0, 15);
+
+                                                    return filtered.map(svc => (
+                                                        <div
+                                                            key={svc.id}
+                                                            onClick={() => handlePushTreatment({
+                                                                id: svc.id,
+                                                                name: svc.name,
+                                                                price: svc.final_price || 0
+                                                            })}
+                                                            className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors group"
+                                                        >
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{svc.name}</p>
+                                                                {svc.specialty_name && (
+                                                                    <p className="text-[10px] text-slate-400 font-bold group-hover:text-blue-400">{svc.specialty_name}</p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xs font-black text-slate-400 group-hover:text-blue-600">
+                                                                    {(svc.final_price || 0) > 0 ? `${svc.final_price}€` : 'Gratis'}
+                                                                </span>
+                                                                <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-blue-600 flex items-center justify-center transition-colors">
+                                                                    <Plus size={14} className="text-slate-400 group-hover:text-white" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ));
+                                                })()}
+                                            </div>
+                                        )}
+                                        {/* Click outside to close */}
+                                        {showServiceDropdown && (
+                                            <div className="fixed inset-0 z-[-1]" onClick={() => setShowServiceDropdown(false)} />
+                                        )}
+                                    </div>
                                 </div>
                             )}
 
-                            {/* Read-only simple treatment if viewing an appointment with NO budget */}
-                            {selectedAppt && !bookingBudgetId && (
-                                <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
+                            {/* Revisión Toggle */}
+                            <div className="flex items-center gap-3 py-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
                                     <input
-                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-700"
-                                        value={
-                                            typeof selectedAppt.treatment === 'object' && selectedAppt.treatment !== null
-                                                ? (selectedAppt.treatment as any).name
-                                                : ((selectedAppt as any).treatmentName || selectedAppt.treatment || 'No especificado')
-                                        }
-                                        onChange={(e) => setBookingTreatment(e.target.value)}
+                                        type="checkbox"
+                                        checked={bookingIsRevision}
+                                        onChange={(e) => setBookingIsRevision(e.target.checked)}
+                                        className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                                     />
-                                </div>
-                            )}
-
-                            {/* Additional Details: Price, Duration, Observation */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Precio (€)</label>
-                                    <input
-                                        type="number"
-                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                        value={bookingPrice}
-                                        onChange={e => setBookingPrice(Number(e.target.value))}
-                                        disabled={false}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Duración</label>
-                                    <select
-                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                        value={bookingDuration}
-                                        onChange={e => setBookingDuration(Number(e.target.value))}
-                                        disabled={false}
-                                        style={{ colorScheme: 'light' }}
-                                    >
-                                        {DURATION_OPTIONS.map(opt => (
-                                            <option key={opt} value={opt}>{opt} min</option>
-                                        ))}
-                                    </select>
-                                </div>
+                                    <span className="text-xs font-bold uppercase text-slate-500">↩ Marcar como Revisión</span>
+                                </label>
+                                {bookingIsRevision && (
+                                    <span className="bg-cyan-100 text-cyan-700 text-[10px] font-black px-2 py-0.5 rounded-full">REVISIÓN</span>
+                                )}
                             </div>
 
+                            {/* Duration Selector */}
                             <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Observaciones</label>
+                                <label className="text-xs font-bold uppercase text-slate-400">Duración</label>
+                                <select
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                    value={bookingDuration}
+                                    onChange={(e) => setBookingDuration(Number(e.target.value))}
+                                    style={{ colorScheme: 'light' }}
+                                >
+                                    {DURATION_OPTIONS.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Restored Observations Field */}
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-400">Observaciones de la Cita</label>
                                 <textarea
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-20 resize-none"
-                                    placeholder="Notas adicionales..."
+                                    className="w-full bg-slate-50/80 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-20 resize-none focus:bg-white focus:border-blue-400 transition-all text-sm placeholder:font-normal"
+                                    placeholder="Notas adicionales sobre este tratamiento..."
                                     value={bookingObservation}
                                     onChange={e => setBookingObservation(e.target.value)}
-                                    disabled={false}
                                 />
                             </div>
 
-                            {/* Feature 7: Visit Details Field */}
+                            {/* Restored Visit Details Field */}
                             <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Detalles de la Visita</label>
+                                <label className="text-xs font-bold uppercase text-slate-400">Detalles de la Visita (Alertas)</label>
                                 <textarea
-                                    className="w-full bg-purple-50/50 p-3 rounded-xl border border-purple-200 mt-2 outline-none font-bold text-purple-700 h-16 resize-none"
-                                    placeholder="Pago pendiente, alergias, indicaciones especiales..."
+                                    className="w-full bg-purple-50/50 p-3 rounded-xl border border-purple-200 mt-2 outline-none font-bold text-purple-700 h-16 resize-none focus:bg-white focus:border-purple-400 transition-all text-sm placeholder:font-normal"
+                                    placeholder="Pago pendiente, patologías, indicaciones especiales..."
                                     value={bookingVisitDetails}
                                     onChange={e => setBookingVisitDetails(e.target.value)}
-                                    disabled={false}
                                 />
                             </div>
 
@@ -1706,51 +1995,49 @@ const Agenda: React.FC = () => {
                             </button>
                             {selectedAppt && (
                                 <button
-                                    disabled={isBooking}
                                     onClick={async () => {
-                                        if (isBooking) return;
                                         try {
-                                            setIsBooking(true);
-
-                                            // Relaxed validation: use original appointment data as fallback
-                                            const finalPatientId = bookingPatientId || selectedAppt?.patientId || '';
-                                            const finalDoctorId = bookingDoctorId || selectedAppt?.doctorId || '';
-                                            const finalDate = bookingDate || (selectedAppt?.date ? selectedAppt.date.split('T')[0] : '');
-                                            const finalTime = bookingTime || selectedAppt?.time || '';
-
-                                            if (!finalDate || !finalTime) {
-                                                alert('❌ Error: Fecha y Hora son obligatorios');
+                                            // Validación: Campos requeridos
+                                            if (!bookingPatientId || !bookingDoctorId || !bookingDate || !bookingTime) {
+                                                alert('❌ Error: Completa todos los campos obligatorios (Paciente, Doctor, Fecha, Hora)');
                                                 return;
                                             }
 
-                                            const updatePayload: any = {
-                                                date: `${finalDate}T00:00:00.000Z`,
-                                                time: finalTime,
-                                                treatmentName: bookingTreatment || null,
+                                            setIsBooking(true);
+                                            const updatePayload = {
+                                                date: `${bookingDate}T00:00:00.000Z`,
+                                                time: bookingTime,
+                                                patientId: bookingPatientId,
+                                                doctorId: bookingDoctorId,
+                                                treatmentName: !bookingBudgetId && selectedDbServices.length > 0 
+                                                    ? selectedDbServices.map(t => t.name).join(', ')
+                                                    : (bookingTreatment || null),
                                                 amount: bookingPrice || null,
                                                 duration: bookingDuration,
                                                 observations: bookingObservation || null,
                                                 visitDetails: bookingVisitDetails || null,
                                                 budgetId: bookingBudgetId || null,
                                                 budgetItemId: bookingBudgetItemId || null,
-                                                status: (selectedAppt as any).status || 'Scheduled'
+                                                status: (selectedAppt as any).status || 'Scheduled',
+                                                // 🆕 New fields
+                                                isRevision: bookingIsRevision,
+                                                serviceIds: selectedDbServices.length > 0 
+                                                    ? selectedDbServices.filter(s => !s.id.startsWith('custom-')).map(s => s.id) 
+                                                    : undefined,
                                             };
-
-                                            // Only include patientId/doctorId if they have a value
-                                            if (finalPatientId) updatePayload.patientId = finalPatientId;
-                                            if (finalDoctorId) updatePayload.doctorId = finalDoctorId;
 
                                             console.log('📝 Updating appointment:', updatePayload);
 
                                             // VALIDATION: Doctor availability — warn but do not block
-                                            if (finalDoctorId) {
-                                                const checkDate = new Date(updatePayload.date);
-                                                const availSlots = getAvailableTimeSlots(checkDate, finalDoctorId);
-                                                if (!availSlots.includes(updatePayload.time)) {
-                                                    const proceed = window.confirm(
-                                                        "⚠️ Este horario está fuera del horario configurado para este doctor.\n\n¿Deseas guardar la cita de todas formas?"
-                                                    );
-                                                    if (!proceed) return;
+                                            const checkDate = new Date(updatePayload.date);
+                                            const availSlots = getAvailableTimeSlots(checkDate, updatePayload.doctorId);
+                                            if (!availSlots.includes(updatePayload.time)) {
+                                                const proceed = window.confirm(
+                                                    "⚠️ Este horario está fuera del horario configurado para este doctor.\n\n¿Deseas guardar la cita de todas formas?"
+                                                );
+                                                if (!proceed) {
+                                                    setIsBooking(false);
+                                                    return;
                                                 }
                                             }
 
@@ -1769,21 +2056,19 @@ const Agenda: React.FC = () => {
                                             setIsBooking(false);
                                         }
                                     }}
+                                    disabled={isBooking}
                                     className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50"
                                 >
-                                    {isBooking ? (
-                                        <><span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" /> Guardando...</>
-                                    ) : (
-                                        <><Save size={16} /> Guardar Cambios</>
-                                    )}
+                                    {isBooking ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : <><Save size={16} /> Guardar Cambios</>}
                                 </button>
                             )}
                             {!selectedAppt && (
-                                <button onClick={handleBooking} disabled={isBooking} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">
-                                    {isBooking ? 'Guardando...' : 'Confirmar'}
+                                <button onClick={handleBooking} disabled={isBooking} className="flex-1 flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">
+                                    {isBooking ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Confirmar'}
                                 </button>
                             )}
                         </div>
+
                     </div>
                 </div>
             )
