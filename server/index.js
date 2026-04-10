@@ -1350,7 +1350,7 @@ app.post('/api/appointments', async (req, res) => {
                 paid: false,
                 is_revision: isRevision === true
             }])
-            .select()
+            .select('*, patient:Patient!left(*), doctor:Doctor!left(*), budget:Budget!left(id, totalAmount, items:BudgetLineItem!left(name, price, tooth))')
             .single();
 
         if (error) {

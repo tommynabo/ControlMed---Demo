@@ -1955,13 +1955,13 @@ const Agenda: React.FC = () => {
                             <div>
                                 <label className="text-xs font-bold uppercase text-slate-400">Duración</label>
                                 <select
-                                    className="w-full bg-white p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-900"
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
                                     value={bookingDuration}
                                     onChange={(e) => setBookingDuration(Number(e.target.value))}
                                     style={{ colorScheme: 'light' }}
                                 >
-                                    {DURATION_OPTIONS.map(opt => (
-                                        <option key={opt.value} value={opt.value} className="bg-white text-slate-900">{opt.label}</option>
+                                    {DURATION_OPTIONS.map(minutes => (
+                                        <option key={minutes} value={minutes}>{minutes} min</option>
                                     ))}
                                 </select>
                             </div>
