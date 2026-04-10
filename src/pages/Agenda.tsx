@@ -1852,23 +1852,25 @@ const Agenda: React.FC = () => {
                                         {/* Dropdown Results */}
                                         {showServiceDropdown && bookingServiceSearch.trim().length > 0 && (
                                             <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl z-[120] max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                                                {/* Custom Entry Option */}
+                                                <div 
+                                                    onClick={handleAddTreatmentToList}
+                                                    className="flex items-center gap-3 px-5 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-100 transition-colors group"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                                        <Sparkles size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-black text-blue-600 group-hover:text-blue-700">Añadir "{bookingServiceSearch}"</p>
+                                                        <p className="text-[10px] text-slate-400 font-bold">Concepto libre a coste 0€</p>
+                                                    </div>
+                                                </div>
+
                                                 {(() => {
                                                     const filtered = dbServices.filter(s =>
                                                         s.name.toLowerCase().includes(bookingServiceSearch.toLowerCase()) ||
                                                         (s.specialty_name || '').toLowerCase().includes(bookingServiceSearch.toLowerCase())
                                                     ).filter(s => !selectedDbServices.some(sel => sel.id === s.id)).slice(0, 15);
-
-                                                    if (filtered.length === 0) {
-                                                        return (
-                                                            <div 
-                                                                onClick={handleAddTreatmentToList}
-                                                                className="p-4 text-center cursor-pointer hover:bg-blue-50 transition-colors group"
-                                                            >
-                                                                <p className="text-sm font-bold text-slate-400 group-hover:text-blue-600">No hay coincidencias en el catálogo</p>
-                                                                <p className="text-[11px] text-blue-500 font-black mt-1">Pulse Enter para añadir "{bookingServiceSearch}" como texto libre (0€)</p>
-                                                            </div>
-                                                        );
-                                                    }
 
                                                     return filtered.map(svc => (
                                                         <div
@@ -1878,7 +1880,7 @@ const Agenda: React.FC = () => {
                                                                 name: svc.name,
                                                                 price: svc.final_price || 0
                                                             })}
-                                                            className="flex items-center justify-between px-5 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors group"
+                                                            className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors group"
                                                         >
                                                             <div>
                                                                 <p className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{svc.name}</p>
@@ -1907,38 +1909,26 @@ const Agenda: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Es Revisión Toggle */}
-                            <div
-                                className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
-                                    bookingIsRevision
-                                        ? 'bg-cyan-50 border-cyan-400 shadow-[0_0_0_4px_rgba(6,182,212,0.1)]'
-                                        : 'bg-slate-50 border-slate-200 hover:border-cyan-300'
-                                }`}
-                                onClick={() => setBookingIsRevision(!bookingIsRevision)}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
-                                        bookingIsRevision ? 'bg-cyan-500 text-white shadow-lg' : 'bg-slate-200 text-slate-500'
-                                    }`}>
-                                        ↩
-                                    </div>
-                                    <div>
-                                        <p className={`text-sm font-black transition-colors ${
-                                            bookingIsRevision ? 'text-cyan-800' : 'text-slate-600'
-                                        }`}>Es Revisión</p>
-                                        <p className="text-[10px] text-slate-400 font-medium">
-                                            {bookingIsRevision ? 'Cita marcada como revisión — aparecerá con etiqueta especial' : 'Marcar para indicar que es una cita de revisión'}
-                                        </p>
-                                    </div>
-                                </div>
-                                {/* Toggle switch */}
-                                <div className={`relative w-12 h-6 rounded-full transition-all ${
-                                    bookingIsRevision ? 'bg-cyan-500' : 'bg-slate-300'
-                                }`}>
-                                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all ${
-                                        bookingIsRevision ? 'left-6' : 'left-0.5'
-                                    }`} />
-                                </div>
+                            {/* Restored Observations Field */}
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-400">Observaciones de la Cita</label>
+                                <textarea
+                                    className="w-full bg-slate-50/80 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-20 resize-none focus:bg-white focus:border-blue-400 transition-all text-sm placeholder:font-normal"
+                                    placeholder="Notas adicionales sobre este tratamiento..."
+                                    value={bookingObservation}
+                                    onChange={e => setBookingObservation(e.target.value)}
+                                />
+                            </div>
+
+                            {/* Restored Visit Details Field */}
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-400">Detalles de la Visita (Alertas)</label>
+                                <textarea
+                                    className="w-full bg-purple-50/50 p-3 rounded-xl border border-purple-200 mt-2 outline-none font-bold text-purple-700 h-16 resize-none focus:bg-white focus:border-purple-400 transition-all text-sm placeholder:font-normal"
+                                    placeholder="Pago pendiente, patologías, indicaciones especiales..."
+                                    value={bookingVisitDetails}
+                                    onChange={e => setBookingVisitDetails(e.target.value)}
+                                />
                             </div>
 
                         </div>{/* end scrollable area */}
