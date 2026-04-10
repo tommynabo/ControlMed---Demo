@@ -183,7 +183,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         const channel = supabase.channel('agenda-realtime')
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'appointments' },
+                { event: '*', schema: 'public', table: 'Appointment' },
                 (payload) => {
                     console.log('[Realtime] Agenda actualizada desde otro cliente:', payload);
                     queryClient.invalidateQueries({ queryKey: ['appointments'] });

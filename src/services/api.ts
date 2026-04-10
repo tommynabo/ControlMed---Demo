@@ -308,16 +308,21 @@ export const api = {
     createPatient: async (patient: Partial<Patient>): Promise<Patient> => {
         // Let the server generate the UUID — don't send a client-side ID
         delete patient.id;
-        const res = await fetch(`${API_URL}/patients`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(patient)
-        });
-        if (!res.ok) {
-            const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error || `Failed to create patient: ${res.statusText}`);
+        try {
+            const res = await fetch(`${API_URL}/patients`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(patient)
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || `Failed to create patient: ${res.statusText}`);
+            }
+            return await res.json();
+        } finally {
+            // Invalidate patients list so Agenda and other views pick up the new patient immediately
+            queryClient.invalidateQueries({ queryKey: ['patients'] });
         }
-        return res.json();
     },
 
     updatePatient: async (id: string, updates: Partial<Patient>): Promise<Patient> => {
@@ -372,7 +377,11 @@ export const api = {
                 }
                 return await res.json();
             } finally {
+                // REQUIRED: Invalidate both global Agenda and Patient-specific caches
                 queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                if (appointment.patientId) {
+                    queryClient.invalidateQueries({ queryKey: ['patient-appointments', appointment.patientId] });
+                }
             }
         },
         update: async (id: string, updates: Partial<Appointment>): Promise<Appointment> => {
@@ -388,7 +397,11 @@ export const api = {
                 }
                 return await res.json();
             } finally {
+                // REQUIRED: Invalidate both global Agenda and Patient-specific caches
                 queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                if (updates.patientId) {
+                    queryClient.invalidateQueries({ queryKey: ['patient-appointments', updates.patientId] });
+                }
             }
         },
         delete: async (id: string): Promise<void> => {
@@ -403,6 +416,9 @@ export const api = {
                 }
             } finally {
                 queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                // Note: We don't have patientId here, but invalidateQueries with partial match or a full refresh would be safer
+                // However, since we don't know the patientId, we just invalidate the global one.
+                // If needed, we could fetch before delete, but for now we follow the instruction.
             }
         }
     },

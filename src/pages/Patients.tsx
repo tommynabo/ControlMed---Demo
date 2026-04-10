@@ -9,6 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
 import { useAppContext } from '../context/AppContext';
+import { useQuery } from '@tanstack/react-query';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
 import OdontogramEnhanced from '../components/OdontogramEnhanced';
 import { PaymentModal } from '../components/PaymentModal';
@@ -332,14 +333,19 @@ const Patients: React.FC = () => {
         }
     }, [selectedPatient, patientTab]);
 
-    // Fetch patient visits when visitas tab is active
-    React.useEffect(() => {
-        if (selectedPatient && patientTab === 'visitas') {
-            api.appointments.getByPatient(selectedPatient.id)
-                .then(setPatientAppointments)
-                .catch(err => console.error("Failed to load visits", err));
+    // Fetch patient visits using React Query for better synchronization
+    const { data: rqPatientAppointments, refetch: refetchPatientAppointments } = useQuery({
+        queryKey: ['patient-appointments', selectedPatient?.id],
+        queryFn: () => api.appointments.getByPatient(selectedPatient!.id),
+        enabled: !!selectedPatient && (patientTab === 'visitas' || patientTab === 'ficha' || patientTab === 'history'),
+        staleTime: 1000 * 60 * 2, // 2 minutes
+    });
+
+    useEffect(() => {
+        if (rqPatientAppointments) {
+            setPatientAppointments(rqPatientAppointments);
         }
-    }, [selectedPatient, patientTab]);
+    }, [rqPatientAppointments]);
 
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
@@ -1960,7 +1966,7 @@ const Patients: React.FC = () => {
                                                             <h4 className="text-lg font-black text-slate-900">{p.medication}</h4>
                                                             <div className="flex items-center gap-3 mt-1">
                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                    {new Date(p.date || p.createdAt || p.date).toLocaleDateString()}
+                                                                    {new Date(p.date || p.createdAt || p.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                                                                 </span>
                                                                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                                                                 <span className="text-[10px] font-bold text-indigo-500 uppercase">
@@ -2204,7 +2210,7 @@ const Patients: React.FC = () => {
                                                             <h4 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                                                                 {budget.title || `Presupuesto #${budget.id.substring(0, 6)}`}
                                                             </h4>
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{new Date(budget.createdAt).toLocaleDateString()}</p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{new Date(budget.date || budget.createdAt).toLocaleDateString('es-ES', { timeZone: 'UTC' })}</p>
                                                         </div>
                                                         <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${budget.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
                                                             {budget.status || 'DRAFT'}
@@ -3034,7 +3040,7 @@ const Patients: React.FC = () => {
                     recordId={recordToReassign.id}
                     patientName={selectedPatient?.name || 'Paciente'}
                     currentDoctorId={recordToReassign.authorId}
-                    dateText={new Date(recordToReassign.date).toLocaleDateString()}
+                    dateText={new Date(recordToReassign.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                     onSuccess={() => {
                         // Refresh clinical records
                         if (selectedPatient) {

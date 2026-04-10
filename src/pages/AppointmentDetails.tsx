@@ -167,7 +167,7 @@ export const AppointmentDetails: React.FC = () => {
                                 Gestión de Cita
                             </h1>
                             <p className="text-sm text-slate-500 font-medium mt-1">
-                                {new Date(appointment.date).toLocaleDateString('es-ES')} - {appointment.time}
+                                {new Date(appointment.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })} - {appointment.time}
                             </p>
                         </div>
                     </div>

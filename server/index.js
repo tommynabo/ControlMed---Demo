@@ -1378,7 +1378,7 @@ app.get('/api/appointments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
+            .select('*, patient:Patient(*), doctor:Doctor(*), budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
             .is('deleted_at', null);
 
         if (error) {
@@ -1399,7 +1399,7 @@ app.get('/api/patients/:patientId/appointments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*')
+            .select('*, patient:Patient(*), doctor:Doctor(*)')
             .eq('patientId', req.params.patientId)
             .is('deleted_at', null)
             .order('date', { ascending: false });

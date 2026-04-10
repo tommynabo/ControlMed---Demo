@@ -133,7 +133,7 @@ const Agenda: React.FC = () => {
         const channel = supabase.channel('agenda-appointments')
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'appointments' },
+                { event: '*', schema: 'public', table: 'Appointment' },
                 () => {
                     queryClient.invalidateQueries({ queryKey: ['appointments'] });
                 }
@@ -1674,7 +1674,7 @@ const Agenda: React.FC = () => {
                                         <option value="">-- Sin vincular --</option>
                                         {patientBudgets.map(b => (
                                             <option key={b.id} value={b.id}>
-                                                #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString()}
+                                                #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                                             </option>
                                         ))}
                                     </select>
