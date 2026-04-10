@@ -59,6 +59,15 @@ const Agenda: React.FC = () => {
     const [treatmentToAdd, setTreatmentToAdd] = useState<string>('');
     const [selectedTreatmentsList, setSelectedTreatmentsList] = useState<Array<{id: string, name: string, price: number}>>([]);
 
+    // 🆕 Feature 1: Real DB Services search state
+    const [dbServices, setDbServices] = useState<Array<{id: string, name: string, final_price: number, specialty_name?: string}>>([]);
+    const [bookingServiceSearch, setBookingServiceSearch] = useState<string>('');
+    const [selectedDbServices, setSelectedDbServices] = useState<Array<{id: string, name: string, price: number}>>([]);
+    const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+
+    // 🆕 Feature 2: Revisión toggle state
+    const [bookingIsRevision, setBookingIsRevision] = useState<boolean>(false);
+
     // Budget & Patient State
     const [bookingPatientId, setBookingPatientId] = useState<string>('');
     const [patientBudgets, setPatientBudgets] = useState<any[]>([]);
@@ -147,6 +156,13 @@ const Agenda: React.FC = () => {
             setPatientBudgets([]);
         }
     }, [bookingPatientId]);
+
+    // 🆕 Load real DB Services catalog for searchable selector
+    useEffect(() => {
+        api.services.getAll()
+            .then((data: any[]) => setDbServices(data || []))
+            .catch((err: any) => console.warn('Could not load DB services catalog:', err));
+    }, [api]);
 
     // Load Agenda Closures (Feature 4)
     useEffect(() => {
@@ -405,6 +421,11 @@ const Agenda: React.FC = () => {
         // Extract date portion directly from ISO string to avoid UTC→local timezone shift
         setBookingDate(appt.date.split('T')[0]);
         setBookingTime(appt.time);
+        // 🆕 Populate new feature states from existing appointment
+        setBookingIsRevision(!!(appt.isRevision || (appt as any).is_revision));
+        setSelectedDbServices([]);
+        setBookingServiceSearch('');
+        setShowServiceDropdown(false);
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
         setIsAppointmentModalOpen(true);
     };
@@ -429,6 +450,11 @@ const Agenda: React.FC = () => {
         setIsDuplicating(false);
         setBookingDate(formatDateLocal(currentDate));
         setBookingTime('08:00');
+        // 🆕 Reset new feature states
+        setBookingIsRevision(false);
+        setSelectedDbServices([]);
+        setBookingServiceSearch('');
+        setShowServiceDropdown(false);
     };
 
     // Multi-treatment handlers
@@ -559,6 +585,8 @@ const Agenda: React.FC = () => {
             treatmentIds: !bookingBudgetId && selectedTreatmentsList.length > 1
                 ? selectedTreatmentsList.map(t => t.id)
                 : null,
+            // 🆕 Real DB service IDs (overrides treatmentName if provided)
+            serviceIds: selectedDbServices.length > 0 ? selectedDbServices.map(s => s.id) : null,
             budgetId: bookingBudgetId || null,
             budgetItemId: bookingBudgetItemId || null,
             budgetItemIds: selectedBudgetItems.length > 0 ? selectedBudgetItems.map(item => item.id || item._idx) : null,
@@ -566,7 +594,9 @@ const Agenda: React.FC = () => {
             observations: bookingObservation || null,
             visitDetails: bookingVisitDetails || null,
             status: 'Scheduled',
-            duration: bookingDuration
+            duration: bookingDuration,
+            // 🆕 Revisión tag
+            isRevision: bookingIsRevision
         };
 
         try {
@@ -590,6 +620,10 @@ const Agenda: React.FC = () => {
             setBookingVisitDetails('');
             setBookingPrice(0);
             setBookingDuration(30);
+            // 🆕 Reset new states
+            setBookingIsRevision(false);
+            setSelectedDbServices([]);
+            setBookingServiceSearch('');
             toast.success("Cita guardada correctamente.");
         } catch (e: any) {
             console.error(e);
@@ -1442,11 +1476,18 @@ const Agenda: React.FC = () => {
                                                                             {appt.observations}
                                                                         </p>
                                                                     )}
-                                                                    {/* Feature 7: Visit Details visible on card */}
+                                                                            {/* Feature 7: Visit Details visible on card */}
                                                                     {appt.duration && appt.duration >= 30 && (appt as any).visitDetails && (
                                                                         <p className="text-[9px] text-purple-500 opacity-80 mt-0.5 line-clamp-1 italic">
                                                                             📋 {(appt as any).visitDetails}
                                                                         </p>
+                                                                    )}
+
+                                                                    {/* 🆕 Feature: Revisión Badge */}
+                                                                    {(appt.isRevision || (appt as any).is_revision) && (
+                                                                        <div className="mt-0.5 inline-flex items-center gap-0.5 bg-cyan-500/20 border border-cyan-400/50 text-cyan-700 rounded-full px-1.5 py-0" style={{fontSize: '8px', fontWeight: 900}}>
+                                                                            ↩ REVISIÓN
+                                                                        </div>
                                                                     )}
 
                                                                     {/* RESIZE HANDLE */}
@@ -1824,6 +1865,148 @@ const Agenda: React.FC = () => {
                                 />
                             </div>
 
+                            {/* 🆕 NEW FEATURE 1: Real DB Service Searchable Multi-Selector */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-xs font-bold uppercase text-slate-400">Servicios / Tratamientos</label>
+                                    {dbServices.length > 0 && (
+                                        <span className="text-[10px] text-emerald-600 font-bold">{dbServices.length} servicios disponibles</span>
+                                    )}
+                                </div>
+
+                                {/* Selected services chips */}
+                                {selectedDbServices.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                        {selectedDbServices.map((svc, idx) => (
+                                            <div
+                                                key={svc.id}
+                                                className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 text-[11px] font-bold"
+                                            >
+                                                <span>{svc.name}</span>
+                                                {svc.price > 0 && <span className="text-emerald-600 font-black">{svc.price}€</span>}
+                                                <button
+                                                    onClick={() => {
+                                                        const newList = selectedDbServices.filter((_, i) => i !== idx);
+                                                        setSelectedDbServices(newList);
+                                                        setBookingPrice(newList.reduce((s, x) => s + x.price, 0));
+                                                    }}
+                                                    className="w-4 h-4 flex items-center justify-center rounded-full bg-emerald-200 hover:bg-red-200 text-emerald-700 hover:text-red-700 transition-colors font-black text-xs leading-none"
+                                                >×</button>
+                                            </div>
+                                        ))}
+                                        <div className="text-right text-[11px] font-black text-emerald-700 ml-auto self-center">
+                                            Total: {selectedDbServices.reduce((s, x) => s + x.price, 0).toFixed(2)}€
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Search input + dropdown */}
+                                <div className="relative">
+                                    <div className="relative">
+                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar servicio (ej: Empaste, Limpieza...)"
+                                            value={bookingServiceSearch}
+                                            onChange={e => {
+                                                setBookingServiceSearch(e.target.value);
+                                                setShowServiceDropdown(true);
+                                            }}
+                                            onFocus={() => setShowServiceDropdown(true)}
+                                            className="w-full bg-slate-50 pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 outline-none text-sm font-bold text-slate-700 placeholder:font-normal placeholder:text-slate-400"
+                                        />
+                                    </div>
+
+                                    {/* Dropdown list */}
+                                    {showServiceDropdown && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto">
+                                            {(bookingServiceSearch.trim().length > 0
+                                                ? dbServices.filter(s =>
+                                                    s.name.toLowerCase().includes(bookingServiceSearch.toLowerCase()) ||
+                                                    (s.specialty_name || '').toLowerCase().includes(bookingServiceSearch.toLowerCase())
+                                                )
+                                                : dbServices
+                                            )
+                                            .filter(s => !selectedDbServices.find(sel => sel.id === s.id))
+                                            .slice(0, 20)
+                                            .map(svc => (
+                                                <div
+                                                    key={svc.id}
+                                                    onClick={() => {
+                                                        const newSvc = { id: svc.id, name: svc.name, price: svc.final_price || 0 };
+                                                        const newList = [...selectedDbServices, newSvc];
+                                                        setSelectedDbServices(newList);
+                                                        setBookingPrice(newList.reduce((s, x) => s + x.price, 0));
+                                                        setBookingServiceSearch('');
+                                                        setShowServiceDropdown(false);
+                                                    }}
+                                                    className="flex items-center justify-between px-4 py-2.5 hover:bg-emerald-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors group"
+                                                >
+                                                    <div>
+                                                        <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-800">{svc.name}</p>
+                                                        {svc.specialty_name && (
+                                                            <p className="text-[10px] text-slate-400 font-medium">{svc.specialty_name}</p>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-xs font-black text-slate-500 group-hover:text-emerald-600">
+                                                        {(svc.final_price || 0) > 0 ? `${svc.final_price}€` : 'Gratis'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                            {dbServices.length === 0 && (
+                                                <div className="px-4 py-3 text-xs text-slate-400 text-center">
+                                                    Cargando catálogo de servicios...
+                                                </div>
+                                            )}
+                                            {dbServices.length > 0 && (bookingServiceSearch.trim().length > 0 ? dbServices.filter(s => s.name.toLowerCase().includes(bookingServiceSearch.toLowerCase()) && !selectedDbServices.find(sel => sel.id === s.id)) : dbServices.filter(s => !selectedDbServices.find(sel => sel.id === s.id))).length === 0 && (
+                                                <div className="px-4 py-3 text-xs text-slate-400 text-center">
+                                                    No se encontraron servicios
+                                                </div>
+                                            )}
+                                            {/* Close dropdown on click outside (blur) */}
+                                            <div
+                                                className="fixed inset-0 z-[-1]"
+                                                onClick={() => setShowServiceDropdown(false)}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* 🆕 NEW FEATURE 2: Es Revisión Toggle */}
+                            <div
+                                className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                                    bookingIsRevision
+                                        ? 'bg-cyan-50 border-cyan-400 shadow-[0_0_0_4px_rgba(6,182,212,0.1)]'
+                                        : 'bg-slate-50 border-slate-200 hover:border-cyan-300'
+                                }`}
+                                onClick={() => setBookingIsRevision(!bookingIsRevision)}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
+                                        bookingIsRevision ? 'bg-cyan-500 shadow-lg' : 'bg-slate-200'
+                                    }`}>
+                                        ↩
+                                    </div>
+                                    <div>
+                                        <p className={`text-sm font-black transition-colors ${
+                                            bookingIsRevision ? 'text-cyan-800' : 'text-slate-600'
+                                        }`}>Es Revisión</p>
+                                        <p className="text-[10px] text-slate-400 font-medium">
+                                            {bookingIsRevision ? 'Cita marcada como revisión — aparecerá con etiqueta especial' : 'Marcar para indicar que es una cita de revisión'}
+                                        </p>
+                                    </div>
+                                </div>
+                                {/* Toggle switch */}
+                                <div className={`relative w-12 h-6 rounded-full transition-all ${
+                                    bookingIsRevision ? 'bg-cyan-500' : 'bg-slate-300'
+                                }`}>
+                                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-all ${
+                                        bookingIsRevision ? 'left-6' : 'left-0.5'
+                                    }`} />
+                                </div>
+                            </div>
+
                         </div>{/* end scrollable area */}
                         <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                             <button onClick={() => { setIsAppointmentModalOpen(false); setIsEditingAppt(false); }} className="flex-1 py-3 font-bold text-slate-500">
@@ -1852,7 +2035,10 @@ const Agenda: React.FC = () => {
                                                 visitDetails: bookingVisitDetails || null,
                                                 budgetId: bookingBudgetId || null,
                                                 budgetItemId: bookingBudgetItemId || null,
-                                                status: (selectedAppt as any).status || 'Scheduled'
+                                                status: (selectedAppt as any).status || 'Scheduled',
+                                                // 🆕 New fields
+                                                isRevision: bookingIsRevision,
+                                                serviceIds: selectedDbServices.length > 0 ? selectedDbServices.map(s => s.id) : undefined,
                                             };
 
                                             console.log('📝 Updating appointment:', updatePayload);
@@ -1897,6 +2083,7 @@ const Agenda: React.FC = () => {
                                 </button>
                             )}
                         </div>
+
                     </div>
                 </div>
             )

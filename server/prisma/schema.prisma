@@ -229,6 +229,8 @@ model Appointment {
   liquidation Liquidation?
   invoice     Invoice?
   whatsappSent Boolean   @default(false) @map("whatsapp_sent")
+  isRevision   Boolean   @default(false) @map("is_revision")
+  deleted_at   DateTime?
 }
 
 model Liquidation {

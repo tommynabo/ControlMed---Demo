@@ -162,9 +162,13 @@ export interface Appointment {
   paid?: boolean;
   treatment?: string;
   treatmentId?: string;
+  treatmentName?: string;
   budgetId?: string;
   budgetItemId?: string;
   amount?: number;
+  isRevision?: boolean; // ✅ Marca la cita como revisión
+  is_revision?: boolean; // snake_case alias from DB
+  serviceIds?: string[]; // IDs de servicios del catálogo real vinculados
 }
 
 export interface InventoryItem {

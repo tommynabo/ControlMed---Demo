@@ -1232,9 +1232,9 @@ app.put('/api/patients/:id', async (req, res) => {
 // --- APPOINTMENTS ---
 app.post('/api/appointments', async (req, res) => {
     try {
-        const { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, budgetItemIds, amount } = req.body;
+        const { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, visitDetails, budgetId, budgetItemId, budgetItemIds, amount, isRevision, serviceIds } = req.body;
 
-        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, budgetId, budgetItemId, budgetItemIds, amount });
+        console.log('📅 Creating appointment:', { date, time, patientId, doctorId, treatmentId, treatmentName, duration, observations, visitDetails, budgetId, budgetItemId, budgetItemIds, amount, isRevision, serviceIds });
 
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
@@ -1316,6 +1316,20 @@ app.post('/api/appointments', async (req, res) => {
         }
 
         const appointmentId = crypto.randomUUID();
+
+        // If serviceIds provided, build a combined treatmentName from Service table
+        let resolvedTreatmentName = treatmentName || null;
+        if (Array.isArray(serviceIds) && serviceIds.length > 0) {
+            try {
+                const { data: svcs } = await supabase.from('Service').select('id, name').in('id', serviceIds);
+                if (svcs && svcs.length > 0) {
+                    resolvedTreatmentName = svcs.map(s => s.name).join(', ');
+                }
+            } catch (svcErr) {
+                console.warn('⚠️ Could not resolve serviceIds to names:', svcErr.message);
+            }
+        }
+
         const { data, error } = await supabase
             .from('Appointment')
             .insert([{
@@ -1324,15 +1338,17 @@ app.post('/api/appointments', async (req, res) => {
                 time,
                 duration: duration || 60,
                 observations: observations || null,
+                visitDetails: visitDetails || null,
                 patientId,
                 doctorId: safeDoctorId,
                 treatmentId: safeTreatmentId,
-                treatmentName: treatmentName || null,
+                treatmentName: resolvedTreatmentName,
                 budgetId: safeBudgetId,
                 budgetItemId: safeBudgetItemId || null,
                 amount: amount || null,
                 status: 'Scheduled',
-                paid: false
+                paid: false,
+                is_revision: isRevision === true
             }])
             .select()
             .single();
@@ -1428,7 +1444,7 @@ app.get('/api/appointments/:id', async (req, res) => {
 app.put('/api/appointments/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const updates = req.body;
+        const updates = { ...req.body };
 
         console.log(`📝 Updating Appointment ${id}:`, JSON.stringify(updates));
 
@@ -1453,6 +1469,29 @@ app.put('/api/appointments/:id', async (req, res) => {
 
         if (updates.date) {
             updates.date = new Date(updates.date).toISOString();
+        }
+
+        // Handle isRevision field mapping (camelCase -> snake_case for Supabase)
+        if (updates.isRevision !== undefined) {
+            updates.is_revision = updates.isRevision === true;
+            delete updates.isRevision;
+        }
+
+        // Handle serviceIds: resolve to treatmentName if provided
+        if (Array.isArray(updates.serviceIds) && updates.serviceIds.length > 0) {
+            try {
+                let supabaseInst;
+                try { supabaseInst = getSupabase(); } catch(e) {}
+                if (supabaseInst) {
+                    const { data: svcs } = await supabaseInst.from('Service').select('id, name').in('id', updates.serviceIds);
+                    if (svcs && svcs.length > 0) {
+                        updates.treatmentName = svcs.map(s => s.name).join(', ');
+                    }
+                }
+            } catch (svcErr) {
+                console.warn('⚠️ Could not resolve serviceIds on update:', svcErr.message);
+            }
+            delete updates.serviceIds;
         }
 
         // Preserve status if provided, default to current value
