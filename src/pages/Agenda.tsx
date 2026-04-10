@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X } from 'lucide-react';
+import { RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X, Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../services/supabase';
 import { DENTAL_SERVICES, TIME_SLOTS, DURATION_OPTIONS } from '../constants';
 import { Appointment, Doctor, AgendaClosure } from '../../types';
 import toast from 'react-hot-toast';
@@ -28,6 +30,7 @@ const Agenda: React.FC = () => {
         appointments, addAppointment, setAppointments, patients, currentUser, currentUserRole, api, setSelectedPatient, doctors, refreshAppointments
     } = useAppContext();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
     const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -116,8 +119,23 @@ const Agenda: React.FC = () => {
 
         // Reload schedules every 5 seconds to catch changes from Settings
         const interval = setInterval(loadSchedules, 5000);
-        return () => clearInterval(interval);
-    }, [api]);
+
+        // Supabase Realtime Listener (Agenda-specific)
+        const channel = supabase.channel('agenda-appointments')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'appointments' },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ['appointments'] });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            clearInterval(interval);
+            supabase.removeChannel(channel);
+        };
+    }, [api, queryClient]);
 
     // Fetch Budgets
     React.useEffect(() => {
@@ -1859,8 +1877,8 @@ const Agenda: React.FC = () => {
                                 </button>
                             )}
                             {!selectedAppt && (
-                                <button onClick={handleBooking} disabled={isBooking} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">
-                                    {isBooking ? 'Guardando...' : 'Confirmar'}
+                                <button onClick={handleBooking} disabled={isBooking} className="flex-1 flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">
+                                    {isBooking ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Confirmar'}
                                 </button>
                             )}
                         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Search, DollarSign, CheckSquare, Square, Percent, Calculator } from 'lucide-react';
+import { X, Plus, Trash2, Search, DollarSign, CheckSquare, Square, Percent, Calculator, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../services/api';
 
@@ -380,8 +380,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                             disabled={isSubmitting}
                             className="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold uppercase shadow-lg hover:shadow-xl hover:scale-105 transition-all flex items-center gap-2 disabled:opacity-50 disabled:scale-100"
                         >
-                            <DollarSign size={18} />
-                            {isSubmitting ? 'Guardando...' : (initialBudget ? 'Guardar Cambios' : 'Crear Presupuesto')}
+                            {isSubmitting ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : <><DollarSign size={18} /> {initialBudget ? 'Guardar Cambios' : 'Crear Presupuesto'}</>}
                         </button>
                     </div>
                 </div>

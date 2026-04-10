@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, User, Calendar, Clock, FileText, Eye } from 'lucide-react';
+import { X, User, Calendar, Clock, FileText, Eye, Loader2 } from 'lucide-react';
 import { Appointment, Patient } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
@@ -28,10 +28,13 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
         }
     }, [appointment]);
 
+    const [isSavingTime, setIsSavingTime] = React.useState(false);
+
     const handleTimeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const newTime = e.target.value;
         setTime(newTime);
         if (appointment) {
+            setIsSavingTime(true);
             try {
                 await api.appointments.update(appointment.id, { time: newTime });
                 await refreshAppointments();
@@ -39,6 +42,8 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             } catch (error) {
                 toast.error('Error al actualizar hora');
                 setTime(appointment.time); // revert to original
+            } finally {
+                setIsSavingTime(false);
             }
         }
     };
@@ -125,14 +130,18 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                             <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center">
                                 <Clock size={20} />
                             </div>
-                            <div>
-                                <p className="text-xs font-bold text-slate-400 uppercase">Hora</p>
-                                <input 
-                                    type="time" 
-                                    value={time} 
-                                    onChange={handleTimeChange}
-                                    className="text-sm font-black text-slate-900 bg-transparent border-b border-slate-300 focus:outline-none focus:border-purple-500 w-full"
-                                />
+                            <div className="flex-1 flex items-center gap-2">
+                                <div className="flex-1">
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Hora</p>
+                                    <input 
+                                        type="time" 
+                                        value={time} 
+                                        onChange={handleTimeChange}
+                                        disabled={isSavingTime}
+                                        className="text-sm font-black text-slate-900 bg-transparent border-b border-slate-300 focus:outline-none focus:border-purple-500 w-full disabled:opacity-50"
+                                    />
+                                </div>
+                                {isSavingTime && <Loader2 className="animate-spin text-purple-600 w-4 h-4 mt-4" />}
                             </div>
                         </div>
 

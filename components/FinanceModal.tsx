@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Budget } from '../types';
+import { Loader2 } from 'lucide-react';
 
 interface FinanceModalProps {
     budget: Budget;
@@ -15,14 +16,20 @@ export const FinanceModal: React.FC<FinanceModalProps> = ({ budget, onClose, onS
     const financedAmount = Math.max(0, totalAmount - downPayment);
     const monthlyFee = months > 0 ? financedAmount / months : 0;
 
-    const handleConfirm = () => {
-        // Here we would call the API to create the TreatmentPlan with installments
-        onSave({
-            total: totalAmount,
-            downPayment,
-            months,
-            monthlyFee
-        });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleConfirm = async () => {
+        setIsSubmitting(true);
+        try {
+            await onSave({
+                total: totalAmount,
+                downPayment,
+                months,
+                monthlyFee
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
@@ -84,8 +91,8 @@ export const FinanceModal: React.FC<FinanceModalProps> = ({ budget, onClose, onS
 
                     <div className="flex gap-4">
                         <button onClick={onClose} className="flex-1 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-xl">Cancelar</button>
-                        <button onClick={handleConfirm} className="flex-1 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 shadow-lg shadow-blue-500/20">
-                            Confirmar Plan
+                        <button onClick={handleConfirm} disabled={isSubmitting} className="flex-1 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2">
+                            {isSubmitting ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Confirmar Plan'}
                         </button>
                     </div>
                 </div>

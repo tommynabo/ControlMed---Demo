@@ -4,7 +4,7 @@ import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight
+    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight, Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
@@ -1625,7 +1625,7 @@ const Patients: React.FC = () => {
                                                                             </div>
                                                                             <div className="flex gap-2 mt-2">
                                                                                 <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
-                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{isSavingVisit ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
                                                                             </div>
                                                                             <div className="flex gap-2 pt-2 border-t border-slate-200">
                                                                                 <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
@@ -1711,7 +1711,7 @@ const Patients: React.FC = () => {
                                                                             </div>
                                                                             <div className="flex gap-2 mt-2">
                                                                                 <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
-                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{isSavingVisit ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
                                                                             </div>
                                                                             <div className="flex gap-2 pt-2 border-t border-slate-200">
                                                                                 <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
@@ -1797,7 +1797,7 @@ const Patients: React.FC = () => {
                                                                             </div>
                                                                             <div className="flex gap-2 mt-2">
                                                                                 <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
-                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{isSavingVisit ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
                                                                             </div>
                                                                             <div className="flex gap-2 pt-2 border-t border-slate-200">
                                                                                 <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
@@ -2554,7 +2554,7 @@ const Patients: React.FC = () => {
                             </div>{/* end scrollable area */}
                             <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                                 <button onClick={() => setIsNewPatientModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
-                                <button onClick={handleCreatePatient} disabled={isSubmittingPatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">{isSubmittingPatient ? 'Guardando...' : 'Guardar'}</button>
+                                <button onClick={handleCreatePatient} disabled={isSubmittingPatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">{isSubmittingPatient ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
                             </div>
                         </div>
                     </div>
