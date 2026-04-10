@@ -50,8 +50,11 @@ export const AppointmentDetails: React.FC = () => {
             const appointmentData = await api.appointments.getById(id);
             setAppointment(appointmentData);
 
-            const patientData = patients.find(p => p.id === appointmentData.patientId);
-            setPatient(patientData || null);
+            // Try to find patient locally first, then use joined data from API, then create a minimal fallback
+            const patientData = patients.find(p => p.id === appointmentData.patientId)
+                || (appointmentData as any).patient
+                || null;
+            setPatient(patientData);
         } catch (error) {
             console.error('Error loading appointment:', error);
             alert('Error al cargar la cita');
@@ -141,13 +144,26 @@ export const AppointmentDetails: React.FC = () => {
 
     const displayConcept = getTreatmentName(appointment);
 
-    if (!appointment || !patient) {
+    if (!appointment) {
         return (
             <div className="flex items-center justify-center h-screen">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900"></div>
             </div>
         );
     }
+
+    // Create a safe patient object — orphan appointments still render
+    const safePatient = patient || {
+        id: appointment.patientId || '',
+        name: '⚠️ Paciente Desconocido',
+        dni: 'N/A',
+        email: 'N/A',
+        phone: '',
+        historyNumber: '',
+        wallet: 0,
+        alerts: [] as string[]
+    } as Patient;
+    const isOrphanPatient = !patient;
 
     return (
         <div className="min-h-screen bg-slate-50 p-8">
@@ -200,25 +216,30 @@ export const AppointmentDetails: React.FC = () => {
                 </div>
 
                 {/* Patient Info Card */}
-                <div className="bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm">
+                <div className={`bg-white rounded-[2.5rem] p-8 border ${isOrphanPatient ? 'border-amber-300' : 'border-slate-200'} shadow-sm`}>
+                    {isOrphanPatient && (
+                        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs font-bold text-amber-700">
+                            ⚠️ Dato huérfano — el paciente original no fue encontrado en el sistema
+                        </div>
+                    )}
                     <div className="flex items-start gap-6">
-                        <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-lg">
-                            {patient.name.charAt(0)}
+                        <div className={`w-20 h-20 ${isOrphanPatient ? 'bg-gradient-to-br from-amber-400 to-orange-400' : 'bg-gradient-to-br from-blue-500 to-indigo-500'} rounded-2xl flex items-center justify-center text-white font-black text-3xl shadow-lg`}>
+                            {safePatient.name.charAt(0)}
                         </div>
                         <div className="flex-1">
-                            <h2 className="text-2xl font-black text-slate-900">{patient.name}</h2>
+                            <h2 className="text-2xl font-black text-slate-900">{safePatient.name}</h2>
                             <div className="grid grid-cols-3 gap-4 mt-4">
                                 <div>
                                     <p className="text-xs font-black uppercase text-slate-400">DNI</p>
-                                    <p className="text-sm font-bold text-slate-900 mt-1">{patient.dni}</p>
+                                    <p className="text-sm font-bold text-slate-900 mt-1">{safePatient.dni}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs font-black uppercase text-slate-400">Email</p>
-                                    <p className="text-sm font-bold text-slate-900 mt-1">{patient.email}</p>
+                                    <p className="text-sm font-bold text-slate-900 mt-1">{safePatient.email}</p>
                                 </div>
                                 <div>
                                     <p className="text-xs font-black uppercase text-slate-400">Monedero</p>
-                                    <p className="text-sm font-black text-green-600 mt-1">{patient.wallet || 0}€</p>
+                                    <p className="text-sm font-black text-green-600 mt-1">{safePatient.wallet || 0}€</p>
                                 </div>
                             </div>
                         </div>
@@ -411,7 +432,7 @@ export const AppointmentDetails: React.FC = () => {
 
                         <div>
                             <p className="text-xs font-black uppercase text-slate-400">N° Historia</p>
-                            <p className="text-sm font-bold text-blue-600 mt-1">{patient.historyNumber || '-'}</p>
+                            <p className="text-sm font-bold text-blue-600 mt-1">{safePatient.historyNumber || '-'}</p>
                         </div>
                         {/* Budget Selector */}
                         <div className="col-span-2">
@@ -558,7 +579,7 @@ export const AppointmentDetails: React.FC = () => {
             <PaymentModal
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
-                patient={patient}
+                patient={safePatient}
                 budgets={budgets}
                 onPaymentComplete={handlePaymentComplete}
                 appointment={appointment}

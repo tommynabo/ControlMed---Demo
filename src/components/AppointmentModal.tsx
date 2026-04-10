@@ -1,9 +1,7 @@
 import React from 'react';
-import { X, User, Calendar, Clock, FileText, Eye, Loader2 } from 'lucide-react';
+import { X, User, Calendar, Clock, FileText, Eye } from 'lucide-react';
 import { Appointment, Patient } from '../../types';
 import { useNavigate } from 'react-router-dom';
-import { useAppContext } from '../context/AppContext';
-import { toast } from 'react-hot-toast';
 
 interface AppointmentModalProps {
     isOpen: boolean;
@@ -19,36 +17,19 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
     patient
 }) => {
     const navigate = useNavigate();
-    const { api, refreshAppointments } = useAppContext();
-    const [time, setTime] = React.useState(appointment?.time || '10:00');
 
-    React.useEffect(() => {
-        if (appointment) {
-            setTime(appointment.time);
-        }
-    }, [appointment]);
+    if (!isOpen || !appointment) return null;
 
-    const [isSavingTime, setIsSavingTime] = React.useState(false);
-
-    const handleTimeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newTime = e.target.value;
-        setTime(newTime);
-        if (appointment) {
-            setIsSavingTime(true);
-            try {
-                await api.appointments.update(appointment.id, { time: newTime });
-                await refreshAppointments();
-                toast.success('Hora actualizada');
-            } catch (error) {
-                toast.error('Error al actualizar hora');
-                setTime(appointment.time); // revert to original
-            } finally {
-                setIsSavingTime(false);
-            }
-        }
+    // Safe patient data — handle orphan appointments where patient is null/deleted
+    const safePatient = patient || {
+        name: '⚠️ Paciente Desconocido',
+        dni: 'N/A',
+        email: 'N/A',
+        phone: '',
+        historyNumber: '',
+        alerts: [] as string[]
     };
-
-    if (!isOpen || !appointment || !patient) return null;
+    const isOrphan = !patient;
 
     const handleViewAppointment = () => {
         // Navegar a la pantalla de gestión de cita
@@ -63,10 +44,10 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
             <div className="bg-white max-w-lg w-full rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 duration-500">
 
                 {/* Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 flex justify-between items-start">
+                <div className={`${isOrphan ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-blue-600 to-indigo-600'} p-8 flex justify-between items-start`}>
                     <div>
                         <h2 className="text-2xl font-black text-white tracking-tight">Resumen de Cita</h2>
-                        <p className="text-sm text-blue-100 mt-1">Información básica del paciente</p>
+                        <p className="text-sm text-blue-100 mt-1">{isOrphan ? '⚠️ Dato huérfano — paciente no encontrado' : 'Información básica del paciente'}</p>
                     </div>
                     <button
                         onClick={onClose}
@@ -81,24 +62,24 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
                     {/* Paciente */}
                     <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg">
-                            {patient.name.charAt(0)}
+                        <div className={`w-16 h-16 ${isOrphan ? 'bg-gradient-to-br from-amber-400 to-orange-400' : 'bg-gradient-to-br from-blue-500 to-indigo-500'} rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg`}>
+                            {safePatient.name.charAt(0)}
                         </div>
                         <div className="flex-1">
-                            <h3 className="text-xl font-black text-slate-900">{patient.name}</h3>
+                            <h3 className="text-xl font-black text-slate-900">{safePatient.name}</h3>
                             <div className="space-y-1 mt-2">
                                 <p className="text-sm text-slate-600 font-medium">
-                                    <strong>NHC:</strong> {patient.historyNumber || <span className="text-slate-400 italic">Sin asignar</span>}
+                                    <strong>NHC:</strong> {safePatient.historyNumber || <span className="text-slate-400 italic">Sin asignar</span>}
                                 </p>
                                 <p className="text-sm text-slate-600 font-medium">
-                                    <strong>DNI:</strong> {patient.dni}
+                                    <strong>DNI:</strong> {safePatient.dni}
                                 </p>
                                 <p className="text-sm text-slate-600 font-medium">
-                                    <strong>Email:</strong> {patient.email}
+                                    <strong>Email:</strong> {safePatient.email}
                                 </p>
-                                {patient.phone && (
+                                {safePatient.phone && (
                                     <p className="text-sm text-slate-600 font-medium">
-                                        <strong>Teléfono:</strong> {patient.phone}
+                                        <strong>Teléfono:</strong> {safePatient.phone}
                                     </p>
                                 )}
                             </div>
@@ -120,8 +101,7 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                                         weekday: 'long',
                                         year: 'numeric',
                                         month: 'long',
-                                        day: 'numeric',
-                                        timeZone: 'UTC'
+                                        day: 'numeric'
                                     })}
                                 </p>
                             </div>
@@ -131,18 +111,9 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                             <div className="w-10 h-10 bg-purple-100 text-purple-600 rounded-xl flex items-center justify-center">
                                 <Clock size={20} />
                             </div>
-                            <div className="flex-1 flex items-center gap-2">
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-slate-400 uppercase">Hora</p>
-                                    <input 
-                                        type="time" 
-                                        value={time} 
-                                        onChange={handleTimeChange}
-                                        disabled={isSavingTime}
-                                        className="text-sm font-black text-slate-900 bg-transparent border-b border-slate-300 focus:outline-none focus:border-purple-500 w-full disabled:opacity-50"
-                                    />
-                                </div>
-                                {isSavingTime && <Loader2 className="animate-spin text-purple-600 w-4 h-4 mt-4" />}
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase">Hora</p>
+                                <p className="text-sm font-black text-slate-900">{appointment.time}</p>
                             </div>
                         </div>
 
@@ -160,11 +131,11 @@ export const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     </div>
 
                     {/* Información adicional */}
-                    {patient.alerts && patient.alerts.length > 0 && (
+                    {safePatient.alerts && safePatient.alerts.length > 0 && (
                         <div className="bg-amber-50 border-l-4 border-amber-500 rounded-xl p-4">
                             <p className="text-xs font-black uppercase text-amber-700 mb-2">⚠️ Alertas</p>
                             <ul className="space-y-1">
-                                {patient.alerts.map((alert, idx) => (
+                                {safePatient.alerts.map((alert, idx) => (
                                     <li key={idx} className="text-sm text-amber-900 font-medium">• {alert}</li>
                                 ))}
                             </ul>

@@ -1378,14 +1378,14 @@ app.get('/api/appointments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*, patient:Patient(*), doctor:Doctor(*), budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
+            .select('*, patient:Patient!left(*), doctor:Doctor!left(*), budget:Budget!left(id, totalAmount, items:BudgetLineItem!left(name, price, tooth))')
             .is('deleted_at', null);
 
         if (error) {
             console.error("❌ Supabase Fetch Error (Appointments):", error);
             return res.status(500).json({ error: error.message });
         }
-        res.json(data);
+        res.json(data || []);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1399,7 +1399,7 @@ app.get('/api/patients/:patientId/appointments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*, patient:Patient(*), doctor:Doctor(*)')
+            .select('*, patient:Patient!left(*), doctor:Doctor!left(*)')
             .eq('patientId', req.params.patientId)
             .is('deleted_at', null)
             .order('date', { ascending: false });
@@ -1453,19 +1453,15 @@ app.put('/api/appointments/:id', async (req, res) => {
             return res.status(400).json({ error: 'ID de cita requerido' });
         }
 
-        // Validación: Campos obligatorios
-        if (!updates.patientId || !updates.doctorId) {
-            return res.status(400).json({ error: 'Paciente y Doctor son obligatorios' });
-        }
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         // Sanitization: Convert empty strings to null for UUID fields
         if (typeof updates.budgetId === 'string' && updates.budgetId.trim() === '') updates.budgetId = null;
         if (typeof updates.budgetItemId === 'string' && updates.budgetItemId.trim() === '') updates.budgetItemId = null;
         if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
         if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
-        if (typeof updates.patientId === 'string' && updates.patientId.trim() === '') {
-            return res.status(400).json({ error: 'Paciente es obligatorio' });
-        }
+        if (typeof updates.patientId === 'string' && updates.patientId.trim() === '') updates.patientId = null;
 
         if (updates.date) {
             updates.date = new Date(updates.date).toISOString();
@@ -1480,13 +1476,9 @@ app.put('/api/appointments/:id', async (req, res) => {
         // Handle serviceIds: resolve to treatmentName if provided
         if (Array.isArray(updates.serviceIds) && updates.serviceIds.length > 0) {
             try {
-                let supabaseInst;
-                try { supabaseInst = getSupabase(); } catch(e) {}
-                if (supabaseInst) {
-                    const { data: svcs } = await supabaseInst.from('Service').select('id, name').in('id', updates.serviceIds);
-                    if (svcs && svcs.length > 0) {
-                        updates.treatmentName = svcs.map(s => s.name).join(', ');
-                    }
+                const { data: svcs } = await supabase.from('Service').select('id, name').in('id', updates.serviceIds);
+                if (svcs && svcs.length > 0) {
+                    updates.treatmentName = svcs.map(s => s.name).join(', ');
                 }
             } catch (svcErr) {
                 console.warn('⚠️ Could not resolve serviceIds on update:', svcErr.message);
@@ -1494,30 +1486,34 @@ app.put('/api/appointments/:id', async (req, res) => {
             delete updates.serviceIds;
         }
 
-        // Preserve status if provided, default to current value
-        if (!updates.status) {
-            const current = await prisma.appointment.findUnique({ where: { id } });
-            if (current) updates.status = current.status;
-        }
-
-        // Remove relation objects from updates to avoid Prisma errors
+        // Remove relation objects and non-DB fields to avoid Supabase errors
         delete updates.treatment;
         delete updates.doctor;
         delete updates.patient;
         delete updates.budget;
         delete updates.liquidation;
         delete updates.id;
+        delete updates.created_at;
 
-        const updatedAppointment = await prisma.appointment.update({
-            where: { id: id },
-            data: updates,
-            include: {
-                patient: true,
-                doctor: true,
-                treatment: true,
-                budget: true
-            }
-        });
+        // Remove null-valued keys to allow partial updates (don't overwrite existing data with null)
+        // Keep explicitly set null for budgetId/budgetItemId (user may want to unlink)
+        const fieldsAllowedNull = ['budgetId', 'budgetItemId', 'treatmentId', 'observations', 'visitDetails', 'treatmentName', 'amount'];
+        for (const key of Object.keys(updates)) {
+            if (updates[key] === undefined) delete updates[key];
+            if (updates[key] === null && !fieldsAllowedNull.includes(key)) delete updates[key];
+        }
+
+        const { data: updatedAppointment, error } = await supabase
+            .from('Appointment')
+            .update(updates)
+            .eq('id', id)
+            .select('*, patient:Patient!left(*), doctor:Doctor!left(*)')
+            .single();
+
+        if (error) {
+            console.error("❌ Supabase Update Error (Appointment):", JSON.stringify(error, null, 2));
+            return res.status(500).json({ error: `Error al actualizar cita: ${error.message}`, details: error.details, hint: error.hint });
+        }
 
         console.log("✅ Appointment Updated:", updatedAppointment.id);
         res.json(updatedAppointment);
