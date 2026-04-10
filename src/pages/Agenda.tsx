@@ -183,6 +183,8 @@ const Agenda: React.FC = () => {
     };
 
     const handleCloseAgenda = async () => {
+        if (isBooking) return;
+        setIsBooking(true);
         const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
         try {
             await api.agendaClosures.create({
@@ -198,6 +200,8 @@ const Agenda: React.FC = () => {
             alert('✅ Agenda cerrada correctamente');
         } catch (e: any) {
             alert('Error: ' + (e.message || e));
+        } finally {
+            setIsBooking(false);
         }
     };
 
@@ -961,8 +965,8 @@ const Agenda: React.FC = () => {
                             <button onClick={() => setShowClosureModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-500">
                                 Cancelar
                             </button>
-                            <button onClick={handleCloseAgenda} className="flex-1 bg-red-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-red-700 transition-colors">
-                                Cerrar Agenda
+                            <button onClick={handleCloseAgenda} disabled={isBooking} className="flex-1 bg-red-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                                {isBooking ? <><Loader2 className="animate-spin w-4 h-4" /> Cerrando...</> : 'Cerrar Agenda'}
                             </button>
                         </div>
                     </div>
@@ -1422,12 +1426,16 @@ const Agenda: React.FC = () => {
                                                                                 const budgetItems = (appt as any).budget?.items;
                                                                                 const displayTreatment = (budgetItems && budgetItems.length > 0)
                                                                                     ? budgetItems.map((item: any) => item.name).join(', ')
-                                                                                    : treatmentText;
-                                                                                return appt.duration && appt.duration >= 15 && displayTreatment ? (
-                                                                                    <span className="text-[10px] opacity-80 truncate mt-0.5 italic">
-                                                                                        {displayTreatment}
-                                                                                    </span>
-                                                                                ) : null;
+                                                                                    : (treatmentText || 'Sin tratamiento');
+                                                                                
+                                                                                const docName = doctors.find(d => d.id === appt.doctorId)?.name || 'Sin doctor';
+                                                                                const concatInfo = `${displayTreatment} | ${appt.time} | ${docName}`;
+
+                                                                                return (
+                                                                                    <div className="text-[10px] opacity-90 leading-tight mt-0.5 line-clamp-2" title={concatInfo}>
+                                                                                        {concatInfo}
+                                                                                    </div>
+                                                                                );
                                                                             })()}
                                                                     {appt.duration && appt.duration >= 30 && appt.observations && (
                                                                         <p className="text-[9px] opacity-60 mt-0.5 line-clamp-2 leading-tight">
@@ -1831,6 +1839,7 @@ const Agenda: React.FC = () => {
                                                 return;
                                             }
 
+                                            setIsBooking(true);
                                             const updatePayload = {
                                                 date: `${bookingDate}T00:00:00.000Z`,
                                                 time: bookingTime,
@@ -1855,7 +1864,10 @@ const Agenda: React.FC = () => {
                                                 const proceed = window.confirm(
                                                     "⚠️ Este horario está fuera del horario configurado para este doctor.\n\n¿Deseas guardar la cita de todas formas?"
                                                 );
-                                                if (!proceed) return;
+                                                if (!proceed) {
+                                                    setIsBooking(false);
+                                                    return;
+                                                }
                                             }
 
                                             const result = await api.appointments.update(selectedAppt.id, updatePayload);
@@ -1869,11 +1881,14 @@ const Agenda: React.FC = () => {
                                         } catch (e: any) {
                                             console.error('❌ Update appointment error:', e);
                                             toast.error('Error al actualizar: ' + (e.message || "Error desconocido"));
+                                        } finally {
+                                            setIsBooking(false);
                                         }
                                     }}
+                                    disabled={isBooking}
                                     className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors disabled:opacity-50"
                                 >
-                                    <Save size={16} /> Guardar Cambios
+                                    {isBooking ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : <><Save size={16} /> Guardar Cambios</>}
                                 </button>
                             )}
                             {!selectedAppt && (
