@@ -1317,11 +1317,11 @@ app.post('/api/appointments', async (req, res) => {
 
         const appointmentId = crypto.randomUUID();
 
-        // If serviceIds provided, build a combined treatmentName from Service table
+        // If serviceIds provided, build a combined treatmentName from services table (lowercase — the real catalog)
         let resolvedTreatmentName = treatmentName || null;
         if (Array.isArray(serviceIds) && serviceIds.length > 0) {
             try {
-                const { data: svcs } = await supabase.from('Service').select('id, name').in('id', serviceIds);
+                const { data: svcs } = await supabase.from('services').select('id, name').in('id', serviceIds);
                 if (svcs && svcs.length > 0) {
                     resolvedTreatmentName = svcs.map(s => s.name).join(', ');
                 }
@@ -1350,7 +1350,7 @@ app.post('/api/appointments', async (req, res) => {
                 paid: false,
                 is_revision: isRevision === true
             }])
-            .select('*, patient:Patient!left(*), doctor:Doctor!left(*), budget:Budget!left(id, totalAmount, items:BudgetLineItem!left(name, price, tooth))')
+            .select('*, patient:Patient!left(*), doctor:Doctor!left(*)')
             .single();
 
         if (error) {
@@ -1473,20 +1473,21 @@ app.put('/api/appointments/:id', async (req, res) => {
             delete updates.isRevision;
         }
 
-        // Handle serviceIds: resolve to treatmentName if provided
+        // Handle serviceIds: resolve to treatmentName if provided (use 'services' lowercase — the real catalog)
         if (Array.isArray(updates.serviceIds) && updates.serviceIds.length > 0) {
             try {
-                const { data: svcs } = await supabase.from('Service').select('id, name').in('id', updates.serviceIds);
+                const { data: svcs } = await supabase.from('services').select('id, name').in('id', updates.serviceIds);
                 if (svcs && svcs.length > 0) {
                     updates.treatmentName = svcs.map(s => s.name).join(', ');
                 }
             } catch (svcErr) {
                 console.warn('⚠️ Could not resolve serviceIds on update:', svcErr.message);
             }
-            delete updates.serviceIds;
         }
 
         // Remove relation objects and non-DB fields to avoid Supabase errors
+        delete updates.serviceIds;
+        delete updates.budgetItemIds;
         delete updates.treatment;
         delete updates.doctor;
         delete updates.patient;
