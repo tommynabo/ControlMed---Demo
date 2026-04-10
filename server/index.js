@@ -2534,6 +2534,30 @@ app.delete('/api/templates/:id', async (req, res) => {
     }
 });
 
+// Serve a template file for preview / download in the browser
+app.get('/api/templates/file/:filename', async (req, res) => {
+    try {
+        const fs = require('fs');
+        const pathMod = require('path');
+        const UPLOAD_DIR = process.env.VERCEL || process.env.NODE_ENV === 'production'
+            ? '/tmp/uploads/templates'
+            : pathMod.join(__dirname, 'uploads/templates');
+        const filePath = pathMod.join(UPLOAD_DIR, req.params.filename);
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        const ext = pathMod.extname(req.params.filename).toLowerCase();
+        const mimeTypes = { '.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.doc': 'application/msword' };
+        const mime = mimeTypes[ext] || 'application/octet-stream';
+        const inline = req.query.preview === '1' && ext === '.pdf'; // inline for PDF preview
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${req.params.filename}"`);
+        fs.createReadStream(filePath).pipe(res);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- MODULE: VACACIONES ---
 app.get('/api/vacations', async (req, res) => {
     try {
@@ -3631,15 +3655,24 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
     try {
         console.log('[MASTER CRON] ▶️ Bloque 1 — Recordatorios de citas...');
 
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const startOfTomorrow = new Date(new Date(tomorrow).setHours(0, 0, 0, 0));
-        const endOfTomorrow   = new Date(new Date(tomorrow).setHours(23, 59, 59, 999));
+        // Use Spain local time (Europe/Madrid) to build tomorrow's date window
+        const nowMadrid = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
+        const tomorrowMadrid = new Date(nowMadrid);
+        tomorrowMadrid.setDate(tomorrowMadrid.getDate() + 1);
+
+        // Build UTC equivalents for Prisma query, covering all of «mañana» in Madrid time
+        const madridOffset = nowMadrid.getTime() - new Date().getTime(); // ms difference Madrid vs UTC
+        const startOfTomorrowMadrid = new Date(new Date(tomorrowMadrid).setHours(0, 0, 0, 0));
+        const endOfTomorrowMadrid   = new Date(new Date(tomorrowMadrid).setHours(23, 59, 59, 999));
+        const startWindow = new Date(startOfTomorrowMadrid.getTime() - madridOffset);
+        const endWindow   = new Date(endOfTomorrowMadrid.getTime() - madridOffset);
+
+        console.log(`[MASTER CRON] Ventana de búsqueda (UTC): ${startWindow.toISOString()} → ${endWindow.toISOString()}`);
 
         const appointments = await prisma.appointment.findMany({
             where: {
                 status: { in: ['Scheduled', 'Confirmed'] },
-                date: { gte: startOfTomorrow, lte: endOfTomorrow },
+                date: { gte: startWindow, lte: endWindow },
                 whatsappSent: false
             },
             include: { patient: true, treatment: true }
@@ -3653,14 +3686,20 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
 
         if (!reminderTemplate && appointments.length > 0) {
             console.warn('[MASTER CRON] Sin plantilla APPOINTMENT_REMINDER. Saltando bloque 1.');
+        } else if (!reminderTemplate) {
+            console.log('[MASTER CRON] Sin citas ni plantilla APPOINTMENT_REMINDER.');
         } else {
             for (const appt of appointments) {
-                if (!appt.patient?.phone) { globalStats.reminders.skipped++; continue; }
+                if (!appt.patient?.phone) {
+                    console.warn(`[MASTER CRON] Cita ${appt.id} sin teléfono (paciente: ${appt.patient?.name}). Skipped.`);
+                    globalStats.reminders.skipped++;
+                    continue;
+                }
 
                 const appointmentDate = new Date(appt.date);
-                const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Madrid' });
                 const formattedTime = appt.time ? appt.time.substring(0, 5)
-                    : appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false });
+                    : appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Madrid' });
                 const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta General';
 
                 const message = reminderTemplate.content
@@ -3679,11 +3718,13 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
                         data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'SENT', content: message, sentAt: new Date() }
                     });
                     globalStats.reminders.sent++;
+                    console.log(`[MASTER CRON] ✅ Recordatorio enviado a ${appt.patient.name} (${number})`);
                 } catch (err) {
-                    console.error(`[MASTER CRON] Recordatorio fallido (appt ${appt.id}):`, err.message);
+                    const errDetail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+                    console.error(`[MASTER CRON] ❌ Recordatorio fallido (appt ${appt.id}, paciente: ${appt.patient.name}):`, errDetail);
                     globalStats.reminders.failed++;
                     await prisma.whatsAppLog.create({
-                        data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'FAILED', content: message, error: err.message, sentAt: new Date() }
+                        data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'FAILED', content: message, error: errDetail, sentAt: new Date() }
                     });
                 }
             }
@@ -3699,10 +3740,13 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
     try {
         console.log('[MASTER CRON] ▶️ Bloque 2 — Cumpleaños...');
 
-        const today = new Date();
-        const todayMonth = today.getMonth() + 1;
-        const todayDay   = today.getDate();
-        const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));
+        // Use Spain local time to determine today's date correctly
+        const nowMadrid = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
+        const todayMonth = nowMadrid.getMonth() + 1;
+        const todayDay   = nowMadrid.getDate();
+        // startOfToday in UTC (for duplicate-check query on sentAt)
+        const startOfToday = new Date();
+        startOfToday.setUTCHours(0, 0, 0, 0);
 
         const allPatients = await prisma.patient.findMany({
             where: { phone: { not: null } },
@@ -3715,20 +3759,35 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
             return bd.getMonth() + 1 === todayMonth && bd.getDate() === todayDay;
         });
 
-        console.log(`[MASTER CRON] Pacientes con cumpleaños hoy: ${birthdayPatients.length}`);
+        console.log(`[MASTER CRON] Pacientes con cumpleaños hoy (${todayDay}/${todayMonth}): ${birthdayPatients.length}`);
 
         const birthdayTemplate = await prisma.whatsAppTemplate.findFirst({
             where: { triggerType: 'BIRTHDAY' }
         });
+
+        if (!birthdayTemplate) {
+            console.warn('[MASTER CRON] ⚠️ Sin plantilla BIRTHDAY configurada — se usará mensaje por defecto.');
+        } else {
+            console.log(`[MASTER CRON] Plantilla BIRTHDAY encontrada: "${birthdayTemplate.name}"`);
+        }
+
         const birthdayDefault = '¡Feliz cumpleaños, {{nombre}}! 🎉 Todo el equipo de la clínica te deseamos un día estupendo. ¡Muchas felicidades!';
 
         for (const patient of birthdayPatients) {
-            if (!patient.phone) { globalStats.birthdays.skipped++; continue; }
+            if (!patient.phone) {
+                console.warn(`[MASTER CRON] Paciente ${patient.name} sin teléfono. Skipped.`);
+                globalStats.birthdays.skipped++;
+                continue;
+            }
 
             const alreadySent = await prisma.whatsAppLog.findFirst({
                 where: { patientId: patient.id, type: 'BIRTHDAY', sentAt: { gte: startOfToday } }
             });
-            if (alreadySent) { globalStats.birthdays.skipped++; continue; }
+            if (alreadySent) {
+                console.log(`[MASTER CRON] Cumpleaños ya enviado hoy a ${patient.name}. Skipped.`);
+                globalStats.birthdays.skipped++;
+                continue;
+            }
 
             const content = (birthdayTemplate?.content || birthdayDefault)
                 .replace(/{{nombre}}/g, patient.name)
@@ -3743,11 +3802,12 @@ app.post('/api/cron/whatsapp-reminders', async (req, res) => {
                     data: { patientId: patient.id, type: 'BIRTHDAY', status: 'SENT', content, sentAt: new Date() }
                 });
                 globalStats.birthdays.sent++;
-                console.log(`[MASTER CRON] 🎂 Cumpleaños enviado a ${patient.name}`);
+                console.log(`[MASTER CRON] 🎂 Cumpleaños enviado a ${patient.name} (${number})`);
             } catch (err) {
-                console.error(`[MASTER CRON] Error cumpleaños (${patient.name}):`, err.message);
+                const errDetail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+                console.error(`[MASTER CRON] ❌ Error cumpleaños (${patient.name}):`, errDetail);
                 await prisma.whatsAppLog.create({
-                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'FAILED', content, error: err.message, sentAt: new Date() }
+                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'FAILED', content, error: errDetail, sentAt: new Date() }
                 });
                 globalStats.birthdays.failed++;
             }

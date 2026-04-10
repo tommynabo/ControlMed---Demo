@@ -465,62 +465,113 @@ ${formData.prescriberName}
                             </section>
                         </div>
                     ) : (
-                        <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-16 border border-slate-100 min-h-[600px] rounded-sm">
-                             {/* Preview content matches print layout */}
-                             <div className="flex justify-between items-start border-b-4 border-slate-900 pb-6 mb-8">
-                                <div>
-                                    <h1 className="text-4xl font-black uppercase text-slate-900">{formData.prescriberName}</h1>
-                                    <p className="text-lg font-bold text-slate-500 uppercase">{formData.prescriberSpecialty}</p>
-                                </div>
-                                <div className="text-right text-sm font-bold text-slate-400">
-                                    <p>FECHA: {new Date(formData.prescriptionDate).toLocaleDateString('es-ES')}</p>
-                                    <p>Nº ORDEN: {formData.dispensationOrderNumber || '---'}</p>
-                                </div>
-                            </div>
+                        // ── PREVIEW: exact replica of the print layout ──────────────────
+                        <div className="max-w-[210mm] mx-auto">
+                            <p className="text-center text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Vista Previa — Idéntica al documento impreso</p>
+                            {/* Simulate both copies as they appear in print */}
+                            {(['EJEMPLAR PARA EL FARMACÉUTICO', 'EJEMPLAR PARA EL PACIENTE'] as const).map(label => {
+                                const patientFullName = [patient.name, patient.lastName1, patient.lastName2].filter(Boolean).join(' ');
+                                const prescDate = formData.prescriptionDate
+                                    ? new Date(formData.prescriptionDate + 'T12:00:00').toLocaleDateString('es-ES')
+                                    : '—';
+                                const dispDate = formData.dispensationDate
+                                    ? new Date(formData.dispensationDate + 'T12:00:00').toLocaleDateString('es-ES')
+                                    : '—';
+                                const birthDate = patient.birthDate
+                                    ? new Date(patient.birthDate).toLocaleDateString('es-ES')
+                                    : '—';
 
-                            <div className="grid grid-cols-2 gap-8 mb-8 bg-slate-50 p-8 rounded-[2rem] border border-slate-200">
-                                <div>
-                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Paciente</p>
-                                    <p className="text-2xl font-black text-slate-900">{patient.name} {patient.lastName1}</p>
-                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">DNI: {patient.dni}</p>
-                                </div>
-                                <div className="text-right flex flex-col justify-center">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">F. Nacimiento</p>
-                                    <p className="text-xl font-bold text-slate-900">{new Date(patient.birthDate).toLocaleDateString('es-ES')}</p>
-                                </div>
-                            </div>
-
-                            <div className="mb-12">
-                                <h3 className="text-3xl font-black text-blue-600 mb-6 flex items-center gap-3">
-                                    <Pill size={32} />
-                                    RP/ {formData.medication}
-                                </h3>
-                                <div className="grid grid-cols-3 gap-8 p-6 bg-blue-50/30 rounded-2xl border border-blue-100/50">
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Forma / Vía</p>
-                                        <p className="font-black text-slate-700">{formData.pharmaceuticalForm} / {formData.administrationRoute}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Pauta / Dosis</p>
-                                        <p className="font-black text-slate-700">{formData.schedulePattern} - {formData.dose}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Duración</p>
-                                        <p className="font-black text-slate-700">{formData.duration} días</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-8">
-                                {formData.patientInstructions && (
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Instrucciones para el Paciente</p>
-                                        <div className="prose prose-slate max-w-none text-slate-600 font-medium leading-relaxed">
-                                            {formData.patientInstructions}
+                                return (
+                                    <div key={label} style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '8pt', color: '#000', border: '1.5px solid #000', marginBottom: '8px' }}>
+                                        {/* Copy label */}
+                                        <div style={{ background: '#e0e0e0', textAlign: 'center', fontSize: '6.5pt', fontWeight: 900, textTransform: 'uppercase', padding: '3px 0', borderBottom: '1px solid #000', letterSpacing: '1px' }}>{label}</div>
+                                        {/* 3-column body */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr' }}>
+                                            {/* COL 1: Prescripción */}
+                                            <div style={{ padding: '6px 8px', borderRight: '1px solid #000' }}>
+                                                <div style={{ fontSize: '6.5pt', fontWeight: 900, textTransform: 'uppercase', borderBottom: '1px solid #999', paddingBottom: '2px', marginBottom: '4px', letterSpacing: '0.5px' }}>Prescripción</div>
+                                                <div style={{ fontSize: '9pt', fontStyle: 'italic', fontWeight: 700, color: '#444' }}>RP/</div>
+                                                <div style={{ fontSize: '11pt', fontWeight: 900, marginBottom: '4px', lineHeight: 1.2 }}>{formData.medication || '—'}</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Forma Farmacéutica</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{formData.pharmaceuticalForm}</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Vía de Administración</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{formData.administrationRoute}</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Núm. Envases</div>
+                                                <div style={{ fontSize: '9pt', fontWeight: 700 }}>{formData.packagesNumber || 1}</div>
+                                                <div style={{ marginTop: '8px', borderTop: '1px solid #ccc', paddingTop: '6px' }}>
+                                                    <div style={{ fontSize: '6pt', fontWeight: 900, textTransform: 'uppercase', color: '#555', marginBottom: '3px' }}>Sustituir en caso de:</div>
+                                                    {['Urgencia', 'Desabastecimiento', 'Otros'].map(s => (
+                                                        <div key={s} style={{ fontSize: '7pt', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                            <span style={{ display: 'inline-block', width: '9px', height: '9px', border: '1.5px solid #000', flexShrink: 0 }} /> {s}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {/* COL 2: Posología y Dispensación */}
+                                            <div style={{ padding: '6px 8px', borderRight: '1px solid #000' }}>
+                                                <div style={{ fontSize: '6.5pt', fontWeight: 900, textTransform: 'uppercase', borderBottom: '1px solid #999', paddingBottom: '2px', marginBottom: '4px', letterSpacing: '0.5px' }}>Posología y Dispensación</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Duración del Tratamiento</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{formData.duration || '—'} días</div>
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid #888', marginTop: '6px' }}>
+                                                    <div style={{ padding: '3px 5px', borderRight: '1px solid #888' }}>
+                                                        <div style={{ fontSize: '5.5pt', fontWeight: 900, textTransform: 'uppercase', color: '#666' }}>Unidades</div>
+                                                        <div style={{ fontSize: '8pt', fontWeight: 700 }}>{formData.dose || formData.units || '—'}</div>
+                                                    </div>
+                                                    <div style={{ padding: '3px 5px' }}>
+                                                        <div style={{ fontSize: '5.5pt', fontWeight: 900, textTransform: 'uppercase', color: '#666' }}>Pauta</div>
+                                                        <div style={{ fontSize: '8pt', fontWeight: 700 }}>{formData.schedulePattern || '—'}</div>
+                                                    </div>
+                                                </div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Núm. Orden Dispensación</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{formData.dispensationOrderNumber || '—'}</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Fecha Prevista Dispensación</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{dispDate}</div>
+                                                <div style={{ marginTop: '6px', border: '1px dashed #aaa', padding: '4px 5px', fontSize: '7pt', color: '#333' }}>
+                                                    <div style={{ fontSize: '5.5pt', fontWeight: 900, textTransform: 'uppercase', color: '#666', marginBottom: '2px' }}>Advertencia para el Farmacéutico</div>
+                                                    {formData.schedulePattern || formData.posology || 'Dispensar según pauta prescrita'}
+                                                </div>
+                                            </div>
+                                            {/* COL 3: Paciente + Prescriptor */}
+                                            <div style={{ padding: '6px 8px' }}>
+                                                <div style={{ fontSize: '6.5pt', fontWeight: 900, textTransform: 'uppercase', borderBottom: '1px solid #999', paddingBottom: '2px', marginBottom: '4px', letterSpacing: '0.5px' }}>Paciente Privado</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Nombre y Apellidos</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{patientFullName}</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Fecha de Nacimiento</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{birthDate}</div>
+                                                <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>DNI / NIE</div>
+                                                <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{patient.dni || '—'}</div>
+                                                {/* Prescriptor sub-section */}
+                                                <div style={{ borderTop: '1px solid #ccc', marginTop: '6px', paddingTop: '4px' }}>
+                                                    <div style={{ fontSize: '6.5pt', fontWeight: 900, textTransform: 'uppercase', borderBottom: '1px solid #999', paddingBottom: '2px', marginBottom: '4px', letterSpacing: '0.5px' }}>Prescriptor</div>
+                                                    <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Nombre</div>
+                                                    <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{formData.prescriberName}</div>
+                                                    <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Núm. Colegiado</div>
+                                                    <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>—</div>
+                                                    <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Especialidad</div>
+                                                    <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{formData.prescriberSpecialty}</div>
+                                                    <div style={{ fontSize: '5.5pt', textTransform: 'uppercase', fontWeight: 900, color: '#555', marginBottom: '1px', marginTop: '6px' }}>Fecha Prescripción</div>
+                                                    <div style={{ fontSize: '7.5pt', fontWeight: 600 }}>{prescDate}</div>
+                                                </div>
+                                                <div style={{ borderTop: '1px solid #ccc', marginTop: '6px', paddingTop: '4px', minHeight: '22px' }}>
+                                                    <div style={{ fontSize: '6.5pt', fontWeight: 900, textTransform: 'uppercase', borderBottom: '1px solid #999', paddingBottom: '2px', letterSpacing: '0.5px' }}>Farmacia (NIF/CIF)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {/* Footer */}
+                                        <div style={{ display: 'flex', borderTop: '1px solid #000' }}>
+                                            <div style={{ flex: 1, padding: '4px 7px', borderRight: '1px solid #000', fontSize: '5.5pt', color: '#444', lineHeight: 1.5 }}>Esta receta es válida para su dispensación durante 10 días desde la fecha de prescripción. Solo es válida en territorio nacional. El médico prescriptor es responsable de la indicación terapéutica.</div>
+                                            <div style={{ flex: 1, padding: '4px 7px', fontSize: '5.5pt', color: '#444', lineHeight: 1.5 }}>De conformidad con la Ley Orgánica 15/1999 de Protección de Datos de Carácter Personal, los datos personales reflejados en este documento son tratados con absoluta confidencialidad y únicamente con fines sanitarios.</div>
                                         </div>
                                     </div>
-                                )}
-                            </div>
+                                );
+                            })}
+                            {/* Indicaciones */}
+                            {formData.patientInstructions && (
+                                <div style={{ border: '1px solid #000', padding: '8px 10px', marginTop: '8px', fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                                    <div style={{ fontSize: '8pt', fontWeight: 900, textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>Indicaciones para el Paciente</div>
+                                    <div style={{ fontSize: '8.5pt', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{formData.patientInstructions}</div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

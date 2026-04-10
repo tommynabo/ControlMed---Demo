@@ -1273,6 +1273,45 @@ export const api = {
             if (!res.ok) throw new Error('Failed to download document');
             return res.json();
         }
+    },
+
+    // Document Templates (Gestor de Plantillas – Settings)
+    templates: {
+        getAll: async () => {
+            const res = await fetch(`${API_URL}/templates`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch templates');
+            return res.json();
+        },
+        upload: async (file: File, title: string, category: string): Promise<any> => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    try {
+                        const base64 = (e.target?.result as string).split(',')[1];
+                        const type = file.name.endsWith('.pdf') ? 'pdf' : 'docx';
+                        const res = await fetch(`${API_URL}/templates`, {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify({ title, category, type, contentBase64: base64 })
+                        });
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            reject(new Error(err.error || 'Failed to upload template'));
+                        } else {
+                            resolve(await res.json());
+                        }
+                    } catch (err) { reject(err); }
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsDataURL(file);
+            });
+        },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/templates/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to delete template');
+            return res.json();
+        },
+        getDownloadUrl: (filename: string) => `${API_URL}/templates/file/${filename}`,
     }
 };
 

@@ -228,6 +228,8 @@ export interface DocumentTemplate {
   date: string;
   size: string;
   type: 'docx' | 'pdf';
+  content?: string; // filename stored on disk (backend: templateService.js)
+  createdAt?: string;
 }
 
 // --- Clinical Treatment Plans ---

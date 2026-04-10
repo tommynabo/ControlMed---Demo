@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon } from 'lucide-react';
+import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { DocumentTemplate } from '../../types';
 import { api } from '../services/api';
@@ -91,20 +91,27 @@ const Settings: React.FC = () => {
     const [newWaTemplate, setNewWaTemplate] = useState({ name: '', content: '', triggerType: 'APPOINTMENT_REMINDER', triggerOffsetValue: '12', triggerOffsetUnit: 'h', triggerOffsetDirection: 'before' });
     const [isGeneratingQr, setIsGeneratingQr] = useState(false);
 
-    // TEMPLATES DATA - Restored complete list
-    const [templates, setTemplates] = useState<DocumentTemplate[]>([
-        { id: '32', title: 'CONSENTIMIENTO INFORMADO GENERAL.DOCX', category: 'General', date: '21/10/2025', size: '0.0086 MB', type: 'docx' },
-        { id: '31', title: 'RGPD - PROTECCIÓN DE DATOS PACIENTE', category: 'Legal', date: '23/05/2025', size: '0.0084 MB', type: 'docx' },
-        { id: '28', title: 'CONSENTIMIENTO IMPLANTES DENTALES', category: 'Cirugía', date: '13/05/2025', size: '0.21 MB', type: 'pdf' },
-        { id: '7', title: 'CONSENTIMIENTO ENDODONCIA', category: 'General', date: '13/05/2025', size: '0.21 MB', type: 'pdf' },
-        { id: '5', title: 'INSTRUCCIONES POST-OPERATORIAS', category: 'Cirugía', date: '10/05/2025', size: '0.15 MB', type: 'pdf' },
-        { id: '4', title: 'FICHA DE PRIMERA VISITA', category: 'Administración', date: '01/05/2025', size: '0.05 MB', type: 'docx' },
-        { id: '3', title: 'PRESUPUESTO GENERAL TIPO', category: 'Administración', date: '01/05/2025', size: '0.05 MB', type: 'docx' },
-    ]);
+    // TEMPLATES STATE — loaded from backend
+    const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
+    const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+
+    const loadTemplates = async () => {
+        setIsLoadingTemplates(true);
+        try {
+            const data = await api.templates.getAll();
+            setTemplates(data);
+        } catch (e) {
+            console.error('Error loading templates:', e);
+        } finally {
+            setIsLoadingTemplates(false);
+        }
+    };
 
     useEffect(() => {
         if (settingsTab === 'whatsapp') {
             refreshWhatsApp();
+        } else if (settingsTab === 'templates') {
+            loadTemplates();
         } else if (settingsTab === 'services') {
             loadServices();
         }
@@ -212,19 +219,46 @@ const Settings: React.FC = () => {
         }
     };
 
-    const handleUploadTemplate = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const newDoc: DocumentTemplate = {
-                id: crypto.randomUUID(),
-                title: file.name,
-                category: 'General',
-                date: new Date().toLocaleDateString(),
-                size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-                type: file.name.endsWith('pdf') ? 'pdf' : 'docx'
-            };
-            setTemplates(prev => [newDoc, ...prev]);
+    const handleUploadTemplate = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || !e.target.files[0]) return;
+        const file = e.target.files[0];
+        const title = file.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' ');
+        const category = 'General';
+        try {
+            setIsLoadingTemplates(true);
+            await api.templates.upload(file, title, category);
+            await loadTemplates();
+        } catch (err: any) {
+            alert(`❌ Error al subir plantilla: ${err.message}`);
+        } finally {
+            setIsLoadingTemplates(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
+    };
+
+    const handleDeleteTemplate = async (id: string, title: string) => {
+        if (!confirm(`¿Eliminar la plantilla "${title}"?`)) return;
+        try {
+            await api.templates.delete(id);
+            await loadTemplates();
+        } catch (err: any) {
+            alert(`❌ Error al eliminar: ${err.message}`);
+        }
+    };
+
+    const handlePreviewTemplate = (doc: DocumentTemplate) => {
+        const url = api.templates.getDownloadUrl(doc.content || doc.title) + '?preview=1';
+        window.open(url, '_blank');
+    };
+
+    const handleDownloadTemplate = (doc: DocumentTemplate) => {
+        const url = api.templates.getDownloadUrl(doc.content || doc.title);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = doc.title;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
     };
 
     const handleUpdateStock = (id: string, delta: number) => {
@@ -467,6 +501,7 @@ const Settings: React.FC = () => {
                                                 className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-100 flex-1"
                                             >
                                                 <option value="APPOINTMENT_REMINDER">Recordatorio de Cita</option>
+                                                <option value="BIRTHDAY">Felicitación Cumpleaños</option>
                                                 <option value="TREATMENT_FOLLOWUP">Seguimiento Tratamiento</option>
                                             </select>
 
@@ -805,11 +840,23 @@ const Settings: React.FC = () => {
                                 accept=".pdf,.docx,.txt"
                                 onChange={handleUploadTemplate}
                             />
-                            <button onClick={() => fileInputRef.current?.click()} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:scale-105 transition-transform flex items-center gap-2">
-                                <UserPlus size={16} /> Subir Plantilla
+                            <button onClick={() => fileInputRef.current?.click()} disabled={isLoadingTemplates} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:scale-105 transition-transform flex items-center gap-2 disabled:opacity-60">
+                                <UserPlus size={16} /> {isLoadingTemplates ? 'Subiendo...' : 'Subir Plantilla'}
                             </button>
                         </div>
 
+                        {isLoadingTemplates && templates.length === 0 ? (
+                            <div className="py-20 text-center">
+                                <div className="animate-spin w-10 h-10 border-4 border-slate-200 border-t-slate-700 rounded-full mx-auto mb-4" />
+                                <p className="text-xs text-slate-400 font-bold uppercase">Cargando plantillas...</p>
+                            </div>
+                        ) : templates.length === 0 ? (
+                            <div className="py-20 text-center bg-white border border-dashed border-slate-200 rounded-2xl">
+                                <FileTextIcon size={40} className="mx-auto text-slate-300 mb-4" />
+                                <p className="text-sm font-bold text-slate-400">No hay plantillas subidas</p>
+                                <p className="text-xs text-slate-400 mt-1">Haz clic en "Subir Plantilla" para añadir documentos</p>
+                            </div>
+                        ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {templates.map(doc => {
                                 const isMatch = templateSearch ? doc.title.toLowerCase().includes(templateSearch.toLowerCase()) : true;
@@ -818,23 +865,46 @@ const Settings: React.FC = () => {
                                     <div
                                         key={doc.id}
                                         id={`template-${doc.id}`}
-                                        className="group bg-white p-6 rounded-xl border border-slate-200 hover:shadow-lg hover:border-slate-300 transition-all cursor-pointer relative"
+                                        className="group bg-white p-6 rounded-xl border border-slate-200 hover:shadow-lg hover:border-slate-300 transition-all relative"
                                     >
-                                        <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="bg-slate-900 p-2 rounded-full shadow-md text-white"><Download size={14} /></div>
-                                        </div>
-                                        <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-6 shadow-sm">
+                                        {/* Delete button */}
+                                        <button
+                                            onClick={() => handleDeleteTemplate(doc.id, doc.title)}
+                                            className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-red-50 text-red-400 hover:text-red-600 rounded-lg"
+                                            title="Eliminar"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                        <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
                                             {doc.type === 'pdf' ? <FileTextIcon size={24} className="text-rose-500" /> : <FileTextIcon size={24} className="text-blue-600" />}
                                         </div>
-                                        <h4 className="text-xs font-bold text-slate-900 uppercase leading-snug mb-2 line-clamp-2 min-h-[2.5em]">{doc.title}</h4>
-                                        <div className="flex justify-between items-center opacity-60">
-                                            <span className="text-[9px] font-bold uppercase bg-slate-100 px-2 py-1 rounded text-slate-600">{doc.category}</span>
+                                        <h4 className="text-xs font-bold text-slate-900 uppercase leading-snug mb-2 line-clamp-2 min-h-[2.5em] pr-6">{doc.title}</h4>
+                                        <div className="flex justify-between items-center opacity-60 mb-4">
+                                            <span className="text-[9px] font-bold uppercase bg-slate-100 px-2 py-1 rounded text-slate-600">{doc.category || 'General'}</span>
                                             <span className="text-[9px] font-bold text-slate-400">{doc.size}</span>
+                                        </div>
+                                        {/* Action buttons */}
+                                        <div className="flex gap-2 mt-auto">
+                                            {doc.type === 'pdf' && (
+                                                <button
+                                                    onClick={() => handlePreviewTemplate(doc)}
+                                                    className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-indigo-600 bg-indigo-50 hover:bg-indigo-100 py-2 rounded-lg transition-colors"
+                                                >
+                                                    <Eye size={12} /> Ver
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleDownloadTemplate(doc)}
+                                                className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition-colors"
+                                            >
+                                                <Download size={12} /> Descargar
+                                            </button>
                                         </div>
                                     </div>
                                 )
                             })}
                         </div>
+                        )}
                     </div>
                 )}
 
