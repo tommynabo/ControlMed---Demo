@@ -423,7 +423,22 @@ const Agenda: React.FC = () => {
         setBookingTime(appt.time);
         // 🆕 Populate new feature states from existing appointment
         setBookingIsRevision(!!(appt.isRevision || (appt as any).is_revision));
-        setSelectedDbServices([]);
+        
+        // Populate services from DB catalogue if IDs exist
+        const initialServices: any[] = [];
+        const apptServiceIds = (appt as any).serviceIds || [];
+        if (apptServiceIds.length > 0) {
+            apptServiceIds.forEach((sid: string) => {
+                const svc = dbServices.find(s => s.id === sid);
+                if (svc) initialServices.push({ id: svc.id, name: svc.name, price: svc.final_price || 0 });
+            });
+        }
+        
+        // If no services were found by ID but there is a treatment name, 
+        // we can't easily map it back to individual items with prices, 
+        // but the 'bookingTreatment' state already holds the full string.
+        
+        setSelectedDbServices(initialServices);
         setBookingServiceSearch('');
         setShowServiceDropdown(false);
         setActiveSlot({ time: appt.time, dayIdx: 0 }); // Visual context
@@ -458,37 +473,50 @@ const Agenda: React.FC = () => {
     };
 
     // Multi-treatment handlers
-    const handleAddTreatmentToList = () => {
-        if (!treatmentToAdd) return;
-        const svc = DENTAL_SERVICES.find(s => s.id === treatmentToAdd);
-        if (!svc) return;
-
-        let itemsToAdd: any[] = [];
-        if (svc.id === 'pack-1') {
-            itemsToAdd = [
-                { id: 'srv-11', name: 'Primera visita', price: 0 },
-                { id: 'srv-12', name: 'OPG', price: 45 }
-            ];
-        } else if (svc.id === 'pack-2') {
-            itemsToAdd = [
-                { id: 'srv-11', name: 'Primera visita', price: 0 },
-                { id: 'srv-12', name: 'OPG', price: 15 },
-                { id: 'srv-13', name: 'Tartrectomía', price: 45 }
-            ];
-        } else {
-            itemsToAdd = [{ id: svc.id, name: svc.name, price: svc.price }];
+    const handlePushTreatment = (svc: { id: string, name: string, price: number }) => {
+        // Prevent duplicates by ID (if it has one)
+        if (svc.id && !svc.id.startsWith('custom-') && selectedDbServices.some(s => s.id === svc.id)) {
+            toast.error('Este servicio ya ha sido añadido');
+            return;
         }
-
-        const newList = [...selectedTreatmentsList, ...itemsToAdd];
-        setSelectedTreatmentsList(newList);
+        
+        const newList = [...selectedDbServices, svc];
+        setSelectedDbServices(newList);
         setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
-        setTreatmentToAdd('');
+        setBookingTreatment(newList.map(t => t.name).join(', '));
+        setBookingServiceSearch('');
+        setShowServiceDropdown(false);
+    };
+
+    const handleAddTreatmentToList = () => {
+        const query = bookingServiceSearch.trim();
+        if (!query) return;
+
+        // Si el texto coincide exactamente con un servicio de la DB, lo añadimos como tal
+        const existingSvc = dbServices.find(s => s.name.toLowerCase() === query.toLowerCase());
+        
+        if (existingSvc) {
+            handlePushTreatment({
+                id: existingSvc.id,
+                name: existingSvc.name,
+                price: existingSvc.final_price || 0
+            });
+        } else {
+            // Si no existe, es un tratamiento personalizado a COSTE CERO
+            handlePushTreatment({
+                id: `custom-${Date.now()}`,
+                name: query,
+                price: 0
+            });
+            toast.success(`Añadido: ${query} (Coste 0€)`);
+        }
     };
 
     const handleRemoveTreatmentFromList = (idx: number) => {
-        const newList = selectedTreatmentsList.filter((_, i) => i !== idx);
-        setSelectedTreatmentsList(newList);
+        const newList = selectedDbServices.filter((_, i) => i !== idx);
+        setSelectedDbServices(newList);
         setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+        setBookingTreatment(newList.map(t => t.name).join(', '));
     };
 
     const checkOverlap = (dateStr: string, timeStr: string, durationMin: number, doctorId: string, excludeApptId?: string) => {
@@ -578,15 +606,13 @@ const Agenda: React.FC = () => {
             time: bookingTime,
             patientId: patient.id,
             doctorId: bookingDoctorId,
-            treatmentId: !bookingBudgetId && selectedTreatmentsList.length > 0 ? selectedTreatmentsList[0].id : null,
-            treatmentName: !bookingBudgetId && selectedTreatmentsList.length > 0
-                ? selectedTreatmentsList.map(t => t.name).join(', ')
+            treatmentName: !bookingBudgetId && selectedDbServices.length > 0 
+                ? selectedDbServices.map(t => t.name).join(', ')
+                : (bookingTreatment || null),
+            // 🆕 Real DB service IDs (filter out custom ones)
+            serviceIds: selectedDbServices.length > 0 
+                ? selectedDbServices.filter(s => !s.id.startsWith('custom-')).map(s => s.id) 
                 : null,
-            treatmentIds: !bookingBudgetId && selectedTreatmentsList.length > 1
-                ? selectedTreatmentsList.map(t => t.id)
-                : null,
-            // 🆕 Real DB service IDs (overrides treatmentName if provided)
-            serviceIds: selectedDbServices.length > 0 ? selectedDbServices.map(s => s.id) : null,
             budgetId: bookingBudgetId || null,
             budgetItemId: bookingBudgetItemId || null,
             budgetItemIds: selectedBudgetItems.length > 0 ? selectedBudgetItems.map(item => item.id || item._idx) : null,
@@ -749,9 +775,18 @@ const Agenda: React.FC = () => {
             { id: 'srv-12', name: 'OPG', price: 30 },
             { id: 'srv-13', name: 'Tartrectomía', price: 50 }
         ];
-        setSelectedTreatmentsList(pack);
-        setBookingPrice(80);
-        setBookingDuration(60);
+        
+        const newList = [...selectedDbServices];
+        pack.forEach(p => {
+            if (!newList.some(existing => existing.id === p.id)) {
+                newList.push(p);
+            }
+        });
+        
+        setSelectedDbServices(newList);
+        setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+        setBookingTreatment(newList.map(t => t.name).join(', '));
+        toast.success("Pack Primera Visita añadido");
     };
 
     const handleDuplicate = () => {
@@ -1742,238 +1777,137 @@ const Agenda: React.FC = () => {
                                 </select>
                             </div>
 
-                            {/* Multi-Treatment Selection - Only show if NO budget is selected */}
+                            {/* Consolidation: Treatment/Service Selection */}
                             {!bookingBudgetId && (
-                                <div>
+                                <div className="space-y-3">
                                     <div className="flex justify-between items-center">
-                                        <label className="text-xs font-bold uppercase text-slate-400">Tratamientos</label>
+                                        <div className="flex items-center gap-2">
+                                            <label className="text-xs font-bold uppercase text-slate-400">Tratamientos y Servicios</label>
+                                            <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-[10px] font-black">
+                                                {selectedDbServices.length}
+                                            </span>
+                                        </div>
                                         <button 
                                             onClick={handlePackPrimeraVisita}
-                                            className="text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                                            className="text-[10px] font-black uppercase text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-lg transition-colors"
                                         >
-                                            <Sparkles size={12} /> Pack Primera Visita
+                                            <Sparkles size={12} /> Pack 1ª Visita
                                         </button>
                                     </div>
-                                    <div className="flex gap-2 mt-2">
-                                        <select
-                                            className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold text-slate-600 text-sm"
-                                            value={treatmentToAdd}
-                                            onChange={(e) => setTreatmentToAdd(e.target.value)}
-                                            style={{ colorScheme: 'light' }}
-                                        >
-                                            <option value="">Añadir tratamiento...</option>
-                                            {DENTAL_SERVICES.map(t => (
-                                                <option key={t.id} value={t.id}>{t.name} — {t.price}€</option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            onClick={handleAddTreatmentToList}
-                                            disabled={!treatmentToAdd}
-                                            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-sm font-black disabled:opacity-40 hover:bg-slate-700 transition-colors"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                    {selectedTreatmentsList.length > 0 && (
-                                        <div className="mt-2 space-y-1">
-                                            {selectedTreatmentsList.map((t, i) => (
-                                                <div key={i} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-xl px-3 py-2">
-                                                    <span className="text-xs font-bold text-blue-800">{t.name}</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-black text-blue-600">{t.price}€</span>
-                                                        <button
-                                                            onClick={() => handleRemoveTreatmentFromList(i)}
-                                                            className="w-5 h-5 flex items-center justify-center bg-blue-200 hover:bg-red-200 text-blue-700 hover:text-red-700 rounded-full text-xs font-black transition-colors"
-                                                        >
-                                                            ×
-                                                        </button>
-                                                    </div>
+
+                                    {/* Selected Items Chips */}
+                                    {selectedDbServices.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                                            {selectedDbServices.map((t, i) => (
+                                                <div key={i} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl pl-3 pr-1.5 py-1.5 shadow-sm group animate-in zoom-in-95 duration-200">
+                                                    <span className="text-xs font-bold text-slate-700">{t.name}</span>
+                                                    <span className="text-xs font-black text-blue-600">{t.price}€</span>
+                                                    <button
+                                                        onClick={() => handleRemoveTreatmentFromList(i)}
+                                                        className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-red-500 text-slate-400 hover:text-white rounded-lg transition-all"
+                                                    >
+                                                        <Plus size={12} className="rotate-45" />
+                                                    </button>
                                                 </div>
                                             ))}
-                                            <div className="text-right text-xs font-black text-blue-700 pr-1 pt-1">
-                                                Total: {selectedTreatmentsList.reduce((sum, t) => sum + t.price, 0).toFixed(2)}€
+                                            <div className="w-full text-right text-xs font-black text-blue-600 pt-1">
+                                                Subtotal: {selectedDbServices.reduce((sum, t) => sum + t.price, 0).toFixed(2)}€
                                             </div>
                                         </div>
                                     )}
-                                </div>
-                            )}
 
-                            {/* Read-only simple treatment if viewing an appointment with NO budget */}
-                            {selectedAppt && !bookingBudgetId && (
-                                <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Tratamiento</label>
-                                    <input
-                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-700"
-                                        value={
-                                            typeof selectedAppt.treatment === 'object' && selectedAppt.treatment !== null
-                                                ? (selectedAppt.treatment as any).name
-                                                : ((selectedAppt as any).treatmentName || selectedAppt.treatment || 'No especificado')
-                                        }
-                                        onChange={(e) => setBookingTreatment(e.target.value)}
-                                    />
-                                </div>
-                            )}
-
-                            {/* Additional Details: Price, Duration, Observation */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Precio (€)</label>
-                                    <input
-                                        type="number"
-                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                        value={bookingPrice}
-                                        onChange={e => setBookingPrice(Number(e.target.value))}
-                                        disabled={false}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold uppercase text-slate-400">Duración</label>
-                                    <select
-                                        className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
-                                        value={bookingDuration}
-                                        onChange={e => setBookingDuration(Number(e.target.value))}
-                                        disabled={false}
-                                        style={{ colorScheme: 'light' }}
-                                    >
-                                        {DURATION_OPTIONS.map(opt => (
-                                            <option key={opt} value={opt}>{opt} min</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Observaciones</label>
-                                <textarea
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 h-20 resize-none"
-                                    placeholder="Notas adicionales..."
-                                    value={bookingObservation}
-                                    onChange={e => setBookingObservation(e.target.value)}
-                                    disabled={false}
-                                />
-                            </div>
-
-                            {/* Feature 7: Visit Details Field */}
-                            <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Detalles de la Visita</label>
-                                <textarea
-                                    className="w-full bg-purple-50/50 p-3 rounded-xl border border-purple-200 mt-2 outline-none font-bold text-purple-700 h-16 resize-none"
-                                    placeholder="Pago pendiente, alergias, indicaciones especiales..."
-                                    value={bookingVisitDetails}
-                                    onChange={e => setBookingVisitDetails(e.target.value)}
-                                    disabled={false}
-                                />
-                            </div>
-
-                            {/* 🆕 NEW FEATURE 1: Real DB Service Searchable Multi-Selector */}
-                            <div>
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs font-bold uppercase text-slate-400">Servicios / Tratamientos</label>
-                                    {dbServices.length > 0 && (
-                                        <span className="text-[10px] text-emerald-600 font-bold">{dbServices.length} servicios disponibles</span>
-                                    )}
-                                </div>
-
-                                {/* Selected services chips */}
-                                {selectedDbServices.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 mb-2">
-                                        {selectedDbServices.map((svc, idx) => (
-                                            <div
-                                                key={svc.id}
-                                                className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-full px-2.5 py-1 text-[11px] font-bold"
+                                    {/* Unified Input + Add Button */}
+                                    <div className="relative group">
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar servicio o escribir texto libre..."
+                                                    value={bookingServiceSearch}
+                                                    onChange={e => {
+                                                        setBookingServiceSearch(e.target.value);
+                                                        setShowServiceDropdown(true);
+                                                    }}
+                                                    onFocus={() => setShowServiceDropdown(true)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            handleAddTreatmentToList();
+                                                        }
+                                                    }}
+                                                    className="w-full bg-slate-50 focus:bg-white pl-11 pr-4 py-3.5 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none text-sm font-bold text-slate-700 transition-all placeholder:font-medium placeholder:text-slate-400"
+                                                />
+                                            </div>
+                                            <button
+                                                onClick={handleAddTreatmentToList}
+                                                disabled={!bookingServiceSearch.trim()}
+                                                className="px-6 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white rounded-2xl font-black text-xs uppercase shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
                                             >
-                                                <span>{svc.name}</span>
-                                                {svc.price > 0 && <span className="text-emerald-600 font-black">{svc.price}€</span>}
-                                                <button
-                                                    onClick={() => {
-                                                        const newList = selectedDbServices.filter((_, i) => i !== idx);
-                                                        setSelectedDbServices(newList);
-                                                        setBookingPrice(newList.reduce((s, x) => s + x.price, 0));
-                                                    }}
-                                                    className="w-4 h-4 flex items-center justify-center rounded-full bg-emerald-200 hover:bg-red-200 text-emerald-700 hover:text-red-700 transition-colors font-black text-xs leading-none"
-                                                >×</button>
+                                                <Plus size={18} />
+                                                <span className="hidden sm:inline">Añadir</span>
+                                            </button>
+                                        </div>
+
+                                        {/* Dropdown Results */}
+                                        {showServiceDropdown && bookingServiceSearch.trim().length > 0 && (
+                                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-[1.5rem] shadow-2xl z-[120] max-h-60 overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+                                                {(() => {
+                                                    const filtered = dbServices.filter(s =>
+                                                        s.name.toLowerCase().includes(bookingServiceSearch.toLowerCase()) ||
+                                                        (s.specialty_name || '').toLowerCase().includes(bookingServiceSearch.toLowerCase())
+                                                    ).filter(s => !selectedDbServices.some(sel => sel.id === s.id)).slice(0, 15);
+
+                                                    if (filtered.length === 0) {
+                                                        return (
+                                                            <div 
+                                                                onClick={handleAddTreatmentToList}
+                                                                className="p-4 text-center cursor-pointer hover:bg-blue-50 transition-colors group"
+                                                            >
+                                                                <p className="text-sm font-bold text-slate-400 group-hover:text-blue-600">No hay coincidencias en el catálogo</p>
+                                                                <p className="text-[11px] text-blue-500 font-black mt-1">Pulse Enter para añadir "{bookingServiceSearch}" como texto libre (0€)</p>
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return filtered.map(svc => (
+                                                        <div
+                                                            key={svc.id}
+                                                            onClick={() => handlePushTreatment({
+                                                                id: svc.id,
+                                                                name: svc.name,
+                                                                price: svc.final_price || 0
+                                                            })}
+                                                            className="flex items-center justify-between px-5 py-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors group"
+                                                        >
+                                                            <div>
+                                                                <p className="text-sm font-bold text-slate-700 group-hover:text-blue-700">{svc.name}</p>
+                                                                {svc.specialty_name && (
+                                                                    <p className="text-[10px] text-slate-400 font-bold group-hover:text-blue-400">{svc.specialty_name}</p>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-xs font-black text-slate-400 group-hover:text-blue-600">
+                                                                    {(svc.final_price || 0) > 0 ? `${svc.final_price}€` : 'Gratis'}
+                                                                </span>
+                                                                <div className="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-blue-600 flex items-center justify-center transition-colors">
+                                                                    <Plus size={14} className="text-slate-400 group-hover:text-white" />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ));
+                                                })()}
                                             </div>
-                                        ))}
-                                        <div className="text-right text-[11px] font-black text-emerald-700 ml-auto self-center">
-                                            Total: {selectedDbServices.reduce((s, x) => s + x.price, 0).toFixed(2)}€
-                                        </div>
+                                        )}
+                                        {/* Click outside to close */}
+                                        {showServiceDropdown && (
+                                            <div className="fixed inset-0 z-[-1]" onClick={() => setShowServiceDropdown(false)} />
+                                        )}
                                     </div>
-                                )}
-
-                                {/* Search input + dropdown */}
-                                <div className="relative">
-                                    <div className="relative">
-                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar servicio (ej: Empaste, Limpieza...)"
-                                            value={bookingServiceSearch}
-                                            onChange={e => {
-                                                setBookingServiceSearch(e.target.value);
-                                                setShowServiceDropdown(true);
-                                            }}
-                                            onFocus={() => setShowServiceDropdown(true)}
-                                            className="w-full bg-slate-50 pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 outline-none text-sm font-bold text-slate-700 placeholder:font-normal placeholder:text-slate-400"
-                                        />
-                                    </div>
-
-                                    {/* Dropdown list */}
-                                    {showServiceDropdown && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto">
-                                            {(bookingServiceSearch.trim().length > 0
-                                                ? dbServices.filter(s =>
-                                                    s.name.toLowerCase().includes(bookingServiceSearch.toLowerCase()) ||
-                                                    (s.specialty_name || '').toLowerCase().includes(bookingServiceSearch.toLowerCase())
-                                                )
-                                                : dbServices
-                                            )
-                                            .filter(s => !selectedDbServices.find(sel => sel.id === s.id))
-                                            .slice(0, 20)
-                                            .map(svc => (
-                                                <div
-                                                    key={svc.id}
-                                                    onClick={() => {
-                                                        const newSvc = { id: svc.id, name: svc.name, price: svc.final_price || 0 };
-                                                        const newList = [...selectedDbServices, newSvc];
-                                                        setSelectedDbServices(newList);
-                                                        setBookingPrice(newList.reduce((s, x) => s + x.price, 0));
-                                                        setBookingServiceSearch('');
-                                                        setShowServiceDropdown(false);
-                                                    }}
-                                                    className="flex items-center justify-between px-4 py-2.5 hover:bg-emerald-50 cursor-pointer border-b border-slate-50 last:border-0 transition-colors group"
-                                                >
-                                                    <div>
-                                                        <p className="text-xs font-bold text-slate-800 group-hover:text-emerald-800">{svc.name}</p>
-                                                        {svc.specialty_name && (
-                                                            <p className="text-[10px] text-slate-400 font-medium">{svc.specialty_name}</p>
-                                                        )}
-                                                    </div>
-                                                    <span className="text-xs font-black text-slate-500 group-hover:text-emerald-600">
-                                                        {(svc.final_price || 0) > 0 ? `${svc.final_price}€` : 'Gratis'}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                            {dbServices.length === 0 && (
-                                                <div className="px-4 py-3 text-xs text-slate-400 text-center">
-                                                    Cargando catálogo de servicios...
-                                                </div>
-                                            )}
-                                            {dbServices.length > 0 && (bookingServiceSearch.trim().length > 0 ? dbServices.filter(s => s.name.toLowerCase().includes(bookingServiceSearch.toLowerCase()) && !selectedDbServices.find(sel => sel.id === s.id)) : dbServices.filter(s => !selectedDbServices.find(sel => sel.id === s.id))).length === 0 && (
-                                                <div className="px-4 py-3 text-xs text-slate-400 text-center">
-                                                    No se encontraron servicios
-                                                </div>
-                                            )}
-                                            {/* Close dropdown on click outside (blur) */}
-                                            <div
-                                                className="fixed inset-0 z-[-1]"
-                                                onClick={() => setShowServiceDropdown(false)}
-                                            />
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
+                            )}
 
-                            {/* 🆕 NEW FEATURE 2: Es Revisión Toggle */}
+                            {/* Es Revisión Toggle */}
                             <div
                                 className={`flex items-center justify-between p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                                     bookingIsRevision
@@ -1984,7 +1918,7 @@ const Agenda: React.FC = () => {
                             >
                                 <div className="flex items-center gap-3">
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
-                                        bookingIsRevision ? 'bg-cyan-500 shadow-lg' : 'bg-slate-200'
+                                        bookingIsRevision ? 'bg-cyan-500 text-white shadow-lg' : 'bg-slate-200 text-slate-500'
                                     }`}>
                                         ↩
                                     </div>
@@ -2028,7 +1962,9 @@ const Agenda: React.FC = () => {
                                                 time: bookingTime,
                                                 patientId: bookingPatientId,
                                                 doctorId: bookingDoctorId,
-                                                treatmentName: bookingTreatment || null,
+                                                treatmentName: !bookingBudgetId && selectedDbServices.length > 0 
+                                                    ? selectedDbServices.map(t => t.name).join(', ')
+                                                    : (bookingTreatment || null),
                                                 amount: bookingPrice || null,
                                                 duration: bookingDuration,
                                                 observations: bookingObservation || null,
@@ -2038,7 +1974,9 @@ const Agenda: React.FC = () => {
                                                 status: (selectedAppt as any).status || 'Scheduled',
                                                 // 🆕 New fields
                                                 isRevision: bookingIsRevision,
-                                                serviceIds: selectedDbServices.length > 0 ? selectedDbServices.map(s => s.id) : undefined,
+                                                serviceIds: selectedDbServices.length > 0 
+                                                    ? selectedDbServices.filter(s => !s.id.startsWith('custom-')).map(s => s.id) 
+                                                    : undefined,
                                             };
 
                                             console.log('📝 Updating appointment:', updatePayload);
