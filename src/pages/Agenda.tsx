@@ -1113,7 +1113,7 @@ const Agenda: React.FC = () => {
                                 {/* HEADERS */}
                                 <div className="flex h-[48px] mb-4 min-w-max">
                                     {viewMode === 'daily' ? (
-                                        selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') ? (
+                                        selectedDoctorId === 'all' ? (
                                             doctorsOnDuty.map(doc => (
                                                 <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide text-xs flex items-center justify-center px-3 whitespace-nowrap ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
                                                     }`}>
@@ -1233,8 +1233,8 @@ const Agenda: React.FC = () => {
                                             });
                                         }
 
-                                        // ── CASE B: Daily + all doctors (admin multi-column) ──
-                                        if (viewMode === 'daily' && selectedDoctorId === 'all' && (currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION')) {
+                                        // ── CASE B: Daily + all doctors (multi-column) ──
+                                        if (viewMode === 'daily' && selectedDoctorId === 'all') {
                                             const activeDoctors = doctorsOnDuty;
                                             return TIME_SLOTS.map(time => {
                                                 const isQuarter = time.endsWith(':00') || time.endsWith(':15') || time.endsWith(':30') || time.endsWith(':45');

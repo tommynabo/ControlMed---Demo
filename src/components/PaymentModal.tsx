@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft, Loader2 } from 'lucide-react';
+import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft } from 'lucide-react';
 import { Payment, Patient, Budget } from '../../types';
 import { api } from '../services/api';
 
@@ -491,7 +491,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         className="flex-1 bg-slate-900 text-white py-4 rounded-xl text-sm font-black uppercase shadow-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                         {isProcessing ? (
-                            <><Loader2 className="animate-spin w-4 h-4" /> Procesando...</>
+                            <>⏳ Procesando...</>
                         ) : (
                             isDirectPayment ? (
                                 <>

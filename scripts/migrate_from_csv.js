@@ -13,8 +13,9 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const SUPABASE_URL = 'https://gnnacijqglcqonholpwt.supabase.co';
-const SERVICE_KEY  = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gnnacijqglcqonholpwt.supabase.co';
+const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+if (!SERVICE_KEY) { console.error('Set SUPABASE_SERVICE_ROLE_KEY in .env'); process.exit(1); }
 const BASE_DIR     = path.join(__dirname, '..', 'BaseDatos');
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);

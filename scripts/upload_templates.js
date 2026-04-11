@@ -6,9 +6,9 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 const ASSETS_DIR = path.join(__dirname, '../assets');
 // HARDCODED FOR DEBUGGING
-const SUPABASE_URL = "https://gnnacijqglcqonholpwt.supabase.co";
-// Using the Service Role Key found in .env explicitly
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImiYXQiOjE3Njg0NzY1NDQsImV4cCI6MjA4NDA1MjU0NH0.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4";
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://gnnacijqglcqonholpwt.supabase.co";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SUPABASE_KEY) { console.error('Set SUPABASE_SERVICE_ROLE_KEY in .env'); process.exit(1); }
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error('Error: Supabase credentials missing.');

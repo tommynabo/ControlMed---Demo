@@ -718,6 +718,59 @@ app.post('/api/clinical-records', async (req, res) => {
     }
 });
 
+app.put('/api/clinical-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { treatment, observation, specialization, doctorId } = req.body;
+
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        // Fetch existing record
+        const { data: existing, error: fetchErr } = await supabase
+            .from('ClinicalRecord')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchErr || !existing) {
+            return res.status(404).json({ error: 'Registro clínico no encontrado' });
+        }
+
+        // Parse existing text JSON and merge updates
+        let parsed = {};
+        try { parsed = JSON.parse(existing.text || '{}'); } catch (e) { }
+
+        const updatedPayload = {
+            treatment: treatment !== undefined ? treatment : (parsed.treatment || ''),
+            observation: observation !== undefined ? observation : (parsed.observation || ''),
+            specialization: specialization !== undefined ? specialization : (parsed.specialization || 'General'),
+            price: parsed.price || 0,
+            doctorId: doctorId || parsed.doctorId || existing.authorId,
+        };
+
+        const { data, error } = await supabase
+            .from('ClinicalRecord')
+            .update({
+                text: JSON.stringify(updatedPayload),
+                authorId: updatedPayload.doctorId,
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('❌ Error updating clinical record:', error);
+            return res.status(500).json({ error: error.message });
+        }
+
+        res.json({ ...data, clinicalData: updatedPayload, specialization: updatedPayload.specialization });
+    } catch (e) {
+        console.error('❌ Error in PUT /api/clinical-records/:id:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.delete('/api/clinical-records/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -1456,6 +1509,18 @@ app.put('/api/appointments/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
+        // CRITICAL FIX: Fetch existing appointment first to ensure required fields are preserved
+        const { data: existingAppt, error: fetchError } = await supabase
+            .from('Appointment')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !existingAppt) {
+            console.error("❌ Appointment not found for update:", fetchError?.message);
+            return res.status(404).json({ error: `Cita no encontrada (ID: ${id})` });
+        }
+
         // Sanitization: Convert empty strings to null for UUID fields
         if (typeof updates.budgetId === 'string' && updates.budgetId.trim() === '') updates.budgetId = null;
         if (typeof updates.budgetItemId === 'string' && updates.budgetItemId.trim() === '') updates.budgetItemId = null;
@@ -1496,17 +1561,23 @@ app.put('/api/appointments/:id', async (req, res) => {
         delete updates.id;
         delete updates.created_at;
 
-        // Remove null-valued keys to allow partial updates (don't overwrite existing data with null)
-        // Keep explicitly set null for budgetId/budgetItemId (user may want to unlink)
+        // Remove undefined keys; keep explicitly set null only for allowed fields
         const fieldsAllowedNull = ['budgetId', 'budgetItemId', 'treatmentId', 'observations', 'visitDetails', 'treatmentName', 'amount'];
         for (const key of Object.keys(updates)) {
             if (updates[key] === undefined) delete updates[key];
             if (updates[key] === null && !fieldsAllowedNull.includes(key)) delete updates[key];
         }
 
+        // CRITICAL FIX: Merge with existing data — always ensure required fields (patientId, doctorId) are present
+        const mergedUpdate = {
+            ...updates,
+            patientId: updates.patientId || existingAppt.patientId,
+            doctorId: updates.doctorId || existingAppt.doctorId,
+        };
+
         const { data: updatedAppointment, error } = await supabase
             .from('Appointment')
-            .update(updates)
+            .update(mergedUpdate)
             .eq('id', id)
             .select('*, patient:Patient!left(*), doctor:Doctor!left(*)')
             .single();
@@ -1717,7 +1788,7 @@ const { createClient } = require('@supabase/supabase-js');
 // Lazy Supabase Initializer to prevent startup crashes
 const getSupabase = () => {
     const URL = process.env.SUPABASE_URL || "https://gnnacijqglcqonholpwt.supabase.co";
-    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4";
+    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
     if (!URL || !KEY) {
         throw new Error('SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son requeridos para acceder a Supabase.');

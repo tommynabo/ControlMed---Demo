@@ -4,12 +4,11 @@ import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight, Loader2
+    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
 import { useAppContext } from '../context/AppContext';
-import { useQuery } from '@tanstack/react-query';
 import { Patient, ClinicalRecord, Specialization, Doctor, Invoice, Appointment, PatientTreatment, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
 import OdontogramEnhanced from '../components/OdontogramEnhanced';
 import { PaymentModal } from '../components/PaymentModal';
@@ -45,7 +44,7 @@ const Patients: React.FC = () => {
     const {
         patients, setPatients, searchQuery, setSearchQuery,
         selectedPatient, setSelectedPatient, clinicalRecords, setClinicalRecords,
-        invoices, setInvoices, api, refreshAppointments, appointments
+        invoices, setInvoices, api, refreshAppointments
     } = useAppContext();
 
 
@@ -137,31 +136,6 @@ const Patients: React.FC = () => {
                 if (slotTimeValue >= (aStartH + aStartM/60) && slotTimeValue < (aEndH + aEndM/60)) inAfternoon = true;
             }
             return inMorning || inAfternoon;
-        });
-    };
-
-    const checkOverlap = (dateStr: string, timeStr: string, durationMin: number, doctorId: string, excludeApptId?: string) => {
-        if (!doctorId || doctorId === 'all') return false;
-        const [h2, m2] = timeStr.split(':').map(Number);
-        const start2 = h2 * 60 + m2;
-        const end2 = start2 + (durationMin || 30);
-        const date2 = new Date(dateStr).toISOString().split('T')[0];
-
-        return appointments.some(a => {
-            if (a.id === excludeApptId) return false;
-            if (a.status === 'Cancelled' || a.status === 'Anulada') return false;
-            if (a.doctorId !== doctorId) return false;
-            
-            const [h1, m1] = a.time.split(':').map(Number);
-            const start1 = h1 * 60 + m1;
-            const end1 = start1 + (a.duration || 30);
-            
-            const date1 = new Date(a.date).toISOString().split('T')[0];
-            
-            if (date1 === date2) {
-                return Math.max(start1, start2) < Math.min(end1, end2); // overlap condition
-            }
-            return false;
         });
     };
 
@@ -333,19 +307,14 @@ const Patients: React.FC = () => {
         }
     }, [selectedPatient, patientTab]);
 
-    // Fetch patient visits using React Query for better synchronization
-    const { data: rqPatientAppointments, refetch: refetchPatientAppointments } = useQuery({
-        queryKey: ['patient-appointments', selectedPatient?.id],
-        queryFn: () => api.appointments.getByPatient(selectedPatient!.id),
-        enabled: !!selectedPatient && (patientTab === 'visitas' || patientTab === 'ficha' || patientTab === 'history'),
-        staleTime: 1000 * 60 * 2, // 2 minutes
-    });
-
-    useEffect(() => {
-        if (rqPatientAppointments) {
-            setPatientAppointments(rqPatientAppointments);
+    // Fetch patient visits when visitas tab is active
+    React.useEffect(() => {
+        if (selectedPatient && patientTab === 'visitas') {
+            api.appointments.getByPatient(selectedPatient.id)
+                .then(setPatientAppointments)
+                .catch(err => console.error("Failed to load visits", err));
         }
-    }, [rqPatientAppointments]);
+    }, [selectedPatient, patientTab]);
 
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
@@ -698,19 +667,6 @@ const Patients: React.FC = () => {
     };
 
     const handleSaveVisitEdit = async (visitId: string) => {
-        // Validation: Overlap check
-        const visitDuration = visitForPayment?.duration || 30; // Find actual visit duration from global state if needed, using 30 as fallback
-        const currentVisit = patientAppointments.find(a => a.id === visitId);
-        const durationMin = currentVisit?.duration || 30;
-        
-        if (editVisitForm.doctorId && checkOverlap(editVisitForm.date, editVisitForm.time, durationMin, editVisitForm.doctorId, visitId)) {
-            toast.error(`El doctor ya tiene una cita en ese horario. Por favor, elige otro hueco.`, {
-                style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' },
-                icon: '🚫'
-            });
-            return;
-        }
-
         setIsSavingVisit(true);
         try {
             const updated = await api.appointments.update(visitId, {
@@ -858,9 +814,21 @@ const Patients: React.FC = () => {
         }
     };
 
-    const handleUpdateRecord = () => {
+    const handleUpdateRecord = async () => {
         if (!editingRecord) return;
-        setClinicalRecords(prev => prev.map(r => r.id === editingRecord.id ? editingRecord : r));
+        try {
+            const updated = await api.clinicalRecords.update(editingRecord.id, {
+                treatment: editingRecord.clinicalData?.treatment || '',
+                observation: editingRecord.clinicalData?.observation || '',
+                specialization: editingRecord.specialization || 'General',
+                doctorId: editingRecord.authorId || '',
+            });
+            setClinicalRecords(prev => prev.map(r => r.id === editingRecord.id ? updated : r));
+            toast.success('Registro actualizado correctamente');
+        } catch (e: any) {
+            console.error('Error updating clinical record:', e);
+            toast.error('Error al actualizar: ' + (e.message || 'Error desconocido'));
+        }
         setIsEditEntryModalOpen(false);
         setEditingRecord(null);
     };
@@ -1502,15 +1470,6 @@ const Patients: React.FC = () => {
                                                         return;
                                                     }
 
-                                                    // Validation: Overlap check
-                                                    if (newVisitForm.doctorId && checkOverlap(newVisitForm.date, newVisitForm.time, newVisitForm.duration || 30, newVisitForm.doctorId)) {
-                                                        toast.error(`El Dr. ya tiene una cita programada en ese horario. Por favor, elige otro hueco.`, {
-                                                            style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' },
-                                                            icon: '🚫'
-                                                        });
-                                                        return;
-                                                    }
-
                                                     setIsCreatingVisit(true);
                                                     try {
                                                         const created = await api.appointments.create({
@@ -1631,7 +1590,7 @@ const Patients: React.FC = () => {
                                                                             </div>
                                                                             <div className="flex gap-2 mt-2">
                                                                                 <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
-                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{isSavingVisit ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
                                                                             </div>
                                                                             <div className="flex gap-2 pt-2 border-t border-slate-200">
                                                                                 <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
@@ -1717,7 +1676,7 @@ const Patients: React.FC = () => {
                                                                             </div>
                                                                             <div className="flex gap-2 mt-2">
                                                                                 <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
-                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{isSavingVisit ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
                                                                             </div>
                                                                             <div className="flex gap-2 pt-2 border-t border-slate-200">
                                                                                 <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
@@ -1803,7 +1762,7 @@ const Patients: React.FC = () => {
                                                                             </div>
                                                                             <div className="flex gap-2 mt-2">
                                                                                 <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
-                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{isSavingVisit ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
                                                                             </div>
                                                                             <div className="flex gap-2 pt-2 border-t border-slate-200">
                                                                                 <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Asistencia:</p>
@@ -1966,7 +1925,7 @@ const Patients: React.FC = () => {
                                                             <h4 className="text-lg font-black text-slate-900">{p.medication}</h4>
                                                             <div className="flex items-center gap-3 mt-1">
                                                                 <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                    {new Date(p.date || p.createdAt || p.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
+                                                                    {new Date(p.date || p.createdAt || p.date).toLocaleDateString()}
                                                                 </span>
                                                                 <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
                                                                 <span className="text-[10px] font-bold text-indigo-500 uppercase">
@@ -2210,7 +2169,7 @@ const Patients: React.FC = () => {
                                                             <h4 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                                                                 {budget.title || `Presupuesto #${budget.id.substring(0, 6)}`}
                                                             </h4>
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{new Date(budget.date || budget.createdAt).toLocaleDateString('es-ES', { timeZone: 'UTC' })}</p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{new Date(budget.createdAt).toLocaleDateString()}</p>
                                                         </div>
                                                         <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${budget.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
                                                             {budget.status || 'DRAFT'}
@@ -2560,7 +2519,7 @@ const Patients: React.FC = () => {
                             </div>{/* end scrollable area */}
                             <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">
                                 <button onClick={() => setIsNewPatientModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
-                                <button onClick={handleCreatePatient} disabled={isSubmittingPatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">{isSubmittingPatient ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Guardar'}</button>
+                                <button onClick={handleCreatePatient} disabled={isSubmittingPatient} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">{isSubmittingPatient ? 'Guardando...' : 'Guardar'}</button>
                             </div>
                         </div>
                     </div>
@@ -2629,6 +2588,72 @@ const Patients: React.FC = () => {
                             <div className="flex gap-4 mt-6">
                                 <button onClick={() => setIsNewEntryModalOpen(false)} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
                                 <button onClick={handleAddClinicalRecord} disabled={isSubmittingRecord} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50">{isSubmittingRecord ? 'Guardando...' : 'Guardar Entrada'}</button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* EDIT CLINICAL RECORD MODAL */}
+            {
+                isEditEntryModalOpen && editingRecord && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+                        <div className="bg-white max-w-lg w-full rounded-[2rem] p-8 shadow-2xl">
+                            <h3 className="text-2xl font-black text-slate-900 mb-6">Editar Entrada Historial</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Tratamiento / Título</label>
+                                    <input
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                        value={editingRecord.clinicalData?.treatment || ''}
+                                        onChange={e => setEditingRecord({ ...editingRecord, clinicalData: { ...editingRecord.clinicalData, treatment: e.target.value } })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Doctor Responsable</label>
+                                    <select
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                                        value={editingRecord.authorId || ''}
+                                        onChange={e => setEditingRecord({ ...editingRecord, authorId: e.target.value })}
+                                    >
+                                        <option value="">— Seleccionar doctor —</option>
+                                        {doctors.map(d => (
+                                            <option key={d.id} value={d.id}>{d.name}{d.specialization ? ` (${d.specialization})` : ''}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-black uppercase text-slate-400 flex justify-between items-center mb-2">
+                                        <span>Detalles</span>
+                                        <button
+                                            onClick={async () => {
+                                                if (!editingRecord.clinicalData?.observation) return toast('Escribe algo primero...');
+                                                setIsProcessing(true);
+                                                try {
+                                                    const improved = await api.ai.improveMessage(editingRecord.clinicalData.observation, selectedPatient?.name, 'clinical_note');
+                                                    if (improved) {
+                                                        setEditingRecord({ ...editingRecord, clinicalData: { ...editingRecord.clinicalData, observation: improved } });
+                                                    } else {
+                                                        toast('La IA no devolvió respuesta.');
+                                                    }
+                                                } catch (e) { console.error(e); toast('Error conectando con IA.'); }
+                                                setIsProcessing(false);
+                                            }}
+                                            className="text-xs bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-200"
+                                        >
+                                            ✨ Mejorar redacción (AI)
+                                        </button>
+                                    </label>
+                                    <textarea
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium h-32 resize-none"
+                                        value={editingRecord.clinicalData?.observation || ''}
+                                        onChange={e => setEditingRecord({ ...editingRecord, clinicalData: { ...editingRecord.clinicalData, observation: e.target.value } })}
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex gap-4 mt-6">
+                                <button onClick={() => { setIsEditEntryModalOpen(false); setEditingRecord(null); }} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
+                                <button onClick={handleUpdateRecord} className="flex-1 bg-amber-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg hover:bg-amber-700 transition-colors">Guardar Cambios</button>
                             </div>
                         </div>
                     </div>
@@ -3040,7 +3065,7 @@ const Patients: React.FC = () => {
                     recordId={recordToReassign.id}
                     patientName={selectedPatient?.name || 'Paciente'}
                     currentDoctorId={recordToReassign.authorId}
-                    dateText={new Date(recordToReassign.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
+                    dateText={new Date(recordToReassign.date).toLocaleDateString()}
                     onSuccess={() => {
                         // Refresh clinical records
                         if (selectedPatient) {

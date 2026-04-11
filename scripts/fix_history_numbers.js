@@ -3,11 +3,13 @@ const { createClient } = require('@supabase/supabase-js');
 const { parse } = require('csv-parse/sync');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const supabase = createClient(
-  'https://gnnacijqglcqonholpwt.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4'
+  process.env.SUPABASE_URL || 'https://gnnacijqglcqonholpwt.supabase.co',
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) { console.error('Set SUPABASE_SERVICE_ROLE_KEY in .env'); process.exit(1); }
 
 async function fixHistoryNumbers() {
   console.log('Fixing historyNumber: IDCONTACTO → real NUM...');

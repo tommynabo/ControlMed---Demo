@@ -30,7 +30,7 @@ const createBudget = async (supabase, patientId, items = [], title = "") => {
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,
             face: item.face || null,
-            treatmentId: null // Force null to avoid FK constraint error (PatientTreatment ID != Treatment ID)
+            treatmentId: (item.treatmentId && !item.treatmentId.startsWith('temp-')) ? item.treatmentId : null
         }));
 
         const { error: itemsError } = await supabase
@@ -247,7 +247,7 @@ const updateBudget = async (supabase, budgetId, items = [], title = "") => {
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,
             face: item.face || null,
-            treatmentId: null
+            treatmentId: (item.treatmentId && !item.treatmentId.startsWith('temp-')) ? item.treatmentId : null
         }));
 
         const { error: itemsError } = await supabase.from('BudgetLineItem').insert(lineItems);

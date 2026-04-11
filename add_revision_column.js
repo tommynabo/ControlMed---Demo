@@ -5,8 +5,9 @@
  */
 const https = require('https');
 
-const SUPABASE_URL = 'https://gnnacijqglcqonholpwt.supabase.co';
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gnnacijqglcqonholpwt.supabase.co';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SERVICE_ROLE_KEY) { console.error('Set SUPABASE_SERVICE_ROLE_KEY env var'); process.exit(1); }
 
 // Test if column already exists by trying to select it
 const testUrl = `${SUPABASE_URL}/rest/v1/Appointment?select=is_revision&limit=1`;

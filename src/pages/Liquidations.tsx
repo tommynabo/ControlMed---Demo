@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown } from 'lucide-react';
+import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
 
@@ -33,6 +33,8 @@ export const Liquidations: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [commissionRate, setCommissionRate] = useState<number>(40);
+    const [labCosts, setLabCosts] = useState<Record<string, number>>({});
 
     // Load doctors on mount
     useEffect(() => {
@@ -104,26 +106,43 @@ export const Liquidations: React.FC = () => {
             // Header
             doc.setFontSize(18);
             doc.setFont('helvetica', 'bold');
-            doc.text('Liquidaciones Doctores', 14, 20);
+            doc.text('Liquidación Doctor', 14, 20);
 
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
-            doc.text(`Doctor: ${doctorName}`, 14, 30);
-            doc.text(`Período: ${dateFrom}  –  ${dateTo}`, 14, 36);
-            doc.text(`Total: ${totalImporte.toFixed(2)} €`, 14, 42);
+            doc.text(`Doctor: ${doctorName}`, 14, 28);
+            doc.text(`Período: ${dateFrom}  –  ${dateTo}`, 14, 34);
+            doc.text(`Comisión: ${commissionRate}%`, 14, 40);
+
+            // Summary box
+            doc.setFillColor(240, 253, 244);
+            doc.rect(180, 18, 100, 26, 'F');
+            doc.setDrawColor(187, 247, 208);
+            doc.rect(180, 18, 100, 26, 'S');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9);
+            doc.setTextColor(30, 41, 59);
+            doc.text(`Total Cobrado: ${totalImporte.toFixed(2)} €`, 184, 25);
+            doc.text(`Coste Laboratorio: ${totalLabCosts.toFixed(2)} €`, 184, 31);
+            doc.text(`Neto: ${netAfterLab.toFixed(2)} €`, 184, 37);
+            doc.setTextColor(37, 99, 235);
+            doc.text(`Comisión Doctor (${commissionRate}%): ${commissionAmount.toFixed(2)} €`, 184, 43);
 
             // Table header
-            const colX = [14, 50, 120, 185, 225, 260];
+            const colX = [14, 44, 110, 160, 200, 235, 260];
             const headerY = 52;
             doc.setFillColor(226, 232, 240);
             doc.rect(14, headerY - 5, 269, 8, 'F');
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(8);
+            doc.setTextColor(30, 41, 59);
             doc.text('FECHA', colX[0], headerY);
             doc.text('CONCEPTO', colX[1], headerY);
             doc.text('PACIENTE', colX[2], headerY);
-            doc.text('NUM. HISTORIA', colX[3], headerY);
+            doc.text('NUM', colX[3], headerY);
             doc.text('IMPORTE', colX[4], headerY);
+            doc.text('COSTE LAB', colX[5], headerY);
+            doc.text('NETO', colX[6], headerY);
 
             // Table rows
             doc.setFont('helvetica', 'normal');
@@ -137,24 +156,46 @@ export const Liquidations: React.FC = () => {
                 }
                 doc.setTextColor(30, 41, 59);
                 const fecha = r.fecha ? r.fecha.substring(0, 10) : '-';
+                const lab = labCosts[r.id] || 0;
+                const net = r.importeCobrado - lab;
                 doc.text(fecha, colX[0], y);
-                doc.text(doc.splitTextToSize(r.concepto || '-', 68)[0], colX[1], y);
-                doc.text(doc.splitTextToSize(r.nombrePaciente || '-', 63)[0], colX[2], y);
+                doc.text(doc.splitTextToSize(r.concepto || '-', 64)[0], colX[1], y);
+                doc.text(doc.splitTextToSize(r.nombrePaciente || '-', 48)[0], colX[2], y);
                 doc.text(r.numeroHistoria || '-', colX[3], y);
                 doc.text(`${r.importeCobrado.toFixed(2)} €`, colX[4], y);
+                doc.text(lab > 0 ? `${lab.toFixed(2)} €` : '-', colX[5], y);
+                doc.text(`${net.toFixed(2)} €`, colX[6], y);
                 y += 7;
             });
 
-            // Total row
+            // Totals section
+            y += 2;
             doc.setFillColor(209, 250, 229);
             doc.rect(14, y - 4, 269, 8, 'F');
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(9);
             doc.setTextColor(4, 120, 87);
-            doc.text('TOTAL', colX[3], y);
+            doc.text('TOTALES', colX[3], y);
             doc.text(`${totalImporte.toFixed(2)} €`, colX[4], y);
+            doc.text(`${totalLabCosts.toFixed(2)} €`, colX[5], y);
+            doc.text(`${netAfterLab.toFixed(2)} €`, colX[6], y);
 
-            doc.save(`liquidaciones-${doctorName}-${dateFrom}-${dateTo}.pdf`);
+            // Commission row
+            y += 9;
+            doc.setFillColor(219, 234, 254);
+            doc.rect(14, y - 4, 269, 8, 'F');
+            doc.setTextColor(37, 99, 235);
+            doc.text(`COMISIÓN DOCTOR (${commissionRate}%)`, colX[3], y);
+            doc.text(`${commissionAmount.toFixed(2)} €`, colX[6], y);
+
+            // Footer
+            y += 14;
+            doc.setFontSize(7);
+            doc.setTextColor(148, 163, 184);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Generado el ${new Date().toLocaleDateString('es-ES')} a las ${new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`, 14, y);
+
+            doc.save(`liquidacion-${doctorName}-${dateFrom}-${dateTo}.pdf`);
         } catch (err) {
             console.error('Error generating PDF:', err);
             setError('Error al generar el PDF');
@@ -168,6 +209,14 @@ export const Liquidations: React.FC = () => {
         () => records.reduce((sum, r) => sum + r.importeCobrado, 0),
         [records]
     );
+
+    const totalLabCosts = useMemo(
+        () => records.reduce((sum, r) => sum + (labCosts[r.id] || 0), 0),
+        [records, labCosts]
+    );
+
+    const netAfterLab = totalImporte - totalLabCosts;
+    const commissionAmount = netAfterLab * (commissionRate / 100);
 
     const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
 
@@ -195,20 +244,29 @@ export const Liquidations: React.FC = () => {
 
                     {/* Summary Stats */}
                     {records.length > 0 && (
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                                 <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Total Cobrado</div>
-                                <div className="text-3xl font-black text-emerald-600">{totalImporte.toFixed(2)}€</div>
+                                <div className="text-2xl font-black text-emerald-600">{totalImporte.toFixed(2)}€</div>
                             </div>
                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                                <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Período</div>
-                                <div className="text-sm font-black text-slate-900">{dateFrom} a {dateTo}</div>
+                                <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Coste Laboratorio</div>
+                                <div className="text-2xl font-black text-rose-500">{totalLabCosts.toFixed(2)}€</div>
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Neto (sin lab)</div>
+                                <div className="text-2xl font-black text-slate-900">{netAfterLab.toFixed(2)}€</div>
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Comisión ({commissionRate}%)</div>
+                                <div className="text-2xl font-black text-blue-600">{commissionAmount.toFixed(2)}€</div>
                             </div>
                             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                                 <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Doctor</div>
                                 <div className="text-sm font-black text-slate-900">
                                     {selectedDoctor ? selectedDoctor.name : 'Seleccionar'}
                                 </div>
+                                <div className="text-xs text-slate-500 mt-1">{dateFrom} a {dateTo}</div>
                             </div>
                         </div>
                     )}
@@ -221,7 +279,7 @@ export const Liquidations: React.FC = () => {
                         <h2 className="text-lg font-black text-slate-900">Filtros</h2>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         {/* Doctor Selector - custom dropdown to avoid OS dark-mode overrides */}
                         <div>
                             <label className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2 block">Doctor</label>
@@ -287,6 +345,23 @@ export const Liquidations: React.FC = () => {
                                 className="w-full bg-white border border-slate-300 text-slate-900 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                             />
                         </div>
+
+                        {/* Commission Rate */}
+                        <div>
+                            <label className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-2 block">Comisión Doctor (%)</label>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    step="1"
+                                    value={commissionRate}
+                                    onChange={(e) => setCommissionRate(Math.min(100, Math.max(0, Number(e.target.value))))}
+                                    className="w-full bg-white border border-slate-300 text-slate-900 px-4 py-3 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-emerald-500 pr-10"
+                                />
+                                <Percent size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Error Message */}
@@ -331,24 +406,51 @@ export const Liquidations: React.FC = () => {
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Paciente</th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">NUM</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Importe</th>
+                                        <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Coste Lab</th>
+                                        <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Neto</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200">
-                                    {records.map((record) => (
+                                    {records.map((record) => {
+                                        const lab = labCosts[record.id] || 0;
+                                        const net = record.importeCobrado - lab;
+                                        return (
                                         <tr key={record.id} className="hover:bg-blue-50/30 transition-colors">
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.concepto}</td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.nombrePaciente}</td>
                                             <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
                                             <td className="px-6 py-4 text-right font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</td>
+                                            <td className="px-6 py-2 text-right">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={lab || ''}
+                                                    placeholder="0.00"
+                                                    onChange={(e) => setLabCosts(prev => ({ ...prev, [record.id]: Number(e.target.value) || 0 }))}
+                                                    className="w-24 text-right bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5 text-sm font-bold text-rose-600 outline-none focus:ring-2 focus:ring-rose-400"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-black text-slate-800">{net.toFixed(2)}€</td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                     {/* Total Row */}
                                     <tr className="bg-emerald-50 border-t-2 border-emerald-200">
                                         <td colSpan={4} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
-                                            TOTAL
+                                            TOTALES
                                         </td>
                                         <td className="px-6 py-4 text-right font-black text-emerald-700 text-lg">{totalImporte.toFixed(2)}€</td>
+                                        <td className="px-6 py-4 text-right font-black text-rose-600">{totalLabCosts.toFixed(2)}€</td>
+                                        <td className="px-6 py-4 text-right font-black text-slate-900 text-lg">{netAfterLab.toFixed(2)}€</td>
+                                    </tr>
+                                    {/* Commission Row */}
+                                    <tr className="bg-blue-50 border-t border-blue-200">
+                                        <td colSpan={6} className="px-6 py-3 text-right font-black uppercase text-blue-700 text-sm">
+                                            COMISIÓN DOCTOR ({commissionRate}%)
+                                        </td>
+                                        <td className="px-6 py-3 text-right font-black text-blue-700 text-lg">{commissionAmount.toFixed(2)}€</td>
                                     </tr>
                                 </tbody>
                             </table>

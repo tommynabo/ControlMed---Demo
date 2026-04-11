@@ -3,9 +3,11 @@ const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const csv = require('csv-parser'); // User might not have this, I'll use simple split
 
-// HARDCODED CREDENTIALS (FROM SERVER/INDEX.JS)
-const URL = "https://gnnacijqglcqonholpwt.supabase.co";
-const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4";
+// CREDENTIALS FROM ENV
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
+const URL = process.env.SUPABASE_URL || "https://gnnacijqglcqonholpwt.supabase.co";
+const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!KEY) { console.error('Set SUPABASE_SERVICE_ROLE_KEY in .env'); process.exit(1); }
 
 const supabase = createClient(URL, KEY);
 
