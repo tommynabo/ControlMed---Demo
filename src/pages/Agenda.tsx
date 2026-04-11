@@ -2004,7 +2004,8 @@ const Agenda: React.FC = () => {
                                             }
 
                                             setIsBooking(true);
-                                            const updatePayload = {
+
+                                            const result = await api.appointments.update(selectedAppt.id, {
                                                 date: `${bookingDate}T00:00:00.000Z`,
                                                 time: bookingTime,
                                                 patientId: bookingPatientId,
@@ -2019,31 +2020,15 @@ const Agenda: React.FC = () => {
                                                 budgetId: bookingBudgetId || null,
                                                 budgetItemId: bookingBudgetItemId || null,
                                                 status: (selectedAppt as any).status || 'Scheduled',
-                                                // 🆕 New fields
                                                 isRevision: bookingIsRevision,
                                                 serviceIds: selectedDbServices.length > 0 
                                                     ? selectedDbServices.filter(s => !s.id.startsWith('custom-')).map(s => s.id) 
                                                     : undefined,
-                                            };
+                                            });
 
-                                            console.log('📝 Updating appointment:', updatePayload);
-
-                                            // VALIDATION: Doctor availability — warn but do not block
-                                            const checkDate = new Date(updatePayload.date);
-                                            const availSlots = getAvailableTimeSlots(checkDate, updatePayload.doctorId);
-                                            if (!availSlots.includes(updatePayload.time)) {
-                                                const proceed = window.confirm(
-                                                    "⚠️ Este horario está fuera del horario configurado para este doctor.\n\n¿Deseas guardar la cita de todas formas?"
-                                                );
-                                                if (!proceed) {
-                                                    setIsBooking(false);
-                                                    return;
-                                                }
-                                            }
-
-                                            const result = await api.appointments.update(selectedAppt.id, updatePayload);
-                                            
-                                            // Refresh appointments via context
+                                            // Immediately update local state (like f2540b9)
+                                            setAppointments(prev => prev.map(a => a.id === result.id ? { ...a, ...result } : a));
+                                            // Then also refresh from server for consistency
                                             await refreshAppointments();
                                             setIsAppointmentModalOpen(false);
                                             setIsEditingAppt(false);

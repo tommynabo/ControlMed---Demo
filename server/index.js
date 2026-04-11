@@ -1431,16 +1431,17 @@ app.get('/api/appointments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*, patient:Patient!left(*), doctor:Doctor!left(*), budget:Budget!left(id, totalAmount, items:BudgetLineItem!left(name, price, tooth))')
-            .is('deleted_at', null);
+            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))');
 
         if (error) {
             console.error("❌ Supabase Fetch Error (Appointments):", error);
             return res.status(500).json({ error: error.message });
         }
 
-        console.log(`📋 GET /api/appointments: returning ${(data || []).length} appointments`);
-        res.json(data || []);
+        // Filter soft-deleted in JS to avoid potential query issues
+        const active = (data || []).filter(a => !a.deleted_at);
+        console.log(`📋 GET /api/appointments: ${(data || []).length} total, ${active.length} active`);
+        res.json(active);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1537,131 +1538,97 @@ app.get('/api/appointments/:id/debug', async (req, res) => {
 app.put('/api/appointments/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const body = req.body;
+        const updates = { ...req.body };
 
-        console.log(`📝 Updating Appointment ${id}:`, JSON.stringify(body));
+        console.log(`📝 Updating Appointment ${id}:`, JSON.stringify(updates));
 
-        // Validación: ID requerido
-        if (!id || id.trim() === '') {
-            return res.status(400).json({ error: 'ID de cita requerido' });
+        // Sanitization: Convert empty strings to null for UUID fields
+        if (typeof updates.budgetId === 'string' && updates.budgetId.trim() === '') updates.budgetId = null;
+        if (typeof updates.budgetItemId === 'string' && updates.budgetItemId.trim() === '') updates.budgetItemId = null;
+        if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
+        if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
+        if (typeof updates.patientId === 'string' && updates.patientId.trim() === '') updates.patientId = null;
+
+        if (updates.date) {
+            updates.date = new Date(updates.date).toISOString();
         }
 
-        let supabase;
-        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-
-        // Fetch existing appointment (exclude soft-deleted)
-        const { data: existingAppt, error: fetchError } = await supabase
-            .from('Appointment')
-            .select('*')
-            .eq('id', id)
-            .is('deleted_at', null)
-            .single();
-
-        if (fetchError || !existingAppt) {
-            console.error("❌ Appointment not found for update:", fetchError?.message);
-            return res.status(404).json({ error: `Cita no encontrada (ID: ${id})` });
+        // Handle isRevision -> is_revision mapping for DB
+        if (updates.isRevision !== undefined) {
+            updates.is_revision = updates.isRevision === true;
+            delete updates.isRevision;
         }
 
-        // Explicit whitelist of allowed DB columns
-        const ALLOWED_FIELDS = [
-            'date', 'time', 'duration', 'observations', 'visitDetails',
-            'status', 'paid', 'patientId', 'doctorId', 'treatmentId',
-            'treatmentName', 'budgetId', 'budgetItemId', 'amount',
-            'is_revision', 'whatsapp_sent'
-        ];
-
-        // Build clean update object from whitelist only
-        const updates = {};
-
-        // Handle isRevision -> is_revision mapping
-        if (body.isRevision !== undefined) {
-            updates.is_revision = body.isRevision === true;
-        }
-
-        // Handle date: extract YYYY-MM-DD for PostgreSQL DATE column
-        if (body.date !== undefined) {
-            const d = new Date(body.date);
-            updates.date = d.toISOString().split('T')[0]; // "2026-04-11"
-        }
-
-        // Copy allowed fields from body
-        for (const field of ALLOWED_FIELDS) {
-            if (field in body && !(field in updates)) {
-                updates[field] = body[field];
-            }
-        }
-
-        // Handle serviceIds: resolve to treatmentName
-        if (Array.isArray(body.serviceIds) && body.serviceIds.length > 0) {
+        // Handle serviceIds: resolve to treatmentName if provided
+        if (Array.isArray(updates.serviceIds) && updates.serviceIds.length > 0) {
             try {
-                const { data: svcs } = await supabase.from('services').select('id, name').in('id', body.serviceIds);
-                if (svcs && svcs.length > 0) {
-                    updates.treatmentName = svcs.map(s => s.name).join(', ');
+                let supabase;
+                try { supabase = getSupabase(); } catch (e) { /* ignore */ }
+                if (supabase) {
+                    const { data: svcs } = await supabase.from('services').select('id, name').in('id', updates.serviceIds);
+                    if (svcs && svcs.length > 0) {
+                        updates.treatmentName = svcs.map(s => s.name).join(', ');
+                    }
                 }
             } catch (svcErr) {
-                console.warn('⚠️ Could not resolve serviceIds on update:', svcErr.message);
+                console.warn('⚠️ Could not resolve serviceIds:', svcErr.message);
             }
         }
 
-        // Sanitize UUID fields: empty strings -> null
-        const UUID_FIELDS = ['budgetId', 'budgetItemId', 'treatmentId', 'doctorId', 'patientId'];
-        for (const f of UUID_FIELDS) {
-            if (typeof updates[f] === 'string' && updates[f].trim() === '') {
-                updates[f] = null;
-            }
-        }
-
-        // Ensure required fields are always present
-        if (!updates.patientId) updates.patientId = existingAppt.patientId;
-        if (!updates.doctorId) updates.doctorId = existingAppt.doctorId;
+        // Remove relation objects and non-DB fields to avoid errors
+        delete updates.serviceIds;
+        delete updates.budgetItemIds;
+        delete updates.treatment;
+        delete updates.doctor;
+        delete updates.patient;
+        delete updates.budget;
+        delete updates.liquidation;
+        delete updates.id;
+        delete updates.created_at;
+        delete updates.deleted_at;
 
         // Remove undefined values
         for (const key of Object.keys(updates)) {
             if (updates[key] === undefined) delete updates[key];
         }
 
-        console.log(`📦 Final update payload for ${id}:`, JSON.stringify(updates));
+        console.log(`📦 Clean update payload for ${id}:`, JSON.stringify(updates));
 
-        const { data: updatedAppointment, error } = await supabase
-            .from('Appointment')
-            .update(updates)
-            .eq('id', id)
-            .is('deleted_at', null)
-            .select('*, patient:Patient!left(*), doctor:Doctor!left(*)')
-            .single();
+        // STRATEGY 1: Try Prisma first (proven to work in f2540b9)
+        let updatedAppointment;
+        try {
+            updatedAppointment = await prisma.appointment.update({
+                where: { id: id },
+                data: updates
+            });
+            console.log("✅ Appointment Updated via Prisma:", updatedAppointment.id, "time:", updatedAppointment.time);
+        } catch (prismaErr) {
+            console.warn("⚠️ Prisma update failed, falling back to Supabase REST:", prismaErr.message);
+            
+            // STRATEGY 2: Fallback to Supabase REST API
+            let supabase;
+            try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        if (error) {
-            console.error("❌ Supabase Update Error (Appointment):", JSON.stringify(error, null, 2));
-            return res.status(500).json({ error: `Error al actualizar cita: ${error.message}`, details: error.details, hint: error.hint });
-        }
+            const { data, error } = await supabase
+                .from('Appointment')
+                .update(updates)
+                .eq('id', id)
+                .select()
+                .single();
 
-        if (!updatedAppointment) {
-            console.error("❌ No data returned after update for:", id);
-            return res.status(500).json({ error: 'La actualización no devolvió datos' });
-        }
-
-        console.log("✅ Appointment Updated:", updatedAppointment.id, "status:", updatedAppointment.status, "time:", updatedAppointment.time);
-
-        // POST-UPDATE VERIFICATION: Query the row directly to confirm persistence
-        const { data: verifyRow, error: verifyErr } = await supabase
-            .from('Appointment')
-            .select('id, time, date, status, deleted_at')
-            .eq('id', id)
-            .single();
-
-        if (verifyErr) {
-            console.error('🔍 VERIFY FAILED:', verifyErr.message);
-        } else {
-            console.log(`🔍 VERIFY after update: id=${verifyRow.id}, time=${verifyRow.time}, date=${verifyRow.date}, status=${verifyRow.status}, deleted_at=${verifyRow.deleted_at}`);
-            if (verifyRow.deleted_at) {
-                console.error('🚨 CRITICAL: deleted_at is NOT null after update! Value:', verifyRow.deleted_at);
+            if (error) {
+                console.error("❌ Supabase Update Error (Appointment):", JSON.stringify(error, null, 2));
+                return res.status(500).json({ error: `Error al actualizar cita: ${error.message}`, details: error.details, hint: error.hint });
             }
+
+            updatedAppointment = data;
+            console.log("✅ Appointment Updated via Supabase:", updatedAppointment.id, "time:", updatedAppointment.time);
         }
 
         res.json(updatedAppointment);
     } catch (e) {
         console.error("❌ Error updating appointment:", e);
-        res.status(500).json({ error: e.message || 'Error desconocido al actualizar cita' });
+        res.status(500).json({ error: e.message });
     }
 });
 

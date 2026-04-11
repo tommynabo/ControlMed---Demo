@@ -390,19 +390,11 @@ export const api = {
                 headers,
                 body: JSON.stringify(updates)
             });
-            try {
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    throw new Error(errData.error || 'Failed to update appointment');
-                }
-                return await res.json();
-            } finally {
-                // REQUIRED: Invalidate both global Agenda and Patient-specific caches
-                queryClient.invalidateQueries({ queryKey: ['appointments'] });
-                if (updates.patientId) {
-                    queryClient.invalidateQueries({ queryKey: ['patient-appointments', updates.patientId] });
-                }
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to update appointment');
             }
+            return res.json();
         },
         delete: async (id: string): Promise<void> => {
             const res = await fetch(`${API_URL}/appointments/${id}`, {
