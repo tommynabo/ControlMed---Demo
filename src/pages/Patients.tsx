@@ -279,6 +279,7 @@ const Patients: React.FC = () => {
     const [isNewTreatmentModalOpen, setIsNewTreatmentModalOpen] = useState(false);
     const [treatmentSearch, setTreatmentSearch] = useState('');
     const [treatmentForm, setTreatmentForm] = useState({ name: '', price: '', status: 'Pendiente' });
+    const [treatmentRefreshKey, setTreatmentRefreshKey] = useState(0);
     const [isTreatmentSearchFocused, setIsTreatmentSearchFocused] = useState(false);
     const [treatments, setTreatments] = useState<PatientTreatment[]>([]); // NEW: Source of Truth
 
@@ -1855,7 +1856,7 @@ const Patients: React.FC = () => {
                                                 <div className="col-span-3">Precio (Total)</div>
                                                 <div className="col-span-1 text-right">Acciones</div>
                                             </div>
-                                            <TreatmentsList patientId={selectedPatient.id} />
+                                            <TreatmentsList patientId={selectedPatient.id} refreshTrigger={treatmentRefreshKey} />
                                         </div>
                                     </div>
                                 </div>
@@ -2824,11 +2825,8 @@ const Patients: React.FC = () => {
                                                     status: 'PENDIENTE'
                                                 }
                                             ]);
-                                            // Refresh treatments list
-                                            if (selectedPatient) {
-                                                const updated = await api.treatments.getByPatient(selectedPatient.id);
-                                                setTreatments(updated);
-                                            }
+                                            // Refresh treatments list via trigger
+                                            setTreatmentRefreshKey(k => k + 1);
                                             setIsNewTreatmentModalOpen(false);
                                             setTreatmentForm({ name: '', price: '', status: 'Pendiente' });
                                             toast("Tratamiento creado correctamente");

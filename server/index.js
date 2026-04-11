@@ -1438,6 +1438,8 @@ app.get('/api/appointments', async (req, res) => {
             console.error("❌ Supabase Fetch Error (Appointments):", error);
             return res.status(500).json({ error: error.message });
         }
+
+        console.log(`📋 GET /api/appointments: returning ${(data || []).length} appointments`);
         res.json(data || []);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1494,6 +1496,44 @@ app.get('/api/appointments/:id', async (req, res) => {
     }
 });
 
+// DEBUG: Check appointment state with NO filters (bypasses deleted_at)
+app.get('/api/appointments/:id/debug', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { data, error } = await supabase
+            .from('Appointment')
+            .select('id, date, time, duration, status, deleted_at, patientId, doctorId')
+            .eq('id', req.params.id)
+            .single();
+
+        if (error) {
+            // Also try without .single() to check if row exists at all
+            const { data: allRows } = await supabase
+                .from('Appointment')
+                .select('id, deleted_at')
+                .eq('id', req.params.id);
+            
+            return res.json({
+                found: false,
+                error: error.message,
+                rawRows: allRows || [],
+                message: allRows?.length === 0 ? 'ROW DOES NOT EXIST IN DB' : 'Row exists but query failed'
+            });
+        }
+
+        res.json({
+            found: true,
+            appointment: data,
+            isDeleted: data.deleted_at !== null,
+            message: data.deleted_at ? `SOFT-DELETED at ${data.deleted_at}` : 'ACTIVE (deleted_at is null)'
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.put('/api/appointments/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -1527,7 +1567,7 @@ app.put('/api/appointments/:id', async (req, res) => {
             'date', 'time', 'duration', 'observations', 'visitDetails',
             'status', 'paid', 'patientId', 'doctorId', 'treatmentId',
             'treatmentName', 'budgetId', 'budgetItemId', 'amount',
-            'is_revision', 'whatsapp_sent', 'deleted_at'
+            'is_revision', 'whatsapp_sent'
         ];
 
         // Build clean update object from whitelist only
@@ -1601,6 +1641,23 @@ app.put('/api/appointments/:id', async (req, res) => {
         }
 
         console.log("✅ Appointment Updated:", updatedAppointment.id, "status:", updatedAppointment.status, "time:", updatedAppointment.time);
+
+        // POST-UPDATE VERIFICATION: Query the row directly to confirm persistence
+        const { data: verifyRow, error: verifyErr } = await supabase
+            .from('Appointment')
+            .select('id, time, date, status, deleted_at')
+            .eq('id', id)
+            .single();
+
+        if (verifyErr) {
+            console.error('🔍 VERIFY FAILED:', verifyErr.message);
+        } else {
+            console.log(`🔍 VERIFY after update: id=${verifyRow.id}, time=${verifyRow.time}, date=${verifyRow.date}, status=${verifyRow.status}, deleted_at=${verifyRow.deleted_at}`);
+            if (verifyRow.deleted_at) {
+                console.error('🚨 CRITICAL: deleted_at is NOT null after update! Value:', verifyRow.deleted_at);
+            }
+        }
+
         res.json(updatedAppointment);
     } catch (e) {
         console.error("❌ Error updating appointment:", e);
@@ -1806,9 +1863,9 @@ const getSupabase = () => {
         throw new Error('SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son requeridos para acceder a Supabase.');
     }
 
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_KEY) {
-        console.warn('⚠️ WARNING: Using fallback Supabase key. Set SUPABASE_SERVICE_ROLE_KEY in environment.');
-    }
+    const keySource = process.env.SUPABASE_SERVICE_ROLE_KEY ? 'env:SERVICE_ROLE' : (process.env.SUPABASE_KEY ? 'env:SUPABASE_KEY' : 'FALLBACK');
+    const keyPreview = KEY.substring(KEY.length - 12);
+    console.log(`🔑 Supabase client: source=${keySource}, key=...${keyPreview}`);
 
     return createClient(URL, KEY);
 };
