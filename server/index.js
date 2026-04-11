@@ -1447,30 +1447,44 @@ app.get('/api/appointments', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        // NOTE: Supabase REST has a default 1000-row cap (PostgREST limit).
-        // We must override it with .range() and order by date to always get the most recent appointments.
-        // Filter to a practical window: past 2 years + future 2 years to avoid unbounded growth.
+        // Supabase PostgREST caps at max-rows (default: 1000). With 3000+ records,
+        // new appointments beyond row 1000 would be silently excluded.
+        // Fix: paginate with .range() until all rows are fetched.
         const twoYearsAgo = new Date();
         twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
         const twoYearsAhead = new Date();
         twoYearsAhead.setFullYear(twoYearsAhead.getFullYear() + 2);
 
-        const { data, error } = await supabase
-            .from('Appointment')
-            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
-            .gte('date', twoYearsAgo.toISOString())
-            .lte('date', twoYearsAhead.toISOString())
-            .is('deleted_at', null)
-            .order('date', { ascending: true })
-            .limit(10000);
+        let allData = [];
+        let from = 0;
+        const PAGE_SIZE = 1000;
+        let keepFetching = true;
 
-        if (error) {
-            console.error("❌ Supabase Fetch Error (Appointments):", error);
-            return res.status(500).json({ error: error.message });
+        while (keepFetching) {
+            const { data: page, error } = await supabase
+                .from('Appointment')
+                .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
+                .gte('date', twoYearsAgo.toISOString())
+                .lte('date', twoYearsAhead.toISOString())
+                .is('deleted_at', null)
+                .order('date', { ascending: true })
+                .range(from, from + PAGE_SIZE - 1);
+
+            if (error) {
+                console.error("❌ Supabase Fetch Error (Appointments page", from, "):", error);
+                if (allData.length === 0) return res.status(500).json({ error: error.message });
+                break; // Return what we have so far
+            }
+
+            allData = allData.concat(page || []);
+            keepFetching = (page || []).length === PAGE_SIZE;
+            from += PAGE_SIZE;
+
+            if (from > 20000) break; // Safety cap — should never be reached
         }
 
-        console.log(`📋 GET /api/appointments: ${(data || []).length} active appointments returned`);
-        res.json(data || []);
+        console.log(`📋 GET /api/appointments: ${allData.length} active appointments returned (${Math.ceil(allData.length / PAGE_SIZE)} pages)`);
+        res.json(allData);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
