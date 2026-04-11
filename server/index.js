@@ -1447,19 +1447,30 @@ app.get('/api/appointments', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
+        // NOTE: Supabase REST has a default 1000-row cap (PostgREST limit).
+        // We must override it with .range() and order by date to always get the most recent appointments.
+        // Filter to a practical window: past 2 years + future 2 years to avoid unbounded growth.
+        const twoYearsAgo = new Date();
+        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+        const twoYearsAhead = new Date();
+        twoYearsAhead.setFullYear(twoYearsAhead.getFullYear() + 2);
+
         const { data, error } = await supabase
             .from('Appointment')
-            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))');
+            .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
+            .gte('date', twoYearsAgo.toISOString())
+            .lte('date', twoYearsAhead.toISOString())
+            .is('deleted_at', null)
+            .order('date', { ascending: true })
+            .limit(10000);
 
         if (error) {
             console.error("❌ Supabase Fetch Error (Appointments):", error);
             return res.status(500).json({ error: error.message });
         }
 
-        // Filter soft-deleted in JS to avoid potential query issues
-        const active = (data || []).filter(a => !a.deleted_at);
-        console.log(`📋 GET /api/appointments: ${(data || []).length} total, ${active.length} active`);
-        res.json(active);
+        console.log(`📋 GET /api/appointments: ${(data || []).length} active appointments returned`);
+        res.json(data || []);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
