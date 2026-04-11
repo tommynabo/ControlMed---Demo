@@ -1497,9 +1497,9 @@ app.get('/api/appointments/:id', async (req, res) => {
 app.put('/api/appointments/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const updates = { ...req.body };
+        const body = req.body;
 
-        console.log(`📝 Updating Appointment ${id}:`, JSON.stringify(updates));
+        console.log(`📝 Updating Appointment ${id}:`, JSON.stringify(body));
 
         // Validación: ID requerido
         if (!id || id.trim() === '') {
@@ -1509,11 +1509,12 @@ app.put('/api/appointments/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        // CRITICAL FIX: Fetch existing appointment first to ensure required fields are preserved
+        // Fetch existing appointment (exclude soft-deleted)
         const { data: existingAppt, error: fetchError } = await supabase
             .from('Appointment')
             .select('*')
             .eq('id', id)
+            .is('deleted_at', null)
             .single();
 
         if (fetchError || !existingAppt) {
@@ -1521,27 +1522,39 @@ app.put('/api/appointments/:id', async (req, res) => {
             return res.status(404).json({ error: `Cita no encontrada (ID: ${id})` });
         }
 
-        // Sanitization: Convert empty strings to null for UUID fields
-        if (typeof updates.budgetId === 'string' && updates.budgetId.trim() === '') updates.budgetId = null;
-        if (typeof updates.budgetItemId === 'string' && updates.budgetItemId.trim() === '') updates.budgetItemId = null;
-        if (typeof updates.treatmentId === 'string' && updates.treatmentId.trim() === '') updates.treatmentId = null;
-        if (typeof updates.doctorId === 'string' && updates.doctorId.trim() === '') updates.doctorId = null;
-        if (typeof updates.patientId === 'string' && updates.patientId.trim() === '') updates.patientId = null;
+        // Explicit whitelist of allowed DB columns
+        const ALLOWED_FIELDS = [
+            'date', 'time', 'duration', 'observations', 'visitDetails',
+            'status', 'paid', 'patientId', 'doctorId', 'treatmentId',
+            'treatmentName', 'budgetId', 'budgetItemId', 'amount',
+            'is_revision', 'whatsapp_sent', 'deleted_at'
+        ];
 
-        if (updates.date) {
-            updates.date = new Date(updates.date).toISOString();
+        // Build clean update object from whitelist only
+        const updates = {};
+
+        // Handle isRevision -> is_revision mapping
+        if (body.isRevision !== undefined) {
+            updates.is_revision = body.isRevision === true;
         }
 
-        // Handle isRevision field mapping (camelCase -> snake_case for Supabase)
-        if (updates.isRevision !== undefined) {
-            updates.is_revision = updates.isRevision === true;
-            delete updates.isRevision;
+        // Handle date: extract YYYY-MM-DD for PostgreSQL DATE column
+        if (body.date !== undefined) {
+            const d = new Date(body.date);
+            updates.date = d.toISOString().split('T')[0]; // "2026-04-11"
         }
 
-        // Handle serviceIds: resolve to treatmentName if provided (use 'services' lowercase — the real catalog)
-        if (Array.isArray(updates.serviceIds) && updates.serviceIds.length > 0) {
+        // Copy allowed fields from body
+        for (const field of ALLOWED_FIELDS) {
+            if (field in body && !(field in updates)) {
+                updates[field] = body[field];
+            }
+        }
+
+        // Handle serviceIds: resolve to treatmentName
+        if (Array.isArray(body.serviceIds) && body.serviceIds.length > 0) {
             try {
-                const { data: svcs } = await supabase.from('services').select('id, name').in('id', updates.serviceIds);
+                const { data: svcs } = await supabase.from('services').select('id, name').in('id', body.serviceIds);
                 if (svcs && svcs.length > 0) {
                     updates.treatmentName = svcs.map(s => s.name).join(', ');
                 }
@@ -1550,35 +1563,30 @@ app.put('/api/appointments/:id', async (req, res) => {
             }
         }
 
-        // Remove relation objects and non-DB fields to avoid Supabase errors
-        delete updates.serviceIds;
-        delete updates.budgetItemIds;
-        delete updates.treatment;
-        delete updates.doctor;
-        delete updates.patient;
-        delete updates.budget;
-        delete updates.liquidation;
-        delete updates.id;
-        delete updates.created_at;
-
-        // Remove undefined keys; keep explicitly set null only for allowed fields
-        const fieldsAllowedNull = ['budgetId', 'budgetItemId', 'treatmentId', 'observations', 'visitDetails', 'treatmentName', 'amount'];
-        for (const key of Object.keys(updates)) {
-            if (updates[key] === undefined) delete updates[key];
-            if (updates[key] === null && !fieldsAllowedNull.includes(key)) delete updates[key];
+        // Sanitize UUID fields: empty strings -> null
+        const UUID_FIELDS = ['budgetId', 'budgetItemId', 'treatmentId', 'doctorId', 'patientId'];
+        for (const f of UUID_FIELDS) {
+            if (typeof updates[f] === 'string' && updates[f].trim() === '') {
+                updates[f] = null;
+            }
         }
 
-        // CRITICAL FIX: Merge with existing data — always ensure required fields (patientId, doctorId) are present
-        const mergedUpdate = {
-            ...updates,
-            patientId: updates.patientId || existingAppt.patientId,
-            doctorId: updates.doctorId || existingAppt.doctorId,
-        };
+        // Ensure required fields are always present
+        if (!updates.patientId) updates.patientId = existingAppt.patientId;
+        if (!updates.doctorId) updates.doctorId = existingAppt.doctorId;
+
+        // Remove undefined values
+        for (const key of Object.keys(updates)) {
+            if (updates[key] === undefined) delete updates[key];
+        }
+
+        console.log(`📦 Final update payload for ${id}:`, JSON.stringify(updates));
 
         const { data: updatedAppointment, error } = await supabase
             .from('Appointment')
-            .update(mergedUpdate)
+            .update(updates)
             .eq('id', id)
+            .is('deleted_at', null)
             .select('*, patient:Patient!left(*), doctor:Doctor!left(*)')
             .single();
 
@@ -1587,7 +1595,12 @@ app.put('/api/appointments/:id', async (req, res) => {
             return res.status(500).json({ error: `Error al actualizar cita: ${error.message}`, details: error.details, hint: error.hint });
         }
 
-        console.log("✅ Appointment Updated:", updatedAppointment.id);
+        if (!updatedAppointment) {
+            console.error("❌ No data returned after update for:", id);
+            return res.status(500).json({ error: 'La actualización no devolvió datos' });
+        }
+
+        console.log("✅ Appointment Updated:", updatedAppointment.id, "status:", updatedAppointment.status, "time:", updatedAppointment.time);
         res.json(updatedAppointment);
     } catch (e) {
         console.error("❌ Error updating appointment:", e);
@@ -1785,13 +1798,16 @@ app.post('/api/inventory/check', async (req, res) => {
 const { createClient } = require('@supabase/supabase-js');
 
 // Lazy Supabase Initializer to prevent startup crashes
-// Lazy Supabase Initializer to prevent startup crashes
 const getSupabase = () => {
     const URL = process.env.SUPABASE_URL || "https://gnnacijqglcqonholpwt.supabase.co";
-    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4";
 
     if (!URL || !KEY) {
         throw new Error('SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY son requeridos para acceder a Supabase.');
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_KEY) {
+        console.warn('⚠️ WARNING: Using fallback Supabase key. Set SUPABASE_SERVICE_ROLE_KEY in environment.');
     }
 
     return createClient(URL, KEY);

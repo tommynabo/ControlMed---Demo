@@ -17,6 +17,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     const [availableServices, setAvailableServices] = useState<any[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+    const [patientTreatments, setPatientTreatments] = useState<any[]>([]);
 
     // Loading state
     const [isLoadingServices, setIsLoadingServices] = useState(false);
@@ -47,8 +48,15 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 })
                 .catch(console.error)
                 .finally(() => setIsLoadingServices(false));
+
+            // Fetch patient's existing treatments
+            if (patientId) {
+                api.treatments.getByPatient(patientId)
+                    .then(setPatientTreatments)
+                    .catch(console.error);
+            }
         }
-    }, [isOpen, initialBudget]);
+    }, [isOpen, initialBudget, patientId]);
 
     const filteredServices = availableServices.filter(s =>
         s.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -213,6 +221,39 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                             autoFocus
                         />
                     </div>
+
+                    {/* Patient Existing Treatments */}
+                    {patientTreatments.length > 0 && (
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Tratamientos del Paciente</label>
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1">
+                                {patientTreatments
+                                    .filter(t => t.status !== 'PRESUPUESTADO')
+                                    .map(t => (
+                                        <button
+                                            key={t.id}
+                                            onClick={() => {
+                                                setItems(prev => [...prev, {
+                                                    serviceId: t.serviceId || null,
+                                                    treatmentId: t.id,
+                                                    name: t.serviceName || t.name || 'Tratamiento',
+                                                    price: t.price || t.customPrice || 0,
+                                                    quantity: 1,
+                                                    tooth: t.toothId ? String(t.toothId) : ''
+                                                }]);
+                                            }}
+                                            className="w-full text-left p-2 hover:bg-amber-100 rounded-lg flex justify-between items-center text-sm font-medium transition-colors"
+                                        >
+                                            <span className="font-bold text-amber-800">{t.serviceName || t.name}</span>
+                                            <span className="text-amber-600 text-xs">{t.price || t.customPrice || 0}€ · {t.status}</span>
+                                        </button>
+                                    ))}
+                                {patientTreatments.filter(t => t.status !== 'PRESUPUESTADO').length === 0 && (
+                                    <div className="text-xs text-amber-500 text-center py-2">Todos los tratamientos ya están presupuestados</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Service Selector */}
                     <div className="relative">

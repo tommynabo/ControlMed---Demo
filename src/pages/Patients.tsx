@@ -2816,19 +2816,23 @@ const Patients: React.FC = () => {
                                         if (isSubmittingTreatment) return;
                                         setIsSubmittingTreatment(true);
                                         try {
-                                            // Save as Clinical Record primarily (as requested for history)
-                                            const rec = await api.clinicalRecords.create({
-                                                patientId: selectedPatient?.id,
-                                                treatment: treatmentForm.name,
-                                                observation: `Precio Estimado: ${treatmentForm.price}€`,
-                                                specialization: 'Odontología',
-                                                price: Number(treatmentForm.price)
-                                            });
-                                            setClinicalRecords(prev => [rec, ...prev]);
+                                            // Create as PatientTreatment via batch endpoint
+                                            const result = await api.treatments.createBatch(selectedPatient?.id || '', [
+                                                {
+                                                    serviceName: treatmentForm.name,
+                                                    price: Number(treatmentForm.price) || 0,
+                                                    status: 'PENDIENTE'
+                                                }
+                                            ]);
+                                            // Refresh treatments list
+                                            if (selectedPatient) {
+                                                const updated = await api.treatments.getByPatient(selectedPatient.id);
+                                                setTreatments(updated);
+                                            }
                                             setIsNewTreatmentModalOpen(false);
                                             setTreatmentForm({ name: '', price: '', status: 'Pendiente' });
-                                            toast("Tratamiento guardado en historial");
-                                        } catch (e) { toast("Error: " + e.message); }
+                                            toast("Tratamiento creado correctamente");
+                                        } catch (e: any) { toast("Error: " + e.message); }
                                         finally { setIsSubmittingTreatment(false); }
                                     }}
                                     className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-bold uppercase shadow-lg disabled:opacity-50"
