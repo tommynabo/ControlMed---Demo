@@ -394,7 +394,11 @@ export const api = {
                 const errData = await res.json().catch(() => ({}));
                 throw new Error(errData.error || 'Failed to update appointment');
             }
-            return res.json();
+            const data = await res.json();
+            // Invalidate cache after successful update so Agenda colors refresh
+            queryClient.invalidateQueries({ queryKey: ['appointments'] });
+            queryClient.invalidateQueries({ queryKey: ['calendar'] });
+            return data;
         },
         delete: async (id: string): Promise<void> => {
             const res = await fetch(`${API_URL}/appointments/${id}`, {
