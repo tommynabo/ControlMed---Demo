@@ -85,12 +85,30 @@ schedulerService.startScheduler(prisma);
 app.post('/api/treatments/:appointmentId/complete', async (req, res) => {
     try {
         const { appointmentId } = req.params;
-        // 1. Mark appointment as completed
-        const appointment = await prisma.appointment.update({
-            where: { id: appointmentId },
-            data: { status: 'COMPLETED' },
-            include: { treatment: true, doctor: true }
-        });
+        // 1. Mark appointment as completed — Supabase first, Prisma fallback
+        let appointment;
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { /* ignore */ }
+        
+        if (supabase) {
+            const { data, error } = await supabase
+                .from('Appointment')
+                .update({ status: 'COMPLETED' })
+                .eq('id', appointmentId)
+                .select('*, treatment:Treatment(*), doctor:Doctor(*)')
+                .single();
+            if (!error && data) {
+                appointment = data;
+            }
+        }
+        
+        if (!appointment) {
+            appointment = await prisma.appointment.update({
+                where: { id: appointmentId },
+                data: { status: 'COMPLETED' },
+                include: { treatment: true, doctor: true }
+            });
+        }
 
         // 2. Trigger Liquidation Calculation
         const liquidation = await financeService.calculateLiquidation(prisma, appointment);
@@ -1594,33 +1612,35 @@ app.put('/api/appointments/:id', async (req, res) => {
 
         console.log(`📦 Clean update payload for ${id}:`, JSON.stringify(updates));
 
-        // STRATEGY 1: Try Prisma first (proven to work in f2540b9)
+        // STRATEGY 1: Supabase REST first (fast, no connection pool issues on serverless)
         let updatedAppointment;
-        try {
-            updatedAppointment = await prisma.appointment.update({
-                where: { id: id },
-                data: updates
-            });
-            console.log("✅ Appointment Updated via Prisma:", updatedAppointment.id, "time:", updatedAppointment.time);
-        } catch (prismaErr) {
-            console.warn("⚠️ Prisma update failed, falling back to Supabase REST:", prismaErr.message);
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { data, error } = await supabase
+            .from('Appointment')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.warn("⚠️ Supabase REST update failed, falling back to Prisma:", error.message);
             
-            // STRATEGY 2: Fallback to Supabase REST API
-            let supabase;
-            try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-
-            const { data, error } = await supabase
-                .from('Appointment')
-                .update(updates)
-                .eq('id', id)
-                .select()
-                .single();
-
-            if (error) {
-                console.error("❌ Supabase Update Error (Appointment):", JSON.stringify(error, null, 2));
+            // STRATEGY 2: Fallback to Prisma
+            try {
+                updatedAppointment = await prisma.appointment.update({
+                    where: { id: id },
+                    data: updates
+                });
+                console.log("✅ Appointment Updated via Prisma:", updatedAppointment.id, "time:", updatedAppointment.time);
+            } catch (prismaErr) {
+                console.error("❌ Both Supabase and Prisma update failed:");
+                console.error("  Supabase:", error.message);
+                console.error("  Prisma:", prismaErr.message);
                 return res.status(500).json({ error: `Error al actualizar cita: ${error.message}`, details: error.details, hint: error.hint });
             }
-
+        } else {
             updatedAppointment = data;
             console.log("✅ Appointment Updated via Supabase:", updatedAppointment.id, "time:", updatedAppointment.time);
         }
@@ -1648,8 +1668,13 @@ app.delete('/api/appointments/:id', async (req, res) => {
 
         if (error) {
             // Fallback to Prisma if supabase column not yet migrated
-            console.warn('Supabase soft-delete failed, falling back to Prisma hard-delete:', error.message);
-            await prisma.appointment.delete({ where: { id } });
+            console.warn('Supabase soft-delete failed, trying Prisma hard-delete:', error.message);
+            try {
+                await prisma.appointment.delete({ where: { id } });
+            } catch (prismaErr) {
+                console.error('❌ Both Supabase and Prisma delete failed:', prismaErr.message);
+                return res.status(500).json({ error: error.message });
+            }
         }
 
         console.log("✅ Appointment Soft-Deleted:", id);
