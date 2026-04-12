@@ -23,8 +23,7 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             vendor: ['react', 'react-dom', 'react-router-dom'],
             icons: ['lucide-react'],
-            query: ['@tanstack/react-query'],
-            form: ['react-hook-form', '@hookform/resolvers/zod', 'zod']
+            query: ['@tanstack/react-query']
           }
         }
       },
