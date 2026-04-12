@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Patient, Appointment, Invoice, InventoryItem, ClinicalRecord, Doctor, Liquidation, AIChatMessage, ToothState, DocumentTemplate, Expense, TreatmentPlan } from '../../types';
 import { supabase } from '../services/supabase';
-import { api } from '../services/api';
+import { api, setApiAuthToken } from '../services/api';
 import { UserRole, canAccessPage, canAccessRoute, hasPermission } from '../config/roles';
 
 // === TabGuard: Session Storage Keys ===
@@ -115,6 +115,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const [currentUser, setCurrentUser] = useState<any>(() => restoreSession());
     const [role, setRole] = useState<UserRole>(() => restoreSession()?.role || 'ADMIN');
 
+    // Restore JWT token on page reload so API calls remain authenticated
+    useState(() => {
+        const session = restoreSession();
+        if (session?.token) setApiAuthToken(session.token);
+    });
+
     // Local state retained for backward-compat setters used by mutation callers
     const [patients, setPatients] = useState<Patient[]>([]);
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -202,6 +208,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         setCurrentUser(user);
         setRole(user.role);
         setIsAuthenticated(true);
+        // Attach JWT to all subsequent API requests
+        if (user?.token) setApiAuthToken(user.token);
         // === TabGuard: Persist session ===
         persistSession(user);
     };
@@ -209,6 +217,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     const logout = () => {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        // Remove JWT from API headers
+        setApiAuthToken(null);
         // Invalidate all cached data on logout
         queryClient.clear();
         // === TabGuard: Clear session ===

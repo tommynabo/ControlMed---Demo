@@ -1,0 +1,441 @@
+'use strict';
+const express = require('express');
+const crypto = require('crypto');
+const { prisma, getSupabase } = require('../lib/db');
+const financeService = require('../services/financeService');
+const quipuService = require('../services/quipuService');
+const invoiceService = require('../services/invoiceService');
+const budgetService = require('../services/budgetService');
+const { calculateWalletBalance } = require('../lib/utils');
+
+const router = express.Router();
+
+// ─── FINANCE: Financing plan ──────────────────────────────────────────────────
+router.post('/financing', async (req, res) => {
+    try {
+        const result = await financeService.createFinancingPlan(prisma, req.body);
+        res.json(result);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── INSTALLMENTS ─────────────────────────────────────────────────────────────
+router.get('/installments/:planId', async (req, res) => {
+    try {
+        const installments = await prisma.installment.findMany({
+            where: { planId: req.params.planId },
+            orderBy: { dueDate: 'asc' }
+        });
+        res.json(installments);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/installments/:id/pay', async (req, res) => {
+    try {
+        const updated = await financeService.markInstallmentPaid(prisma, req.params.id);
+        res.json(updated);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/installments/process-due', async (req, res) => {
+    try {
+        const results = await financeService.processDueInstallments(prisma);
+        res.json({ processed: results.length, results });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/plans/:patientId', async (req, res) => {
+    try {
+        const plans = await prisma.treatmentPlan.findMany({
+            where: { patientId: req.params.patientId },
+            include: { installments: { orderBy: { dueDate: 'asc' } } },
+            orderBy: { startDate: 'desc' }
+        });
+        res.json(plans);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── LIQUIDATIONS ─────────────────────────────────────────────────────────────
+router.get('/liquidations', async (req, res) => {
+    try {
+        const liquidations = await prisma.liquidation.findMany({ orderBy: { createdAt: 'desc' } });
+        res.json(liquidations);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/liquidations/summary', async (req, res) => {
+    try {
+        const { doctorId, month, year, dateFrom, dateTo } = req.query;
+        if (!doctorId) return res.status(400).json({ error: 'doctorId is required' });
+
+        if (dateFrom && dateTo) {
+            let supabase;
+            try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+            const startISO = new Date(dateFrom).toISOString();
+            const endDate  = new Date(dateTo); endDate.setHours(23, 59, 59, 999);
+            const endISO   = endDate.toISOString();
+
+            const { data: payments, error: pmtError } = await supabase
+                .from('Payment').select('*')
+                .eq('doctorId', doctorId).gte('createdAt', startISO).lte('createdAt', endISO)
+                .order('createdAt', { ascending: true });
+            if (pmtError) throw pmtError;
+
+            const patientIds = [...new Set((payments || []).map(p => p.patientId).filter(Boolean))];
+            const patientMap = {};
+            if (patientIds.length > 0) {
+                const { data: patients } = await supabase.from('Patient').select('id, name, historyNumber').in('id', patientIds);
+                (patients || []).forEach(pt => { patientMap[pt.id] = pt; });
+            }
+
+            const records = (payments || []).map(p => {
+                const patient = patientMap[p.patientId] || {};
+                return { id: p.id, fecha: p.createdAt, concepto: p.notes || 'Pago', importeCobrado: p.amount || 0, nombrePaciente: patient.name || 'Desconocido', numeroHistoria: patient.historyNumber || '-', doctorId: p.doctorId };
+            });
+            const total = records.reduce((s, r) => s + r.importeCobrado, 0);
+            return res.json({ records, dateFrom, dateTo, doctorId, total });
+        }
+
+        const monthInt = parseInt(month, 10) || new Date().getMonth() + 1;
+        const yearInt  = parseInt(year,  10) || new Date().getFullYear();
+        const startDate = new Date(yearInt, monthInt - 1, 1);
+        const endDate   = new Date(yearInt, monthInt, 0, 23, 59, 59);
+
+        const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+        if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
+
+        let liquidations = [];
+        try {
+            liquidations = await prisma.liquidation.findMany({
+                where: { doctorId, createdAt: { gte: startDate, lte: endDate } },
+                orderBy: { createdAt: 'asc' }
+            });
+        } catch (_) {}
+
+        const totals = { totalGross: 0, totalLabCost: 0, totalCommission: 0, totalToPay: 0 };
+        liquidations.forEach(l => {
+            totals.totalGross      += l.grossAmount  || 0;
+            totals.totalLabCost    += l.labCost      || 0;
+            totals.totalCommission += l.finalAmount  || 0;
+            totals.totalToPay      += l.finalAmount  || 0;
+        });
+
+        const MONTHS = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        res.json({ doctor: { id: doctor.id, name: doctor.name, specialization: doctor.specialization }, period: `${MONTHS[monthInt]} ${yearInt}`, treatments: liquidations, totals, count: liquidations.length });
+    } catch (e) {
+        console.error('Error fetching liquidation summary:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── INVOICES ─────────────────────────────────────────────────────────────────
+router.get('/invoices', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { data, error } = await supabase.from('Invoice').select('*, items:InvoiceItem(*)').order('date', { ascending: false });
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.get('/invoices/appointment/:appointmentId', async (req, res) => {
+    try {
+        const invoice = await prisma.invoice.findFirst({
+            where: { appointmentId: req.params.appointmentId },
+            orderBy: { date: 'desc' }
+        });
+        if (!invoice) return res.status(404).json({ error: 'Invoice not found for this appointment' });
+        res.json(invoice);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── PAYMENTS: GET ────────────────────────────────────────────────────────────
+router.get('/payments', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { data, error } = await supabase.from('Payment').select('*').order('createdAt', { ascending: false });
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── PAYMENTS: CREATE ─────────────────────────────────────────────────────────
+router.post('/payments/create', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { patientId, amount, method, type, notes, appointmentId, budgetId, isPartial, originalAmount } = req.body;
+
+        if (!patientId || !amount || !method) {
+            return res.status(400).json({ error: 'patientId, amount, and method are required' });
+        }
+
+        const numericAmount = parseFloat(amount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+            return res.status(400).json({ error: 'Invalid amount' });
+        }
+
+        // Resolve patient and doctor
+        const { data: patient } = await supabase.from('Patient').select('*').eq('id', patientId).single();
+        if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+        let doctor = null;
+        const doctorId = req.body.doctorId;
+        if (doctorId) {
+            const { data: d } = await supabase.from('Doctor').select('*').eq('id', doctorId).single();
+            doctor = d;
+        }
+
+        // Resolve treatment name
+        let solvedTreatmentName = req.body.treatmentName || 'Servicio';
+        const treatmentId = req.body.treatmentId;
+        if (treatmentId && !req.body.treatmentName) {
+            const { data: t } = await supabase.from('Treatment').select('name').eq('id', treatmentId).single();
+            if (t) solvedTreatmentName = t.name;
+        }
+
+        // Attempt Quipu invoice creation
+        let quipuResult = { success: false };
+        try {
+            const contactData = {
+                name: patient.name || 'Paciente',
+                email: patient.email,
+                tax_id: patient.dni,
+                address: patient.address,
+                city: patient.city,
+                zip_code: patient.zipCode || patient.zip_code
+            };
+            const contact = await quipuService.getOrCreateContact(contactData);
+            if (contact && contact.id) {
+                const today = new Date().toISOString().split('T')[0];
+                quipuResult = await quipuService.createInvoice(
+                    contact.id,
+                    [{ name: solvedTreatmentName, quantity: 1, price: numericAmount }],
+                    today, today,
+                    method === 'card' ? 'credit_card' : method
+                );
+            }
+        } catch (qErr) {
+            console.error('⚠️ Quipu Error (continuing with local only):', qErr.response?.data || qErr.message);
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            const payment = await tx.payment.create({
+                data: { id: crypto.randomUUID(), patientId, budgetId: budgetId || null, amount: numericAmount, method, type, notes: notes || null, doctorId: doctor?.id || null, createdAt: new Date().toISOString() }
+            });
+
+            if (appointmentId) {
+                const isPartialPayment = isPartial === true;
+                await tx.appointment.update({
+                    where: { id: appointmentId },
+                    data: isPartialPayment ? { paid: false, status: 'EN_PROCESO' } : { paid: true, status: 'Completed' }
+                });
+            }
+
+            let invoiceNumber = quipuResult.success ? quipuResult.number : null;
+            if (!invoiceNumber || invoiceNumber === 'PENDING') {
+                const year = new Date().getFullYear();
+                const ts   = Date.now();
+                const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+                invoiceNumber = `F-${year}-${ts}-${rand}`;
+            }
+            const collision = await tx.invoice.findUnique({ where: { invoiceNumber } });
+            if (collision) invoiceNumber += `-${Math.random().toString(36).substring(2, 5)}`;
+
+            const invoice = await tx.invoice.create({
+                data: {
+                    id: crypto.randomUUID(), invoiceNumber,
+                    externalId: quipuResult.success ? String(quipuResult.id) : null,
+                    url: quipuResult.success ? quipuResult.pdf_url : null,
+                    patientId, amount: numericAmount, date: new Date(), status: 'issued',
+                    paymentMethod: method,
+                    concept: isPartial ? `${solvedTreatmentName} (Pago Parcial)` : solvedTreatmentName,
+                    appointmentId: (appointmentId && !isPartial) ? appointmentId : null,
+                    relatedPaymentId: payment.id
+                }
+            });
+
+            await tx.invoiceItem.create({ data: { id: crypto.randomUUID(), invoiceId: invoice.id, name: solvedTreatmentName, price: numericAmount } });
+            await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
+
+            let liquidation = null;
+            if (doctor && type === 'DIRECT_CHARGE') {
+                const rawRate = doctor.commissionPercentage || 30;
+                const labCost = req.body.costeLab || 0;
+                const finalAmount = (numericAmount - labCost) * (rawRate / 100);
+                liquidation = await tx.liquidation.create({
+                    data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: appointmentId || null, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                });
+            }
+
+            if (type === 'ADVANCE_PAYMENT' || (type === 'DIRECT_CHARGE' && method === 'wallet')) {
+                const balanceAdjustment = method === 'wallet' ? -numericAmount : numericAmount;
+                await tx.patient.update({ where: { id: patientId }, data: { wallet: { increment: balanceAdjustment } } });
+            }
+
+            return { payment, invoice, payroll: liquidation, pdfUrl: quipuResult.success ? quipuResult.pdf_url : null, isPartial: isPartial === true, remainingBalance: (isPartial && originalAmount) ? parseFloat(originalAmount) - numericAmount : 0 };
+        });
+
+        res.status(200).json({ success: true, ...result });
+    } catch (e) {
+        console.error('❌ Payment creation error:', e);
+        res.status(500).json({ error: e.message || 'Unknown transaction error' });
+    }
+});
+
+// ─── PAYMENTS: TRANSFER advance to treatment ─────────────────────────────────
+router.post('/payments/transfer', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { patientId, sourcePaymentId, amount, treatmentId, treatmentName, doctorId, notes, budgetId } = req.body;
+
+        if (!patientId || !sourcePaymentId || !amount || !doctorId) {
+            return res.status(400).json({ error: 'Campos requeridos: patientId, sourcePaymentId, amount, doctorId' });
+        }
+
+        const { data: sourcePayment, error: sourceError } = await supabase.from('Payment').select('*').eq('id', sourcePaymentId).single();
+        if (sourceError || !sourcePayment) return res.status(404).json({ error: 'Pago origen no encontrado' });
+        if (sourcePayment.type !== 'ADVANCE_PAYMENT') return res.status(400).json({ error: 'Solo se pueden transferir pagos a cuenta (ADVANCE_PAYMENT)' });
+
+        const transferId = crypto.randomUUID();
+        const { data: transfer, error: transferError } = await supabase
+            .from('Payment')
+            .insert([{ id: transferId, patientId, amount: parseFloat(amount), method: 'wallet', type: 'TRANSFER', sourcePaymentId, treatmentId: treatmentId || null, budgetId: budgetId || null, doctorId, notes: notes || `Transferencia de anticipo a: ${treatmentName || 'Tratamiento'}`, createdAt: new Date().toISOString() }])
+            .select().single();
+
+        if (transferError) return res.status(500).json({ error: transferError.message });
+
+        await calculateWalletBalance(supabase, patientId);
+
+        if (treatmentId) {
+            const { data: treatmentData } = await supabase.from('PatientTreatment').update({ status: 'PAGADO' }).eq('id', treatmentId).select().single();
+            if (treatmentData && treatmentData.serviceId) {
+                try {
+                    const existingLiquidation = await prisma.liquidation.findFirst({
+                        where: { appointment: { patientId, treatmentId: treatmentData.serviceId }, status: 'PENDING' },
+                        orderBy: { createdAt: 'desc' }
+                    });
+
+                    if (existingLiquidation) {
+                        await prisma.liquidation.update({ where: { id: existingLiquidation.id }, data: { doctorId } });
+                    } else {
+                        const dummyAppt = await prisma.appointment.create({
+                            data: { date: new Date(), time: '00:00', status: 'COMPLETED', patientId, doctorId, treatmentId: treatmentData.serviceId },
+                            include: { treatment: true, doctor: true }
+                        });
+                        await financeService.calculateLiquidation(prisma, dummyAppt);
+                    }
+                } catch (liqErr) {
+                    console.error('⚠️ Error syncing liquidation on transfer:', liqErr);
+                }
+            }
+        }
+
+        await supabase.from('ClinicalRecord').insert([{ id: crypto.randomUUID(), patientId, date: new Date().toISOString(), text: JSON.stringify({ treatment: 'Asignación de Saldo', observation: `Saldo de ${amount}€ asignado a: ${treatmentName || 'Tratamiento'}`, specialization: 'Administración' }), authorId: 'system' }]);
+
+        res.json({ success: true, transfer, message: 'Saldo transferido correctamente. No se ha generado nueva factura.' });
+    } catch (e) {
+        console.error('❌ Transfer error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── PAY WITH WALLET ──────────────────────────────────────────────────────────
+router.post('/pay-with-wallet', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { patientId, amount, appointmentId, treatmentName } = req.body;
+        if (!patientId || !amount) return res.status(400).json({ error: 'patientId and amount are required' });
+
+        const numericAmount = parseFloat(amount);
+        const { data: patient } = await supabase.from('Patient').select('wallet').eq('id', patientId).single();
+        if (!patient) return res.status(404).json({ error: 'Patient not found' });
+        if ((patient.wallet || 0) < numericAmount) return res.status(400).json({ error: 'Saldo insuficiente en monedero' });
+
+        const result = await prisma.$transaction(async (tx) => {
+            const payment = await tx.payment.create({
+                data: { id: crypto.randomUUID(), patientId, amount: numericAmount, method: 'wallet', type: 'DIRECT_CHARGE', notes: `Pago con saldo: ${treatmentName || 'Tratamiento'}`, createdAt: new Date().toISOString() }
+            });
+            if (appointmentId) {
+                await tx.appointment.update({ where: { id: appointmentId }, data: { paid: true, status: 'Completed' } });
+            }
+            await tx.patient.update({ where: { id: patientId }, data: { wallet: { decrement: numericAmount } } });
+            return payment;
+        });
+
+        res.json({ success: true, payment: result });
+    } catch (e) {
+        console.error('❌ Pay with wallet error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── EXPENSES ─────────────────────────────────────────────────────────────────
+router.get('/expenses', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { month } = req.query;
+        let query = supabase.from('expenses').select('*').order('date', { ascending: false });
+        if (month) { query = query.gte('date', `${month}-01`).lte('date', `${month}-31`); }
+        const { data, error } = await query;
+        if (error) throw error;
+        res.json(data || []);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/expenses', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { date, description, category, amount, paymentMethod, receiptUrl } = req.body;
+        if (!description || !category || !amount || !paymentMethod) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios: description, category, amount, paymentMethod' });
+        }
+        const { data, error } = await supabase.from('expenses').insert([{ date, description, category, amount, paymentMethod, receiptUrl }]).select().single();
+        if (error) throw error;
+        res.status(201).json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.put('/expenses/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { date, description, category, amount, paymentMethod, receiptUrl } = req.body;
+        const { data, error } = await supabase.from('expenses').update({ date, description, category, amount, paymentMethod, receiptUrl }).eq('id', req.params.id).select().single();
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.delete('/expenses/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { error } = await supabase.from('expenses').delete().eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+module.exports = router;

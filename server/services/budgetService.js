@@ -218,7 +218,15 @@ const convertBudgetToInvoice = async (supabase, budgetId) => {
     }
 
     // 4. Update Budget Status
-    await supabase.from('Budget').update({ status: 'CONVERTED' }).eq('id', budgetId);
+    const { error: updateError } = await supabase
+        .from('Budget')
+        .update({ status: 'CONVERTED', updatedAt: new Date().toISOString() })
+        .eq('id', budgetId);
+
+    if (updateError) {
+        console.error("Failed to update budget status:", updateError);
+        throw new Error("Error updating budget status: " + updateError.message);
+    }
 
     return invoice;
 };

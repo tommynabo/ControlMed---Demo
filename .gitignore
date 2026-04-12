@@ -29,3 +29,7 @@ dist-ssr
 backups/*.zip
 CRM_MEDICO_BACKUP_*
 backups/
+
+# Patient data — never commit these folders
+assets/
+BaseDatos/

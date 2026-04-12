@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Activity, Send, Plus, Trash2, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { useAppContext } from '../context/AppContext';
 
 // === Types ===
@@ -52,7 +53,7 @@ const setActiveConvId = (id: string) => {
     } catch { }
 };
 
-// === Simple Markdown renderer ===
+// === Simple Markdown renderer (output always sanitized with DOMPurify) ===
 const renderMarkdown = (text: string): string => {
     if (!text) return '';
     let html = text
@@ -70,7 +71,7 @@ const renderMarkdown = (text: string): string => {
         .replace(/(^|<br\/>)\s*-\s+(.+?)(?=<br\/>|$)/g, '$1<span class="flex gap-2 items-start"><span class="text-blue-500 mt-0.5">•</span><span>$2</span></span>')
         // Numbered lists (1. item)
         .replace(/(^|<br\/>)\s*(\d+)\.\s+(.+?)(?=<br\/>|$)/g, '$1<span class="flex gap-2 items-start"><span class="text-blue-500 font-bold mt-0.5">$2.</span><span>$3</span></span>');
-    return html;
+    return DOMPurify.sanitize(html, { ALLOWED_TAGS: ['strong', 'em', 'br', 'span'], ALLOWED_ATTR: ['class'] });
 };
 
 // === Generate title from first user message ===

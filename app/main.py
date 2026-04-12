@@ -19,13 +19,18 @@ load_dotenv()
 app = FastAPI(title="Billing Service", version="1.0.0")
 
 from fastapi.middleware.cors import CORSMiddleware
+import re as _re
+
+# Only allow explicitly configured origins — never wildcard in production
+_raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for dev
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Supabase Client

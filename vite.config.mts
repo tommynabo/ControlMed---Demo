@@ -17,6 +17,19 @@ export default defineConfig(({ mode }) => {
       }
     },
     plugins: [react()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            icons: ['lucide-react'],
+            query: ['@tanstack/react-query'],
+            form: ['react-hook-form', '@hookform/resolvers/zod', 'zod']
+          }
+        }
+      },
+      chunkSizeWarningLimit: 1000
+    },
     define: {
       'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY),
     },

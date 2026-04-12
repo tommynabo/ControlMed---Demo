@@ -20,10 +20,22 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl();
 
-const headers = {
+// Mutable headers object — Authorization token is injected at login via setApiAuthToken()
+export const apiHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
-    // 'x-user-role': 'DOCTOR' // Default role for now
 };
+
+/** Call after login to attach the JWT to all subsequent API requests. */
+export const setApiAuthToken = (token: string | null) => {
+    if (token) {
+        apiHeaders['Authorization'] = `Bearer ${token}`;
+    } else {
+        delete apiHeaders['Authorization'];
+    }
+};
+
+// Internal alias used by all fetch calls below
+const headers = apiHeaders;
 
 export const api = {
     // Auth
@@ -139,16 +151,14 @@ export const api = {
     // Attendance (Control de Jornada)
     attendance: {
         getHistory: async (userId: string, role: string) => {
-            const res = await fetch(`${API_URL}/jornada/history`, { 
-                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role } 
-            });
+            const res = await fetch(`${API_URL}/jornada/history`, { headers });
             if (!res.ok) throw new Error('Failed to fetch attendance history');
             return res.json();
         },
         clockIn: async (userId: string, role: string) => {
             const res = await fetch(`${API_URL}/jornada/clock-in`, { 
                 method: 'POST', 
-                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role } 
+                headers,
             });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
@@ -159,7 +169,7 @@ export const api = {
         clockOut: async (userId: string, role: string) => {
             const res = await fetch(`${API_URL}/jornada/clock-out`, { 
                 method: 'PUT', 
-                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role } 
+                headers,
             });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
@@ -170,7 +180,7 @@ export const api = {
         manual: async (userId: string, role: string, data: { date: string, startTime: string, endTime: string, breakMinutes: number, notes: string }) => {
             const res = await fetch(`${API_URL}/jornada/manual`, { 
                 method: 'POST', 
-                headers: { ...headers, 'x-user-id': userId, 'x-user-role': role },
+                headers,
                 body: JSON.stringify(data)
             });
             if (!res.ok) {
