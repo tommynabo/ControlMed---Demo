@@ -56,6 +56,7 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 
 // --- Rate Limiting ---
+app.set('trust proxy', 1); // Confía en proxies de Vercel (evita error en express-rate-limit)
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 const aiLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
 
@@ -76,8 +77,9 @@ app.use('/api/auth/login', loginLimiter); // Rate limiting for login
 
 // --- Auth Middleware ---
 const authMiddleware = (req, res, next) => {
-    const PUBLIC_PATHS = ['/api/auth/login', '/api/health'];
-    if (PUBLIC_PATHS.includes(req.path) || req.path.startsWith('/api/cron/')) return next();
+    // Cuando usamos app.use('/api', ...), req.path pierde el prefijo '/api'
+    const PUBLIC_PATHS = ['/auth/login', '/health'];
+    if (PUBLIC_PATHS.includes(req.path) || req.path.startsWith('/cron/')) return next();
 
     const authHeader = req.headers['authorization'];
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
