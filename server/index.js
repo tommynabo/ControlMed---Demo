@@ -37,12 +37,15 @@ const { errorHandler } = require('./lib/errors');
 const app = express();
 
 // --- CORS & Body Parsing ---
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000')
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000,https://controlmed.vercel.app')
     .split(',').map(o => o.trim()).filter(Boolean);
 
 app.use(cors({
     origin: (origin, callback) => {
-        if (!origin || ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+        // Permitimos localhost, dominios configurados y cualquier preview/producción de Vercel
+        if (!origin || ALLOWED_ORIGINS.includes(origin) || origin.endsWith('vercel.app')) {
+            return callback(null, true);
+        }
         callback(new Error(`CORS: Origin '${origin}' not allowed`));
     },
     credentials: true,
