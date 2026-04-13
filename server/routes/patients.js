@@ -84,10 +84,10 @@ router.post('/', async (req, res) => {
         const isValidUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
         if (!data.id || !isValidUuid(data.id)) data.id = crypto.randomUUID();
 
-        const { firstName, lastName1, dni, birthDate } = data;
+        const { firstName, lastName1, birthDate } = data;
         if (!firstName) return res.status(400).json({ error: 'Falta rellenar el campo: Nombre' });
         if (!lastName1) return res.status(400).json({ error: 'Falta rellenar el campo: Primer Apellido' });
-        if (!dni) return res.status(400).json({ error: 'Falta rellenar el campo: DNI' });
+        if (!data.dni) data.dni = `SIN-DNI-${crypto.randomUUID()}`;
         if (!birthDate) return res.status(400).json({ error: 'Falta rellenar el campo: Fecha de Nacimiento' });
 
         data.birthDate = new Date(birthDate).toISOString();

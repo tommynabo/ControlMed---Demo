@@ -151,7 +151,7 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onPa
                         </div>
 
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400">DNI / NIE</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400">DNI / NIE <span className="normal-case font-normal">(opcional)</span></label>
                             <input
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
                                 placeholder="12345678X"

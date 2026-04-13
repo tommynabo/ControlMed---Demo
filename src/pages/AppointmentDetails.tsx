@@ -144,6 +144,25 @@ export const AppointmentDetails: React.FC = () => {
 
     const displayConcept = getTreatmentName(appointment);
 
+    const handleDownloadInvoice = async () => {
+        if (!invoice) return;
+        try {
+            const data = await api.invoices.getDownloadUrl(invoice.id);
+            if (data.url || data.previewUrl) {
+                window.open(data.url || data.previewUrl, '_blank');
+            } else {
+                alert('No se pudo obtener la URL de descarga. Inténtelo de nuevo.');
+            }
+        } catch (e) {
+            console.error('Download error:', e);
+            if (invoice.url) {
+                window.open(invoice.url, '_blank');
+            } else {
+                alert('Error al descargar la factura.');
+            }
+        }
+    };
+
     if (!appointment) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -194,9 +213,9 @@ export const AppointmentDetails: React.FC = () => {
                                 <Check size={20} />
                                 Cobrado ✓
                             </div>
-                            {invoice?.url && (
+                            {invoice && (
                                 <button
-                                    onClick={() => window.open(invoice.url, '_blank')}
+                                    onClick={handleDownloadInvoice}
                                     className="bg-white border-2 border-slate-900 text-slate-900 px-8 py-4 rounded-2xl text-sm font-black uppercase hover:bg-slate-100 transition-all flex items-center gap-2"
                                 >
                                     <FileText size={20} />
