@@ -214,7 +214,7 @@ export const api = {
             treatmentName?: string;
             notes?: string;
         }) => {
-            const res = await fetch(`${API_URL}/payments/create`, {
+            const res = await fetch(`${API_URL}/finance/payments/create`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(paymentData)
@@ -235,7 +235,7 @@ export const api = {
             notes?: string;
             budgetId?: string;
         }) => {
-            const res = await fetch(`${API_URL}/payments/transfer`, {
+            const res = await fetch(`${API_URL}/finance/payments/transfer`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(transferData)
