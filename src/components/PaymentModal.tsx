@@ -158,8 +158,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 throw new Error("No se recibió respuesta del servidor");
             }
 
-            const pdfUrl = response?.pdfUrl || response?.invoice?.url;
-
             const payment: Payment = {
                 id: `pay_${Date.now()}`,
                 patientId: patient.id,
@@ -183,8 +181,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);
 
-            if (pdfUrl) {
-                window.open(pdfUrl, '_blank');
+            // Abrir factura usando el endpoint de descarga local (no la URL directa de Quipu que requiere auth)
+            const invoiceId = response?.invoice?.id;
+            if (invoiceId) {
+                try {
+                    const downloadData = await api.invoices.getDownloadUrl(invoiceId);
+                    if (downloadData?.url) {
+                        window.open(downloadData.url, '_blank');
+                    }
+                } catch {
+                    // Si falla la descarga no bloqueamos el flujo, la factura está en Facturación
+                }
             }
 
             onClose();
