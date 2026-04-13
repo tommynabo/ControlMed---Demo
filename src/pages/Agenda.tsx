@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X, Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, Loader2 } from 'lucide-react';
+import { RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X, Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, Loader2, UserPlus } from 'lucide-react';
+import NewPatientModal from '../components/NewPatientModal';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -94,6 +95,13 @@ const Agenda: React.FC = () => {
     const [bookingVisitDetails, setBookingVisitDetails] = useState('');
     // Block 3: prevent double booking
     const [isBooking, setIsBooking] = useState(false);
+
+    // Price editing for service chips
+    const [editingPriceIdx, setEditingPriceIdx] = useState<number | null>(null);
+    const [editingPriceValue, setEditingPriceValue] = useState<string>('');
+
+    // Quick new patient modal
+    const [isQuickNewPatientOpen, setIsQuickNewPatientOpen] = useState(false);
 
     // Feature 8: Editable duration for existing appointments
     const [isEditingAppt, setIsEditingAppt] = useState(false);
@@ -513,14 +521,25 @@ const Agenda: React.FC = () => {
                 price: existingSvc.final_price || 0
             });
         } else {
-            // Si no existe, es un tratamiento personalizado a COSTE CERO
-            handlePushTreatment({
-                id: `custom-${Date.now()}`,
-                name: query,
-                price: 0
-            });
-            toast.success(`Añadido: ${query} (Coste 0€)`);
+            // Concepto libre: añadir con precio 0 y activar edición de precio inmediatamente
+            const newList = [...selectedDbServices, { id: `custom-${Date.now()}`, name: query, price: 0 }];
+            setSelectedDbServices(newList);
+            setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+            setBookingTreatment(newList.map(t => t.name).join(', '));
+            setBookingServiceSearch('');
+            setShowServiceDropdown(false);
+            // Abrir edición de precio en el chip recién añadido
+            setEditingPriceIdx(newList.length - 1);
+            setEditingPriceValue('0');
         }
+    };
+
+    const handleUpdateServicePrice = (idx: number, newPrice: number) => {
+        const updated = selectedDbServices.map((s, i) => i === idx ? { ...s, price: newPrice } : s);
+        setSelectedDbServices(updated);
+        setBookingPrice(updated.reduce((sum, t) => sum + t.price, 0));
+        setEditingPriceIdx(null);
+        setEditingPriceValue('');
     };
 
     const handleRemoveTreatmentFromList = (idx: number) => {
@@ -861,6 +880,7 @@ const Agenda: React.FC = () => {
     }
 
     return (
+        <>
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header ... */}
             <div className="flex flex-wrap justify-between items-center gap-6 bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
@@ -1679,18 +1699,27 @@ const Agenda: React.FC = () => {
                             {/* Patient Search in Modal */}
                             <div>
                                 <label className="text-xs font-bold uppercase text-slate-400">Paciente</label>
-                                <input
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold"
-                                    placeholder="Buscar paciente (Nombre)"
-                                    value={apptSearch}
-                                    onChange={(e) => {
-                                        setApptSearch(e.target.value);
-                                        if (bookingPatientId) {
-                                            setBookingPatientId('');
-                                            setPatientBudgets([]);
-                                        }
-                                    }}
-                                />
+                                <div className="flex gap-2 mt-2">
+                                    <input
+                                        className="flex-1 bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none font-bold"
+                                        placeholder="Buscar paciente (Nombre o DNI)"
+                                        value={apptSearch}
+                                        onChange={(e) => {
+                                            setApptSearch(e.target.value);
+                                            if (bookingPatientId) {
+                                                setBookingPatientId('');
+                                                setPatientBudgets([]);
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        title="Añadir nuevo paciente"
+                                        onClick={() => setIsQuickNewPatientOpen(true)}
+                                        className="w-11 h-11 flex-shrink-0 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                                    >
+                                        <UserPlus size={18} />
+                                    </button>
+                                </div>
                                 {/* Suggestions - Mostrar siempre que se esté buscando y no haya paciente seleccionado */}
                                 {apptSearch.length > 0 && !bookingPatientId && (
                                     <div className="mt-2 bg-white border border-slate-100 rounded-xl shadow-lg max-h-40 overflow-y-auto">
@@ -1827,7 +1856,30 @@ const Agenda: React.FC = () => {
                                             {selectedDbServices.map((t, i) => (
                                                 <div key={i} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl pl-3 pr-1.5 py-1.5 shadow-sm group animate-in zoom-in-95 duration-200">
                                                     <span className="text-xs font-bold text-slate-700">{t.name}</span>
-                                                    <span className="text-xs font-black text-blue-600">{t.price}€</span>
+                                                    {editingPriceIdx === i ? (
+                                                        <input
+                                                            type="number"
+                                                            autoFocus
+                                                            min="0"
+                                                            step="0.01"
+                                                            className="w-16 text-xs font-black text-blue-600 bg-blue-50 border border-blue-300 rounded-lg px-1.5 py-0.5 outline-none focus:ring-2 focus:ring-blue-400"
+                                                            value={editingPriceValue}
+                                                            onChange={e => setEditingPriceValue(e.target.value)}
+                                                            onBlur={() => handleUpdateServicePrice(i, parseFloat(editingPriceValue) || 0)}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') handleUpdateServicePrice(i, parseFloat(editingPriceValue) || 0);
+                                                                if (e.key === 'Escape') { setEditingPriceIdx(null); setEditingPriceValue(''); }
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <button
+                                                            title="Editar precio"
+                                                            onClick={() => { setEditingPriceIdx(i); setEditingPriceValue(String(t.price)); }}
+                                                            className="text-xs font-black text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                                                        >
+                                                            {t.price}€
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleRemoveTreatmentFromList(i)}
                                                         className="w-5 h-5 flex items-center justify-center bg-slate-100 hover:bg-red-500 text-slate-400 hover:text-white rounded-lg transition-all"
@@ -2059,6 +2111,17 @@ const Agenda: React.FC = () => {
             )
             }
         </div >
+
+            <NewPatientModal
+                isOpen={isQuickNewPatientOpen}
+                onClose={() => setIsQuickNewPatientOpen(false)}
+                onPatientCreated={(patient) => {
+                    setApptSearch(patient.name);
+                    setBookingPatientId(patient.id);
+                    setIsQuickNewPatientOpen(false);
+                }}
+            />
+        </>
     );
 };
 
