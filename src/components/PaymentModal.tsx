@@ -181,16 +181,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);
 
-            // Abrir factura usando el endpoint de descarga local (no la URL directa de Quipu que requiere auth)
+            // Usar la URL efímera pública de Quipu si viene en la respuesta,
+            // si no, pedirla al endpoint de descarga local
+            const ephemeralUrl = response?.previewUrl;
             const invoiceId = response?.invoice?.id;
-            if (invoiceId) {
+
+            if (ephemeralUrl) {
+                window.open(ephemeralUrl, '_blank');
+            } else if (invoiceId) {
                 try {
                     const downloadData = await api.invoices.getDownloadUrl(invoiceId);
-                    if (downloadData?.url) {
-                        window.open(downloadData.url, '_blank');
-                    }
+                    if (downloadData?.url) window.open(downloadData.url, '_blank');
                 } catch {
-                    // Si falla la descarga no bloqueamos el flujo, la factura está en Facturación
+                    // Si falla la descarga no bloqueamos el flujo
                 }
             }
 

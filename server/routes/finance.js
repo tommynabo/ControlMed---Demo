@@ -155,6 +155,32 @@ router.get('/invoices/appointment/:appointmentId', async (req, res) => {
     }
 });
 
+// GET /invoices/:id/download — devuelve la URL efímera pública de Quipu para abrir en navegador
+router.get('/invoices/:id/download', async (req, res) => {
+    try {
+        const invoice = await prisma.invoice.findUnique({ where: { id: req.params.id } });
+        if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+
+        // Si tiene ID externo de Quipu, pedimos una URL efímera fresca (sin auth de navegador)
+        if (invoice.externalId) {
+            try {
+                const urls = await quipuService.getInvoiceUrls(invoice.externalId);
+                if (urls?.preview) return res.json({ url: urls.preview });
+                if (urls?.download) return res.json({ url: urls.download });
+            } catch (qErr) {
+                console.warn('⚠️ [Quipu] Could not get ephemeral URL, falling back to stored URL:', qErr.message);
+            }
+        }
+
+        // Fallback: URL almacenada en BD (puede requerir auth, pero es lo que hay)
+        if (invoice.url) return res.json({ url: invoice.url });
+
+        return res.status(404).json({ error: 'No PDF URL available for this invoice' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ─── PAYMENTS: GET ────────────────────────────────────────────────────────────
 router.get('/payments', async (req, res) => {
     try {
@@ -284,7 +310,7 @@ router.post('/payments/create', async (req, res) => {
                 await tx.patient.update({ where: { id: patientId }, data: { wallet: { increment: balanceAdjustment } } });
             }
 
-            return { payment, invoice, payroll: liquidation, pdfUrl: quipuResult.success ? quipuResult.pdf_url : null, isPartial: isPartial === true, remainingBalance: (isPartial && originalAmount) ? parseFloat(originalAmount) - numericAmount : 0 };
+            return { payment, invoice, payroll: liquidation, pdfUrl: quipuResult.success ? quipuResult.pdf_url : null, previewUrl: quipuResult.success ? quipuResult.preview_url : null, isPartial: isPartial === true, remainingBalance: (isPartial && originalAmount) ? parseFloat(originalAmount) - numericAmount : 0 };
         });
 
         res.status(200).json({ success: true, ...result });
