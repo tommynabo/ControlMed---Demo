@@ -1860,9 +1860,9 @@ const Patients: React.FC = () => {
                                     <div className="w-full overflow-x-auto">
                                         <div className="min-w-[700px]">
                                             <div className="grid grid-cols-12 gap-4 pb-4 border-b border-slate-100 text-slate-400 text-[10px] font-bold uppercase tracking-widest text-left">
-                                                <div className="col-span-1 text-center">Pieza(s)</div>
+                                                <div className="col-span-2 text-center">Pieza(s)</div>
                                                 <div className="col-span-4">Tratamiento</div>
-                                                <div className="col-span-3">Estado</div>
+                                                <div className="col-span-2">Estado</div>
                                                 <div className="col-span-3">Precio (Total)</div>
                                                 <div className="col-span-1 text-right">Acciones</div>
                                             </div>

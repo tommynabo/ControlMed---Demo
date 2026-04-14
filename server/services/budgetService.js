@@ -91,6 +91,7 @@ const getBudgetsByPatient = async (supabase, patientId) => {
         .from('Budget')
         .select('*, items:BudgetLineItem(*)')
         .eq('patientId', patientId)
+        .is('deleted_at', null)
         .order('date', { ascending: false });
 
     if (error) throw new Error(error.message);

@@ -87,7 +87,7 @@ export const TreatmentsList: React.FC<TreatmentsListProps> = ({ patientId, refre
                 <div key={group.id} className="grid grid-cols-12 gap-4 items-center p-3 bg-slate-50 rounded-xl text-[10px] font-black uppercase text-slate-600 border border-slate-100 hover:bg-blue-50 transition-colors cursor-pointer text-left group relative">
 
                     {/* Teeth Column with Click Interaction */}
-                    <div className="col-span-1 border-r border-slate-200 pr-2 text-center text-slate-400 relative">
+                    <div className="col-span-2 border-r border-slate-200 pr-2 text-center text-slate-400 relative">
                         {group.count > 1 ? (
                             <button
                                 onClick={(e) => {
@@ -117,7 +117,7 @@ export const TreatmentsList: React.FC<TreatmentsListProps> = ({ patientId, refre
                         )}
                     </div>
 
-                    <div className="col-span-4 text-slate-900 line-clamp-1 flex flex-col" title={group.serviceName}>
+                    <div className="col-span-4 text-slate-900 line-clamp-2 flex flex-col" title={group.serviceName}>
                         <span>{group.serviceName}</span>
                         {group.notes && <span className="text-[9px] text-slate-400 normal-case">{group.notes}</span>}
                         {group.updated_by_name && (
@@ -127,7 +127,7 @@ export const TreatmentsList: React.FC<TreatmentsListProps> = ({ patientId, refre
                         )}
                     </div>
 
-                    <div className={`col-span-3 font-bold ${group.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-500'}`}>
+                    <div className={`col-span-2 font-bold ${group.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-500'}`}>
                         {group.status}
                     </div>
 
