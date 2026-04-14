@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { prisma, getSupabase } = require('../lib/db');
 const financeService = require('../services/financeService');
 const { logAudit } = require('../lib/audit');
+const { resolveUserNames } = require('../lib/utils');
 
 const router = express.Router();
 
@@ -116,7 +117,14 @@ router.get('/patients/:patientId/treatments', async (req, res) => {
             .order('createdAt', { ascending: false });
 
         if (error) throw error;
-        res.json(data || []);
+
+        // Enrich with user names
+        const rows = data || [];
+        const userIds = rows.map(t => t.updated_by).filter(Boolean);
+        const nameMap = await resolveUserNames(supabase, userIds);
+        const enriched = rows.map(t => ({ ...t, updated_by_name: t.updated_by ? (nameMap.get(t.updated_by) || null) : null }));
+
+        res.json(enriched);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -127,7 +135,7 @@ router.post('/patients/:patientId/treatments', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const payload = { ...req.body, id: crypto.randomUUID(), patientId: req.params.patientId };
+        const payload = { ...req.body, id: crypto.randomUUID(), patientId: req.params.patientId, updated_by: req.user?.id || null };
         const { data, error } = await supabase.from('PatientTreatment').insert([payload]).select().single();
         if (error) throw error;
         logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'treatments', resourceId: data.id, newValues: data, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
@@ -144,7 +152,7 @@ router.put('/patients/:patientId/treatments/:id', async (req, res) => {
 
         const { data: oldTreatment } = await supabase.from('PatientTreatment').select('*').eq('id', req.params.id).single();
         const { data, error } = await supabase
-            .from('PatientTreatment').update(req.body).eq('id', req.params.id).select().single();
+            .from('PatientTreatment').update({ ...req.body, updated_by: req.user?.id || null }).eq('id', req.params.id).select().single();
         if (error) throw error;
         logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'UPDATE', resourceType: 'treatments', resourceId: req.params.id, oldValues: oldTreatment || undefined, newValues: data, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.json(data);
@@ -183,6 +191,10 @@ router.get('/patients/:patientId/clinical-records', async (req, res) => {
 
         if (error) return res.status(500).json({ error: error.message });
 
+        // Enrich with user names
+        const userIds = (data || []).map(r => r.updated_by).filter(Boolean);
+        const nameMap = await resolveUserNames(supabase, userIds);
+
         const mapped = (data || []).map(record => {
             let parsed = {};
             let isJson = false;
@@ -195,7 +207,8 @@ router.get('/patients/:patientId/clinical-records', async (req, res) => {
             return {
                 ...record,
                 clinicalData: isJson ? parsed : { treatment: 'Nota', observation: record.text },
-                specialization: isJson && parsed.specialization ? parsed.specialization : 'General'
+                specialization: isJson && parsed.specialization ? parsed.specialization : 'General',
+                updated_by_name: record.updated_by ? (nameMap.get(record.updated_by) || null) : null,
             };
         });
 
@@ -224,7 +237,7 @@ router.post('/clinical-records', async (req, res) => {
 
         const { data, error } = await supabase
             .from('ClinicalRecord')
-            .insert([{ id: crypto.randomUUID(), patientId, date: new Date().toISOString(), text: JSON.stringify(payload), authorId: doctorId }])
+            .insert([{ id: crypto.randomUUID(), patientId, date: new Date().toISOString(), text: JSON.stringify(payload), authorId: doctorId, updated_by: req.user?.id || null }])
             .select()
             .single();
 
@@ -260,7 +273,7 @@ router.put('/clinical-records/:id', async (req, res) => {
 
         const { data, error } = await supabase
             .from('ClinicalRecord')
-            .update({ text: JSON.stringify(updated), authorId: updated.doctorId })
+            .update({ text: JSON.stringify(updated), authorId: updated.doctorId, updated_by: req.user?.id || null })
             .eq('id', id).select().single();
 
         if (error) return res.status(500).json({ error: error.message });

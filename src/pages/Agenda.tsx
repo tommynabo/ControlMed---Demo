@@ -1571,6 +1571,13 @@ const Agenda: React.FC = () => {
                                                                         </div>
                                                                     )}
 
+                                                                    {/* Última modificación */}
+                                                                    {(appt as any).updated_by_name && (
+                                                                        <div className="mt-0.5 text-[8px] opacity-50 leading-tight truncate" title={`Última mod.: ${(appt as any).updated_by_name}`}>
+                                                                            ✎ {(appt as any).updated_by_name}
+                                                                        </div>
+                                                                    )}
+
                                                                     {/* RESIZE HANDLE */}
                                                                     {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
                                                                         <div 

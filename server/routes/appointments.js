@@ -142,7 +142,15 @@ router.get('/', async (req, res) => {
             if (from > 20000) break;
         }
 
-        res.json(allData);
+        // Enrich with user names for last-modifier display
+        const userIds = allData.flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
+        const nameMap = await resolveUserNames(supabase, userIds);
+        const enriched = allData.map(a => ({
+            ...a,
+            updated_by_name: a.updated_by ? (nameMap.get(a.updated_by) || null) : (a.created_by ? (nameMap.get(a.created_by) || null) : null),
+        }));
+
+        res.json(enriched);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -162,7 +170,17 @@ router.get('/patient/:patientId', async (req, res) => {
             .order('date', { ascending: false });
 
         if (error) return res.status(500).json({ error: error.message });
-        res.json(data || []);
+
+        // Enrich with user names
+        const rows = data || [];
+        const userIds = rows.flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
+        const nameMap = await resolveUserNames(supabase, userIds);
+        const enriched = rows.map(a => ({
+            ...a,
+            updated_by_name: a.updated_by ? (nameMap.get(a.updated_by) || null) : (a.created_by ? (nameMap.get(a.created_by) || null) : null),
+        }));
+
+        res.json(enriched);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

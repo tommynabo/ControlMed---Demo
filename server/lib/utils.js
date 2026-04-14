@@ -85,4 +85,25 @@ const calculateWalletBalance = async (supabase, patientId) => {
     }
 };
 
-module.exports = { isUuid, normalizeSchedule, normalizePatient, calculateWalletBalance };
+/**
+ * Resolve a list of user IDs to their display names in a single batch query.
+ * Returns a Map<userId, displayName>. Unknown IDs get 'Usuario'.
+ * Never throws — returns empty map on error.
+ */
+const resolveUserNames = async (supabase, userIds) => {
+    const nameMap = new Map();
+    try {
+        const unique = [...new Set((userIds || []).filter(Boolean))];
+        if (unique.length === 0) return nameMap;
+        const { data, error } = await supabase
+            .from('User')
+            .select('id, name')
+            .in('id', unique);
+        if (!error && data) {
+            for (const u of data) nameMap.set(u.id, u.name || 'Usuario');
+        }
+    } catch (_) {}
+    return nameMap;
+};
+
+module.exports = { isUuid, normalizeSchedule, normalizePatient, calculateWalletBalance, resolveUserNames };

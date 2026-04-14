@@ -120,6 +120,11 @@ export const TreatmentsList: React.FC<TreatmentsListProps> = ({ patientId, refre
                     <div className="col-span-4 text-slate-900 line-clamp-1 flex flex-col" title={group.serviceName}>
                         <span>{group.serviceName}</span>
                         {group.notes && <span className="text-[9px] text-slate-400 normal-case">{group.notes}</span>}
+                        {group.updated_by_name && (
+                            <span className="text-[8px] text-slate-400 normal-case font-normal opacity-70" title={`Última mod.: ${group.updated_by_name}`}>
+                                ✎ {group.updated_by_name}
+                            </span>
+                        )}
                     </div>
 
                     <div className={`col-span-3 font-bold ${group.status === 'COMPLETED' ? 'text-emerald-600' : 'text-amber-500'}`}>

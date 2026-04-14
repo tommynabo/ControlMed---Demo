@@ -1824,6 +1824,11 @@ const Patients: React.FC = () => {
                                                         <div className="px-4 py-4 self-start">
                                                             {r.clinicalData?.treatment && <p className="text-xs font-black text-slate-900 mb-1">{r.clinicalData.treatment}</p>}
                                                             <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{r.clinicalData?.observation}</p>
+                                                            {(r as any).updated_by_name && (
+                                                                <p className="text-[9px] text-slate-400 mt-1 opacity-60" title={`Última modificación: ${(r as any).updated_by_name}`}>
+                                                                    ✎ {(r as any).updated_by_name}
+                                                                </p>
+                                                            )}
                                                         </div>
                                                         <div className="px-4 py-4 flex items-start justify-end gap-2 pt-4">
                                                             <button onClick={() => { setRecordToReassign(r); setIsReassignDoctorModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Reasignar Doctor"><UserCheck size={14} /></button>

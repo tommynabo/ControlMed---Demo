@@ -71,6 +71,8 @@ export interface ClinicalRecord {
     signatureUrl?: string;
   };
   isEncrypted: boolean;
+  updated_by?: string;
+  updated_by_name?: string;
 }
 
 export interface Service {
@@ -91,6 +93,8 @@ export interface PatientTreatment {
   status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'PRESUPUESTADO';
   notes?: string;
   createdAt: string;
+  updated_by?: string;
+  updated_by_name?: string;
 }
 
 export interface Budget {
@@ -171,6 +175,7 @@ export interface Appointment {
   serviceIds?: string[]; // IDs de servicios del catálogo real vinculados
   created_by?: string; // UUID del usuario que creó la cita
   updated_by?: string; // UUID del último usuario que modificó la cita
+  updated_by_name?: string; // Nombre del último usuario que modificó la cita
 }
 
 export interface AuditLog {
