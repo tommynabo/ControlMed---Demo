@@ -118,11 +118,14 @@ router.get('/patients/:patientId/treatments', async (req, res) => {
 
         if (error) throw error;
 
-        // Enrich with user names
+        // Enrich with user names (graceful fallback)
         const rows = data || [];
-        const userIds = rows.map(t => t.updated_by).filter(Boolean);
-        const nameMap = await resolveUserNames(supabase, userIds);
-        const enriched = rows.map(t => ({ ...t, updated_by_name: t.updated_by ? (nameMap.get(t.updated_by) || null) : null }));
+        let enriched = rows;
+        try {
+            const userIds = rows.map(t => t.updated_by).filter(Boolean);
+            const nameMap = await resolveUserNames(supabase, userIds);
+            enriched = rows.map(t => ({ ...t, updated_by_name: t.updated_by ? (nameMap.get(t.updated_by) || null) : null }));
+        } catch (_) {}
 
         res.json(enriched);
     } catch (e) {
@@ -191,9 +194,10 @@ router.get('/patients/:patientId/clinical-records', async (req, res) => {
 
         if (error) return res.status(500).json({ error: error.message });
 
-        // Enrich with user names
+        // Enrich clinical records with user names (graceful fallback)
         const userIds = (data || []).map(r => r.updated_by).filter(Boolean);
-        const nameMap = await resolveUserNames(supabase, userIds);
+        let nameMap = new Map();
+        try { nameMap = await resolveUserNames(supabase, userIds); } catch (_) {}        
 
         const mapped = (data || []).map(record => {
             let parsed = {};

@@ -142,13 +142,16 @@ router.get('/', async (req, res) => {
             if (from > 20000) break;
         }
 
-        // Enrich with user names for last-modifier display
-        const userIds = allData.flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
-        const nameMap = await resolveUserNames(supabase, userIds);
-        const enriched = allData.map(a => ({
-            ...a,
-            updated_by_name: a.updated_by ? (nameMap.get(a.updated_by) || null) : (a.created_by ? (nameMap.get(a.created_by) || null) : null),
-        }));
+        // Enrich with user names for last-modifier display (graceful fallback)
+        let enriched = allData;
+        try {
+            const userIds = allData.flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
+            const nameMap = await resolveUserNames(supabase, userIds);
+            enriched = allData.map(a => ({
+                ...a,
+                updated_by_name: a.updated_by ? (nameMap.get(a.updated_by) || null) : (a.created_by ? (nameMap.get(a.created_by) || null) : null),
+            }));
+        } catch (_) {}
 
         res.json(enriched);
     } catch (e) {
@@ -171,14 +174,16 @@ router.get('/patient/:patientId', async (req, res) => {
 
         if (error) return res.status(500).json({ error: error.message });
 
-        // Enrich with user names
-        const rows = data || [];
-        const userIds = rows.flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
-        const nameMap = await resolveUserNames(supabase, userIds);
-        const enriched = rows.map(a => ({
-            ...a,
-            updated_by_name: a.updated_by ? (nameMap.get(a.updated_by) || null) : (a.created_by ? (nameMap.get(a.created_by) || null) : null),
-        }));
+        // Enrich with user names (graceful fallback)
+        let enriched = rows;
+        try {
+            const userIds = rows.flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
+            const nameMap = await resolveUserNames(supabase, userIds);
+            enriched = rows.map(a => ({
+                ...a,
+                updated_by_name: a.updated_by ? (nameMap.get(a.updated_by) || null) : (a.created_by ? (nameMap.get(a.created_by) || null) : null),
+            }));
+        } catch (_) {}
 
         res.json(enriched);
     } catch (e) {
