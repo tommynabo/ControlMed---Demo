@@ -4,14 +4,9 @@ const { getSupabase } = require('../lib/db');
 
 const router = express.Router();
 
-// ─── GET audit logs (ADMIN only) ─────────────────────────────────────────────
+// ─── GET audit logs ───────────────────────────────────────────────────────────
 router.get('/logs', async (req, res) => {
     try {
-        // Only ADMIN can access audit logs
-        if (req.user?.role !== 'ADMIN') {
-            return res.status(403).json({ error: 'Acceso denegado. Solo administradores pueden ver el log de auditoría.' });
-        }
-
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 

@@ -120,11 +120,14 @@ router.post('/', async (req, res) => {
 
         res.json(normalizePatient(created));
 
-        // Audit log (after responding so it doesn't delay the client)
+        // Audit log (fire-and-forget, never throws)
         try {
             const supabase = getSupabase();
             logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'patients', resourceId: created.id, newValues: { name: created.name, historyNumber: created.historyNumber }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         } catch (_) {}
+    } catch (e) {
+        console.error('Error creating patient:', e);
+        if (e.code === 'P2002') {
             const target = e.meta?.target || [];
             if (target.includes('dni')) return res.status(400).json({ error: 'DNI ya existe.' });
             if (target.includes('historyNumber')) return res.status(400).json({ error: 'Número de historial ya existe.' });
@@ -170,10 +173,13 @@ router.put('/:id', async (req, res) => {
 
         res.json(normalizePatient(data));
 
-        // Audit log (after responding)
+        // Audit log (fire-and-forget, never throws)
         try {
             logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'UPDATE', resourceType: 'patients', resourceId: id, newValues: sanitized, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         } catch (_) {}
+    } catch (e) {
+        console.error('Error updating patient:', e);
+        if (e.code === 'P2002' && e.meta?.target?.includes('dni')) {
             return res.status(400).json({ error: 'DNI ya existe.' });
         }
         res.status(500).json({ error: e.message });

@@ -343,11 +343,9 @@ const Settings: React.FC = () => {
                     <button onClick={() => setSettingsTab('users')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'users' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <UsersIcon size={14} /> Usuarios
                     </button>
-                    {currentUserRole === 'ADMIN' && (
                     <button onClick={() => setSettingsTab('audit')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'audit' ? 'bg-rose-50 text-rose-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <ShieldCheck size={14} /> Auditoría
                     </button>
-                    )}
                 </div>
                 )}
 
@@ -1006,7 +1004,7 @@ const Settings: React.FC = () => {
                 {settingsTab === 'users' && !isReception && <Users />}
 
                 {/* ─── AUDIT LOG SECTION (ADMIN only) ─────────────────────────────── */}
-                {settingsTab === 'audit' && currentUserRole === 'ADMIN' && (
+                {settingsTab === 'audit' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                         <div>
                             <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
