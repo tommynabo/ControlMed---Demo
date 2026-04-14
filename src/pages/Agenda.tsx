@@ -735,7 +735,8 @@ const Agenda: React.FC = () => {
                 doctorId: newDrId
             });
 
-            setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
+            const enriched = { ...updated, updated_by_name: updated.updated_by_name || (currentUser as any)?.name || null };
+            setAppointments(prev => prev.map(a => a.id === enriched.id ? enriched : a));
         } catch (err: any) {
             alert("Error al mover la cita: " + (err.message || err));
         } finally {
@@ -789,7 +790,8 @@ const Agenda: React.FC = () => {
                     const updated = await api.appointments.update(appt.id, {
                         duration: newDuration
                     });
-                    setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
+                    const enriched = { ...updated, updated_by_name: updated.updated_by_name || (currentUser as any)?.name || null };
+                    setAppointments(prev => prev.map(a => a.id === enriched.id ? enriched : a));
                 } catch (err: any) {
                     alert("Error al cambiar la duración: " + (err.message || err));
                 }
@@ -2101,8 +2103,9 @@ const Agenda: React.FC = () => {
                                                     : undefined,
                                             });
 
-                                            // Immediately update local state (like f2540b9)
-                                            setAppointments(prev => prev.map(a => a.id === result.id ? { ...a, ...result } : a));
+                                            // Immediately update local state with updated_by_name from current user
+                                            const enrichedResult = { ...result, updated_by_name: result.updated_by_name || (currentUser as any)?.name || null };
+                                            setAppointments(prev => prev.map(a => a.id === enrichedResult.id ? { ...a, ...enrichedResult } : a));
                                             // Then also refresh from server for consistency
                                             await refreshAppointments();
                                             setIsAppointmentModalOpen(false);

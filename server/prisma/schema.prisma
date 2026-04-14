@@ -231,6 +231,8 @@ model Appointment {
   whatsappSent Boolean   @default(false) @map("whatsapp_sent")
   isRevision   Boolean   @default(false) @map("is_revision")
   deleted_at   DateTime?
+  created_by   String?
+  updated_by   String?
 }
 
 model Liquidation {

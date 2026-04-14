@@ -45,7 +45,7 @@ const Patients: React.FC = () => {
     const {
         patients, setPatients, searchQuery, setSearchQuery,
         selectedPatient, setSelectedPatient, clinicalRecords, setClinicalRecords,
-        invoices, setInvoices, api, refreshAppointments
+        invoices, setInvoices, api, refreshAppointments, currentUser
     } = useAppContext();
 
 
@@ -678,7 +678,8 @@ const Patients: React.FC = () => {
                 status: editVisitForm.status,
                 observations: editVisitForm.observations || undefined,
             });
-            setPatientAppointments(prev => prev.map(a => a.id === visitId ? { ...a, ...updated } : a));
+            const enriched = { ...updated, updated_by_name: updated.updated_by_name || (currentUser as any)?.name || null };
+            setPatientAppointments(prev => prev.map(a => a.id === visitId ? { ...a, ...enriched } : a));
             await refreshAppointments();
             setEditingVisitId(null);
             toast.success('Visita actualizada correctamente');
