@@ -316,11 +316,13 @@ router.post('/payments/create', async (req, res) => {
 
         res.status(200).json({ success: true, ...result });
 
-        // Audit log
+        // Audit log (fire-and-forget, never throws)
         try {
             const supabase = getSupabase();
             logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'payments', resourceId: result.payment?.id, newValues: { patientId, amount: numericAmount, method, type, invoiceNumber: result.invoice?.invoiceNumber }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         } catch (_) {}
+    } catch (e) {
+        console.error('Error creating payment:', e);
         res.status(500).json({ error: e.message || 'Unknown transaction error' });
     }
 });
