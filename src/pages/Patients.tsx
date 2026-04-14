@@ -1547,6 +1547,7 @@ const Patients: React.FC = () => {
                                                                                 <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
                                                                                 <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
                                                                                 {visitDoctor && <p className="text-[10px] text-blue-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                                {(visit as any).updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {(visit as any).updated_by_name}</p>}
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -1633,6 +1634,7 @@ const Patients: React.FC = () => {
                                                                                 <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
                                                                                 <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
                                                                                 {visitDoctor && <p className="text-[10px] text-amber-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                                {(visit as any).updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {(visit as any).updated_by_name}</p>}
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -1719,6 +1721,7 @@ const Patients: React.FC = () => {
                                                                                 <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
                                                                                 <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
                                                                                 {visitDoctor && <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
+                                                                                {(visit as any).updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {(visit as any).updated_by_name}</p>}
                                                                             </div>
                                                                         </div>
                                                                         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -2176,7 +2179,8 @@ const Patients: React.FC = () => {
                                                             <h4 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
                                                                 {budget.title || `Presupuesto #${budget.id.substring(0, 6)}`}
                                                             </h4>
-                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{new Date(budget.createdAt).toLocaleDateString()}</p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">{new Date(budget.date || budget.createdAt).toLocaleDateString()}</p>
+                                                            {budget.updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {budget.updated_by_name}</p>}
                                                         </div>
                                                         <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${budget.status === 'ACCEPTED' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
                                                             {budget.status || 'DRAFT'}
