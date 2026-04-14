@@ -2,6 +2,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const { prisma, getSupabase } = require('../lib/db');
+const { logAudit } = require('../lib/audit');
 
 const router = express.Router();
 
@@ -76,7 +77,9 @@ router.post('/', async (req, res) => {
                 amount: amount || null,
                 status: 'Scheduled',
                 paid: false,
-                is_revision: isRevision === true
+                is_revision: isRevision === true,
+                created_by: req.user?.id || null,
+                updated_by: req.user?.id || null,
             }])
             .select('*, patient:Patient!left(*), doctor:Doctor!left(*)')
             .single();
@@ -85,6 +88,17 @@ router.post('/', async (req, res) => {
             console.error('❌ Supabase Insert Error (Appointment):', JSON.stringify(error));
             return res.status(500).json({ error: `DB Error: ${error.message}`, details: error.details, hint: error.hint });
         }
+
+        logAudit(supabase, {
+            userId:       req.user?.id,
+            userRole:     req.user?.role,
+            action:       'CREATE',
+            resourceType: 'appointments',
+            resourceId:   data.id,
+            newValues:    data,
+            ipAddress:    req.ip,
+            userAgent:    req.headers['user-agent'],
+        });
 
         res.json(data);
     } catch (e) {
@@ -221,10 +235,17 @@ router.put('/:id', async (req, res) => {
         delete updates.serviceIds; delete updates.budgetItemIds; delete updates.treatment;
         delete updates.doctor; delete updates.patient; delete updates.budget;
         delete updates.liquidation; delete updates.id; delete updates.created_at; delete updates.deleted_at;
+        delete updates.created_by; // Never overwrite creation author
         for (const key of Object.keys(updates)) { if (updates[key] === undefined) delete updates[key]; }
+
+        // Stamp the editor
+        updates.updated_by = req.user?.id || null;
 
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        // Fetch old record for audit diff
+        const { data: oldRecord } = await supabase.from('Appointment').select('*').eq('id', id).single();
 
         const { data, error } = await supabase.from('Appointment').update(updates).eq('id', id).select().single();
 
@@ -236,6 +257,18 @@ router.put('/:id', async (req, res) => {
                 return res.status(500).json({ error: error.message, details: error.details });
             }
         }
+
+        logAudit(supabase, {
+            userId:       req.user?.id,
+            userRole:     req.user?.role,
+            action:       'UPDATE',
+            resourceType: 'appointments',
+            resourceId:   id,
+            oldValues:    oldRecord || undefined,
+            newValues:    data,
+            ipAddress:    req.ip,
+            userAgent:    req.headers['user-agent'],
+        });
 
         res.json(data);
     } catch (e) {
@@ -252,9 +285,12 @@ router.delete('/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
+        // Fetch record before deletion for audit trail
+        const { data: deletedRecord } = await supabase.from('Appointment').select('*').eq('id', id).single();
+
         const { error } = await supabase
             .from('Appointment')
-            .update({ deleted_at: new Date().toISOString() })
+            .update({ deleted_at: new Date().toISOString(), updated_by: req.user?.id || null })
             .eq('id', id);
 
         if (error) {
@@ -264,6 +300,17 @@ router.delete('/:id', async (req, res) => {
                 return res.status(500).json({ error: error.message });
             }
         }
+
+        logAudit(supabase, {
+            userId:       req.user?.id,
+            userRole:     req.user?.role,
+            action:       'DELETE',
+            resourceType: 'appointments',
+            resourceId:   id,
+            oldValues:    deletedRecord || undefined,
+            ipAddress:    req.ip,
+            userAgent:    req.headers['user-agent'],
+        });
 
         res.json({ success: true });
     } catch (e) {

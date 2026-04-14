@@ -155,7 +155,7 @@ export interface Appointment {
   date: string;
   dayIdx?: number;
   time: string;
-  duration?: number;
+  duration?: number; // Minutos exactos — acepta cualquier entero positivo (ej. 121)
   observations?: string;
   visitDetails?: string; // Detalles de la visita (visible en agenda)
   status?: string;
@@ -169,6 +169,23 @@ export interface Appointment {
   isRevision?: boolean; // ✅ Marca la cita como revisión
   is_revision?: boolean; // snake_case alias from DB
   serviceIds?: string[]; // IDs de servicios del catálogo real vinculados
+  created_by?: string; // UUID del usuario que creó la cita
+  updated_by?: string; // UUID del último usuario que modificó la cita
+}
+
+export interface AuditLog {
+  id: string;
+  user_id?: string;       // UUID del usuario (ref. a User.id)
+  user_email?: string;
+  user_role?: string;     // ADMIN | RECEPTION | AUXILIAR | DOCTOR
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT';
+  resource_type: string;  // 'appointments' | 'patients' | 'budgets' | etc.
+  resource_id?: string;
+  old_values?: Record<string, unknown>;
+  new_values?: Record<string, unknown>;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
 }
 
 export interface InventoryItem {

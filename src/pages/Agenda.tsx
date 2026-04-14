@@ -2003,19 +2003,35 @@ const Agenda: React.FC = () => {
                                 )}
                             </div>
 
-                            {/* Duration Selector */}
+                            {/* Duration Selector — free numeric input */}
                             <div>
-                                <label className="text-xs font-bold uppercase text-slate-400">Duración</label>
-                                <select
-                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600"
+                                <label className="text-xs font-bold uppercase text-slate-400">Duración (minutos)</label>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={480}
+                                    step={1}
+                                    className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2 outline-none font-bold text-slate-600 focus:bg-white focus:border-blue-400 transition-all"
                                     value={bookingDuration}
-                                    onChange={(e) => setBookingDuration(Number(e.target.value))}
-                                    style={{ colorScheme: 'light' }}
-                                >
-                                    {DURATION_OPTIONS.map(minutes => (
-                                        <option key={minutes} value={minutes}>{minutes} min</option>
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        if (!isNaN(val) && val > 0) setBookingDuration(val);
+                                    }}
+                                    placeholder="ej. 121"
+                                />
+                                {/* Quick-select chips */}
+                                <div className="flex gap-1.5 mt-2 flex-wrap">
+                                    {[15, 30, 45, 60, 90].map(min => (
+                                        <button
+                                            key={min}
+                                            type="button"
+                                            onClick={() => setBookingDuration(min)}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${bookingDuration === min ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                        >
+                                            {min} min
+                                        </button>
                                     ))}
-                                </select>
+                                </div>
                             </div>
 
                             {/* Restored Observations Field */}
