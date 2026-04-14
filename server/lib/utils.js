@@ -101,6 +101,8 @@ const resolveUserNames = async (supabase, userIds) => {
             .in('id', unique);
         if (!error && data) {
             for (const u of data) nameMap.set(u.id, u.name || 'Usuario');
+        } else if (error) {
+            console.error('[resolveUserNames] Supabase error:', error.message, '| IDs queried:', unique);
         }
     } catch (_) {}
     return nameMap;

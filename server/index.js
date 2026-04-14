@@ -108,6 +108,7 @@ app.use('/api', clinicalRouter);
 app.use('/api/finance', financeRouter);
 app.use('/api/payments', financeRouter);
 app.use('/api/invoices', financeRouter);
+app.use('/api', financeRouter);
 app.use('/api/services', servicesRouter);
 app.use('/api/fix-services', servicesRouter);
 app.use('/api/whatsapp', whatsappRouter);

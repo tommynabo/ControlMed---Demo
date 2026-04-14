@@ -3,6 +3,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { prisma, getSupabase } = require('../lib/db');
 const financeService = require('../services/financeService');
+const budgetService = require('../services/budgetService');
 const { logAudit } = require('../lib/audit');
 const { resolveUserNames } = require('../lib/utils');
 
@@ -112,22 +113,37 @@ router.get('/patients/:patientId/treatments', async (req, res) => {
 
         const { data, error } = await supabase
             .from('PatientTreatment')
-            .select('*, service:ServiceCatalog(*)')
+            .select('*')
             .eq('patientId', req.params.patientId)
             .order('createdAt', { ascending: false });
 
         if (error) throw error;
 
-        // Enrich with user names (graceful fallback)
         const rows = data || [];
-        let enriched = rows;
+
+        // Enrich with user names (graceful fallback)
+        let nameMap = new Map();
         try {
             const userIds = rows.map(t => t.updated_by).filter(Boolean);
-            const nameMap = await resolveUserNames(supabase, userIds);
-            enriched = rows.map(t => ({ ...t, updated_by_name: t.updated_by ? (nameMap.get(t.updated_by) || null) : null }));
+            nameMap = await resolveUserNames(supabase, userIds);
         } catch (_) {}
 
-        res.json(enriched);
+        const mapped = rows.map(t => ({
+            id: t.id,
+            patientId: t.patientId,
+            serviceId: t.serviceId,
+            serviceName: t.serviceName || 'Tratamiento',
+            toothId: t.toothId,
+            price: t.price || t.customPrice || 0,
+            customPrice: t.customPrice,
+            status: t.status || 'PENDIENTE',
+            notes: t.notes,
+            createdAt: t.createdAt,
+            updated_by: t.updated_by,
+            updated_by_name: t.updated_by ? (nameMap.get(t.updated_by) || null) : null,
+        }));
+
+        res.json(mapped);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -177,6 +193,142 @@ router.delete('/patients/:patientId/treatments/:id', async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+router.post('/patients/:patientId/treatments/batch', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { treatments } = req.body;
+        if (!treatments || !Array.isArray(treatments)) {
+            return res.status(400).json({ error: 'treatments array is required' });
+        }
+
+        const toInsert = treatments.map(t => ({
+            id: crypto.randomUUID(),
+            patientId: req.params.patientId,
+            serviceId: (t.serviceId && !t.serviceId.toString().startsWith('srv-')) ? t.serviceId : null,
+            serviceName: t.serviceName || 'Tratamiento',
+            toothId: t.toothId || null,
+            price: Number(t.price) || Number(t.customPrice) || 0,
+            customPrice: Number(t.customPrice) || Number(t.price) || null,
+            status: t.status || 'PENDIENTE',
+            notes: t.notes || null,
+            createdAt: new Date().toISOString(),
+            updated_by: req.user?.id || null,
+        }));
+
+        const { data, error } = await supabase
+            .from('PatientTreatment')
+            .insert(toInsert)
+            .select();
+
+        if (error) {
+            console.error('❌ Error creating batch treatments:', JSON.stringify(error, null, 2));
+            return res.status(500).json({ error: `DB Error: ${error.message} - ${error.details || ''}` });
+        }
+
+        // Fire-and-forget clinical history record
+        try {
+            const summary = data.map(t => t.serviceName + (t.toothId ? ` (Diente ${t.toothId})` : '')).join(', ');
+            await supabase.from('ClinicalRecord').insert([{
+                id: crypto.randomUUID(),
+                patientId: req.params.patientId,
+                date: new Date().toISOString(),
+                text: JSON.stringify({
+                    treatment: 'Planificación de Tratamientos',
+                    observation: `Se han añadido ${data.length} tratamientos: ${summary}`,
+                    specialization: 'Odontología',
+                    price: data.reduce((sum, t) => sum + (t.price || 0), 0),
+                }),
+                authorId: req.user?.id || 'system',
+                updated_by: req.user?.id || null,
+            }]);
+        } catch (_) {}
+
+        res.json(data);
+    } catch (e) {
+        console.error('❌ Batch treatments error:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── BUDGETS ─────────────────────────────────────────────────────────────────
+router.get('/patients/:patientId/budgets', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const data = await budgetService.getBudgetsByPatient(supabase, req.params.patientId);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/patients/:patientId/budgets', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { items, title } = req.body;
+        const data = await budgetService.createBudget(supabase, req.params.patientId, items, title);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/patients/:patientId/budgets/draft/items', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const data = await budgetService.addItemToDraftBudget(supabase, req.params.patientId, req.body);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/budgets/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { items, title } = req.body;
+        const data = await budgetService.updateBudget(supabase, req.params.id, items, title);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/budgets/:id/status', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { status } = req.body;
+        const data = await budgetService.updateBudgetStatus(supabase, req.params.id, status);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/budgets/:id/convert', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const data = await budgetService.convertBudgetToInvoice(supabase, req.params.id);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/budgets/items/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const data = await budgetService.deleteItem(supabase, req.params.id);
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/budgets/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { error } = await supabase.from('Budget').update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ─── CLINICAL RECORDS ─────────────────────────────────────────────────────────
@@ -316,19 +468,6 @@ router.put('/clinical-records/:recordId/reassign-doctor', async (req, res) => {
         res.json({ success: true, message: `Registro clínico de ${record.patient.name} actualizado`, record });
     } catch (e) {
         console.error('Error reassigning doctor:', e);
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// ─── BUDGETS ──────────────────────────────────────────────────────────────────
-router.delete('/budgets/:id', async (req, res) => {
-    try {
-        let supabase;
-        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-        const { error } = await supabase.from('Budget').update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
-        if (error) throw error;
-        res.json({ success: true });
-    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
