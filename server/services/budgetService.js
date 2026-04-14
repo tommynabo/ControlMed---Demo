@@ -31,7 +31,7 @@ const createBudget = async (supabase, patientId, items = [], title = "", userId 
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,
             face: item.face || null,
-            treatmentId: (item.treatmentId && !item.treatmentId.startsWith('temp-')) ? item.treatmentId : null
+            treatmentId: null  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
         }));
 
         const { error: itemsError } = await supabase
@@ -91,7 +91,7 @@ const getBudgetsByPatient = async (supabase, patientId) => {
         .from('Budget')
         .select('*, items:BudgetLineItem(*)')
         .eq('patientId', patientId)
-        .order('createdAt', { ascending: false });
+        .order('date', { ascending: false });
 
     if (error) throw new Error(error.message);
     return data;
@@ -256,7 +256,7 @@ const updateBudget = async (supabase, budgetId, items = [], title = "", userId =
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,
             face: item.face || null,
-            treatmentId: (item.treatmentId && !item.treatmentId.startsWith('temp-')) ? item.treatmentId : null
+            treatmentId: null  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
         }));
 
         const { error: itemsError } = await supabase.from('BudgetLineItem').insert(lineItems);

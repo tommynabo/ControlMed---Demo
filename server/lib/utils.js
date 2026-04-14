@@ -1,5 +1,7 @@
 'use strict';
 
+const { prisma } = require('./db');
+
 /**
  * UUID validation helper
  */
@@ -90,21 +92,19 @@ const calculateWalletBalance = async (supabase, patientId) => {
  * Returns a Map<userId, displayName>. Unknown IDs get 'Usuario'.
  * Never throws — returns empty map on error.
  */
-const resolveUserNames = async (supabase, userIds) => {
+const resolveUserNames = async (_supabase, userIds) => {
     const nameMap = new Map();
     try {
         const unique = [...new Set((userIds || []).filter(Boolean))];
         if (unique.length === 0) return nameMap;
-        const { data, error } = await supabase
-            .from('User')
-            .select('id, name')
-            .in('id', unique);
-        if (!error && data) {
-            for (const u of data) nameMap.set(u.id, u.name || 'Usuario');
-        } else if (error) {
-            console.error('[resolveUserNames] Supabase error:', error.message, '| IDs queried:', unique);
-        }
-    } catch (_) {}
+        const users = await prisma.user.findMany({
+            where: { id: { in: unique } },
+            select: { id: true, name: true },
+        });
+        for (const u of users) nameMap.set(u.id, u.name || 'Usuario');
+    } catch (err) {
+        console.error('[resolveUserNames] Prisma error:', err.message);
+    }
     return nameMap;
 };
 
