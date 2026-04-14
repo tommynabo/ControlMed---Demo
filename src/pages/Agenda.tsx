@@ -1123,12 +1123,12 @@ const Agenda: React.FC = () => {
                 {/* STICKY HEADER CONTAINER */}
                 <div 
                     ref={headerContainerRef}
-                    className="sticky top-0 z-[20] bg-white overflow-hidden mb-4"
+                    className="sticky top-0 z-[20] bg-white overflow-hidden mb-4 -mt-8 pt-8 border-b-[3px] border-slate-800"
                 >
                     <div className="flex w-max min-w-full">
                         {/* TIME COLUMN HEADER - Empty space for layout match */}
                         <div className="w-16 flex-shrink-0 pr-4 bg-white">
-                            <div className="h-[48px] flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
+                            <div className="h-[48px] flex items-end pb-3 ml-2 font-black text-xs text-slate-800">Hora</div>
                         </div>
                         
                         {/* DOCTORS / DAYS HEADER */}
@@ -1137,19 +1137,19 @@ const Agenda: React.FC = () => {
                                 {viewMode === 'daily' ? (
                                     selectedDoctorId === 'all' ? (
                                         doctorsOnDuty.map(doc => (
-                                            <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide text-xs flex items-center justify-center px-3 whitespace-nowrap ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
+                                            <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-3 font-black uppercase tracking-wide text-xs flex items-end justify-center px-3 whitespace-nowrap ${isDateClosedForDoctor(currentDate, doc.id) ? 'text-red-400 line-through' : 'text-slate-900'
                                                 }`}>
                                                 {doc.name}
                                             </div>
                                         ))
                                     ) : (
-                                        <div className="flex-1 min-w-[180px] text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase flex items-center justify-center">
+                                        <div className="flex-1 min-w-[180px] text-center pb-3 font-black text-slate-900 uppercase flex items-end justify-center">
                                             {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
                                         </div>
                                     )
                                 ) : (
                                     Array.from({ length: 7 }).map((_, i) => (
-                                        <div key={i} className="min-w-[140px] flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
+                                        <div key={i} className="min-w-[140px] flex-1 text-center pb-3 font-black text-slate-400 uppercase text-xs flex items-end justify-center">
                                             {getDayName(currentDate, i)}
                                         </div>
                                     ))
@@ -1162,7 +1162,7 @@ const Agenda: React.FC = () => {
                 <div 
                     ref={gridContainerRef}
                     onScroll={handleGridScroll}
-                    className="overflow-x-auto pb-4 pt-3 custom-scrollbar"
+                    className="overflow-x-auto pb-4 pt-2 custom-scrollbar"
                 >
                     <div className="flex">
                         {/* TIME COLUMN - Always visible */}
