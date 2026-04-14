@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye } from 'lucide-react';
+import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye, ShieldCheck, ChevronDown } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { DocumentTemplate } from '../../types';
 import { api } from '../services/api';
@@ -33,7 +33,7 @@ const Settings: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const tabFromUrl = searchParams.get('tab') as any;
 
-    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users'>(tabFromUrl || 'templates');
+    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users' | 'audit'>(tabFromUrl || 'templates');
     // Ref so URL→State effect can read latest tab without being re-triggered by it
     const settingsTabRef = React.useRef(settingsTab);
     settingsTabRef.current = settingsTab;
@@ -83,6 +83,36 @@ const Settings: React.FC = () => {
         base_price: 0
     });
 
+    // Audit log state (ADMIN only)
+    const [auditLogs, setAuditLogs] = useState<any[]>([]);
+    const [auditTotal, setAuditTotal] = useState(0);
+    const [auditLoading, setAuditLoading] = useState(false);
+    const [auditFilter, setAuditFilter] = useState({ resource_type: '', action: '', date_from: '', date_to: '' });
+    const [auditOffset, setAuditOffset] = useState(0);
+    const AUDIT_LIMIT = 50;
+
+    const loadAuditLogs = async (offset = 0, filter = auditFilter) => {
+        setAuditLoading(true);
+        try {
+            const result = await api.audit.getLogs({
+                ...filter,
+                resource_type: filter.resource_type || undefined,
+                action: filter.action || undefined,
+                date_from: filter.date_from || undefined,
+                date_to: filter.date_to || undefined,
+                limit: AUDIT_LIMIT,
+                offset,
+            });
+            setAuditLogs(result.data);
+            setAuditTotal(result.total);
+            setAuditOffset(offset);
+        } catch (e) {
+            console.error('Error loading audit logs:', e);
+        } finally {
+            setAuditLoading(false);
+        }
+    };
+
     // WhatsApp State
     const [waStatus, setWaStatus] = useState<{ status: string; qrCode: string | null }>({ status: 'DISCONNECTED', qrCode: null });
     const [waTemplates, setWaTemplates] = useState<any[]>([]);
@@ -114,6 +144,8 @@ const Settings: React.FC = () => {
             loadTemplates();
         } else if (settingsTab === 'services') {
             loadServices();
+        } else if (settingsTab === 'audit') {
+            loadAuditLogs(0, auditFilter);
         }
     }, [settingsTab, waActiveTab]);
 
@@ -311,6 +343,11 @@ const Settings: React.FC = () => {
                     <button onClick={() => setSettingsTab('users')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'users' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <UsersIcon size={14} /> Usuarios
                     </button>
+                    {currentUserRole === 'ADMIN' && (
+                    <button onClick={() => setSettingsTab('audit')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'audit' ? 'bg-rose-50 text-rose-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <ShieldCheck size={14} /> Auditoría
+                    </button>
+                    )}
                 </div>
                 )}
 
@@ -967,6 +1004,170 @@ const Settings: React.FC = () => {
 
                 {/* USERS SECTION */}
                 {settingsTab === 'users' && !isReception && <Users />}
+
+                {/* ─── AUDIT LOG SECTION (ADMIN only) ─────────────────────────────── */}
+                {settingsTab === 'audit' && currentUserRole === 'ADMIN' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                        <div>
+                            <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+                                <ShieldCheck className="text-rose-500" size={28} />
+                                Log de Auditoría
+                            </h3>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
+                                Registro completo de acciones sobre citas, pacientes, historiales, tratamientos y pagos
+                            </p>
+                        </div>
+
+                        {/* Filters */}
+                        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Módulo</label>
+                                    <select
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 outline-none"
+                                        value={auditFilter.resource_type}
+                                        onChange={e => setAuditFilter(f => ({ ...f, resource_type: e.target.value }))}
+                                    >
+                                        <option value="">Todos</option>
+                                        <option value="appointments">Citas</option>
+                                        <option value="patients">Pacientes</option>
+                                        <option value="clinical_records">Historiales Clínicos</option>
+                                        <option value="treatments">Tratamientos</option>
+                                        <option value="clinical_plans">Planes de Tratamiento</option>
+                                        <option value="payments">Pagos</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Acción</label>
+                                    <select
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 outline-none"
+                                        value={auditFilter.action}
+                                        onChange={e => setAuditFilter(f => ({ ...f, action: e.target.value }))}
+                                    >
+                                        <option value="">Todas</option>
+                                        <option value="CREATE">Creación</option>
+                                        <option value="UPDATE">Modificación</option>
+                                        <option value="DELETE">Eliminación</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Desde</label>
+                                    <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 outline-none"
+                                        value={auditFilter.date_from}
+                                        onChange={e => setAuditFilter(f => ({ ...f, date_from: e.target.value }))} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Hasta</label>
+                                    <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-600 outline-none"
+                                        value={auditFilter.date_to}
+                                        onChange={e => setAuditFilter(f => ({ ...f, date_to: e.target.value }))} />
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => { setAuditOffset(0); loadAuditLogs(0, auditFilter); }}
+                                    className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase"
+                                >
+                                    <Filter size={13} /> Filtrar
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        const cleared = { resource_type: '', action: '', date_from: '', date_to: '' };
+                                        setAuditFilter(cleared);
+                                        loadAuditLogs(0, cleared);
+                                    }}
+                                    className="flex items-center gap-2 bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-slate-200"
+                                >
+                                    <X size={13} /> Limpiar
+                                </button>
+                                <button onClick={() => loadAuditLogs(auditOffset, auditFilter)} className="flex items-center gap-2 bg-slate-100 text-slate-500 px-4 py-2 rounded-xl text-xs font-bold uppercase hover:bg-slate-200">
+                                    <RefreshCw size={13} className={auditLoading ? 'animate-spin' : ''} /> Actualizar
+                                </button>
+                                <span className="ml-auto text-xs text-slate-400 self-center font-bold">{auditTotal} resultado{auditTotal !== 1 ? 's' : ''}</span>
+                            </div>
+                        </div>
+
+                        {/* Table */}
+                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                            {auditLoading ? (
+                                <div className="flex items-center justify-center py-16 text-slate-400">
+                                    <RefreshCw className="animate-spin mr-2" size={18} /> Cargando...
+                                </div>
+                            ) : auditLogs.length === 0 ? (
+                                <div className="text-center py-16 text-slate-400 text-sm font-bold">No hay registros de auditoría para los filtros seleccionados.</div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs">
+                                        <thead>
+                                            <tr className="bg-slate-50 border-b border-slate-200">
+                                                <th className="px-4 py-3 text-left font-black uppercase text-slate-400 tracking-wide">Fecha y Hora</th>
+                                                <th className="px-4 py-3 text-left font-black uppercase text-slate-400 tracking-wide">Usuario</th>
+                                                <th className="px-4 py-3 text-left font-black uppercase text-slate-400 tracking-wide">Rol</th>
+                                                <th className="px-4 py-3 text-left font-black uppercase text-slate-400 tracking-wide">Acción</th>
+                                                <th className="px-4 py-3 text-left font-black uppercase text-slate-400 tracking-wide">Módulo</th>
+                                                <th className="px-4 py-3 text-left font-black uppercase text-slate-400 tracking-wide">ID Registro</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {auditLogs.map((log: any) => {
+                                                const actionColors: Record<string, string> = {
+                                                    CREATE: 'bg-emerald-100 text-emerald-700',
+                                                    UPDATE: 'bg-blue-100 text-blue-700',
+                                                    DELETE: 'bg-red-100 text-red-700',
+                                                    LOGIN:  'bg-slate-100 text-slate-600',
+                                                    LOGOUT: 'bg-slate-100 text-slate-600',
+                                                };
+                                                const moduleLabels: Record<string, string> = {
+                                                    appointments:    'Citas',
+                                                    patients:        'Pacientes',
+                                                    clinical_records:'Historiales',
+                                                    treatments:      'Tratamientos',
+                                                    clinical_plans:  'Planes',
+                                                    payments:        'Pagos',
+                                                };
+                                                return (
+                                                    <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                                        <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                                                            {new Date(log.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                            {' '}<span className="text-slate-400">{new Date(log.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        </td>
+                                                        <td className="px-4 py-3 font-bold text-slate-700">{log.user_name || '—'}</td>
+                                                        <td className="px-4 py-3 text-slate-500">{log.user_role || '—'}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`px-2 py-1 rounded-full font-black text-[10px] uppercase ${actionColors[log.action] || 'bg-slate-100 text-slate-500'}`}>
+                                                                {log.action}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-slate-600 font-bold">{moduleLabels[log.resource_type] || log.resource_type}</td>
+                                                        <td className="px-4 py-3 text-slate-400 font-mono text-[10px] truncate max-w-[120px]">{log.resource_id || '—'}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            {/* Pagination */}
+                            {auditTotal > AUDIT_LIMIT && (
+                                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+                                    <button
+                                        disabled={auditOffset === 0}
+                                        onClick={() => loadAuditLogs(Math.max(0, auditOffset - AUDIT_LIMIT), auditFilter)}
+                                        className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-500 text-xs font-bold disabled:opacity-40 hover:bg-slate-200"
+                                    >← Anterior</button>
+                                    <span className="text-xs text-slate-400 font-bold">
+                                        {auditOffset + 1}–{Math.min(auditOffset + AUDIT_LIMIT, auditTotal)} de {auditTotal}
+                                    </span>
+                                    <button
+                                        disabled={auditOffset + AUDIT_LIMIT >= auditTotal}
+                                        onClick={() => loadAuditLogs(auditOffset + AUDIT_LIMIT, auditFilter)}
+                                        className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-500 text-xs font-bold disabled:opacity-40 hover:bg-slate-200"
+                                    >Siguiente →</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </div >
     );

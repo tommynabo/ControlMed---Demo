@@ -3,6 +3,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { prisma, getSupabase } = require('../lib/db');
 const { normalizePatient, calculateWalletBalance } = require('../lib/utils');
+const { logAudit } = require('../lib/audit');
 
 const router = express.Router();
 
@@ -118,9 +119,12 @@ router.post('/', async (req, res) => {
         }
 
         res.json(normalizePatient(created));
-    } catch (e) {
-        console.error('Error creating patient:', e);
-        if (e.code === 'P2002') {
+
+        // Audit log (after responding so it doesn't delay the client)
+        try {
+            const supabase = getSupabase();
+            logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'patients', resourceId: created.id, newValues: { name: created.name, historyNumber: created.historyNumber }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
+        } catch (_) {}
             const target = e.meta?.target || [];
             if (target.includes('dni')) return res.status(400).json({ error: 'DNI ya existe.' });
             if (target.includes('historyNumber')) return res.status(400).json({ error: 'Número de historial ya existe.' });
@@ -165,9 +169,11 @@ router.put('/:id', async (req, res) => {
         }
 
         res.json(normalizePatient(data));
-    } catch (e) {
-        console.error('Error updating patient:', e);
-        if (e.code === 'P2002' && e.meta?.target?.includes('dni')) {
+
+        // Audit log (after responding)
+        try {
+            logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'UPDATE', resourceType: 'patients', resourceId: id, newValues: sanitized, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
+        } catch (_) {}
             return res.status(400).json({ error: 'DNI ya existe.' });
         }
         res.status(500).json({ error: e.message });

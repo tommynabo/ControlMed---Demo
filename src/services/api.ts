@@ -1346,6 +1346,31 @@ export const api = {
             return res.json();
         },
         getDownloadUrl: (filename: string) => `${API_URL}/templates/file/${filename}`,
+    },
+
+    audit: {
+        getLogs: async (params?: {
+            resource_type?: string;
+            user_id?: string;
+            action?: string;
+            date_from?: string;
+            date_to?: string;
+            limit?: number;
+            offset?: number;
+        }): Promise<{ data: any[]; total: number; limit: number; offset: number }> => {
+            const qs = new URLSearchParams();
+            if (params?.resource_type) qs.set('resource_type', params.resource_type);
+            if (params?.user_id)       qs.set('user_id',       params.user_id);
+            if (params?.action)        qs.set('action',        params.action);
+            if (params?.date_from)     qs.set('date_from',     params.date_from);
+            if (params?.date_to)       qs.set('date_to',       params.date_to);
+            if (params?.limit  != null) qs.set('limit',  String(params.limit));
+            if (params?.offset != null) qs.set('offset', String(params.offset));
+            const url = `${API_URL}/audit/logs${qs.toString() ? '?' + qs.toString() : ''}`;
+            const res = await fetch(url, { headers });
+            if (!res.ok) throw new Error('Error al cargar el log de auditoría');
+            return res.json();
+        },
     }
 };
 

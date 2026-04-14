@@ -3,6 +3,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { prisma, getSupabase } = require('../lib/db');
 const financeService = require('../services/financeService');
+const { logAudit } = require('../lib/audit');
 
 const router = express.Router();
 
@@ -129,6 +130,7 @@ router.post('/patients/:patientId/treatments', async (req, res) => {
         const payload = { ...req.body, id: crypto.randomUUID(), patientId: req.params.patientId };
         const { data, error } = await supabase.from('PatientTreatment').insert([payload]).select().single();
         if (error) throw error;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'treatments', resourceId: data.id, newValues: data, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.status(201).json(data);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -140,9 +142,11 @@ router.put('/patients/:patientId/treatments/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
+        const { data: oldTreatment } = await supabase.from('PatientTreatment').select('*').eq('id', req.params.id).single();
         const { data, error } = await supabase
             .from('PatientTreatment').update(req.body).eq('id', req.params.id).select().single();
         if (error) throw error;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'UPDATE', resourceType: 'treatments', resourceId: req.params.id, oldValues: oldTreatment || undefined, newValues: data, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.json(data);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -154,8 +158,10 @@ router.delete('/patients/:patientId/treatments/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
+        const { data: oldT } = await supabase.from('PatientTreatment').select('*').eq('id', req.params.id).single();
         const { error } = await supabase.from('PatientTreatment').delete().eq('id', req.params.id);
         if (error) throw error;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'DELETE', resourceType: 'treatments', resourceId: req.params.id, oldValues: oldT || undefined, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -223,6 +229,7 @@ router.post('/clinical-records', async (req, res) => {
             .single();
 
         if (error) return res.status(500).json({ error: error.message });
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'clinical_records', resourceId: data.id, newValues: payload, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.status(201).json({ ...data, clinicalData: payload, specialization: payload.specialization });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -257,6 +264,7 @@ router.put('/clinical-records/:id', async (req, res) => {
             .eq('id', id).select().single();
 
         if (error) return res.status(500).json({ error: error.message });
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'UPDATE', resourceType: 'clinical_records', resourceId: id, oldValues: parsed, newValues: updated, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.json({ ...data, clinicalData: updated, specialization: updated.specialization });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -267,8 +275,10 @@ router.delete('/clinical-records/:id', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { data: oldCR } = await supabase.from('ClinicalRecord').select('*').eq('id', req.params.id).single();
         const { error } = await supabase.from('ClinicalRecord').update({ deleted_at: new Date().toISOString() }).eq('id', req.params.id);
         if (error) throw error;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'DELETE', resourceType: 'clinical_records', resourceId: req.params.id, oldValues: oldCR || undefined, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -392,6 +402,7 @@ router.post('/clinical-plans', async (req, res) => {
             .select().single();
 
         if (planError) throw planError;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'clinical_plans', resourceId: planId, newValues: { patientId, name }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
 
         if (steps && steps.length > 0) {
             const stepsToInsert = steps.map((s, idx) => ({
@@ -425,6 +436,7 @@ router.put('/clinical-plans/:id', async (req, res) => {
             .from('clinical_treatment_plans').update(updates).eq('id', req.params.id)
             .select('*, steps:clinical_treatment_steps(*)').single();
         if (error) throw error;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'UPDATE', resourceType: 'clinical_plans', resourceId: req.params.id, newValues: updates, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.json(data);
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -436,6 +448,7 @@ router.delete('/clinical-plans/:id', async (req, res) => {
         const supabase = getSupabase();
         const { error } = await supabase.from('clinical_treatment_plans').delete().eq('id', req.params.id);
         if (error) throw error;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'DELETE', resourceType: 'clinical_plans', resourceId: req.params.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });

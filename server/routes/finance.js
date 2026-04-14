@@ -7,6 +7,7 @@ const quipuService = require('../services/quipuService');
 const invoiceService = require('../services/invoiceService');
 const budgetService = require('../services/budgetService');
 const { calculateWalletBalance } = require('../lib/utils');
+const { logAudit } = require('../lib/audit');
 
 const router = express.Router();
 
@@ -314,8 +315,12 @@ router.post('/payments/create', async (req, res) => {
         });
 
         res.status(200).json({ success: true, ...result });
-    } catch (e) {
-        console.error('❌ Payment creation error:', e);
+
+        // Audit log
+        try {
+            const supabase = getSupabase();
+            logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'payments', resourceId: result.payment?.id, newValues: { patientId, amount: numericAmount, method, type, invoiceNumber: result.invoice?.invoiceNumber }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
+        } catch (_) {}
         res.status(500).json({ error: e.message || 'Unknown transaction error' });
     }
 });

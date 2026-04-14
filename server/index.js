@@ -31,6 +31,7 @@ const cronRouter = require('./routes/cron');
 const aiRouter = require('./routes/ai');
 const agendaRouter = require('./routes/agenda');
 const systemUsersRouter = require('./routes/system-users');
+const auditRouter = require('./routes/audit');
 
 const { errorHandler } = require('./lib/errors');
 
@@ -113,6 +114,7 @@ app.use('/api/whatsapp', whatsappRouter);
 app.use('/api/ai', aiLimiter, aiRouter);
 app.use('/api', agendaRouter);
 app.use('/api/system-users', systemUsersRouter);
+app.use('/api/audit', auditRouter);
 
 // --- Initialization ---
 whatsappService.initialize();
