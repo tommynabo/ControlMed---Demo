@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X, Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, Loader2, UserPlus } from 'lucide-react';
 import NewPatientModal from '../components/NewPatientModal';
 import { useNavigate } from 'react-router-dom';
@@ -90,6 +90,16 @@ const Agenda: React.FC = () => {
     // Feature 6: Mini calendar
     const [showMiniCal, setShowMiniCal] = useState(false);
     const [miniCalMonth, setMiniCalMonth] = useState(new Date());
+
+    // Sticky Header Refs
+    const headerContainerRef = useRef<HTMLDivElement>(null);
+    const gridContainerRef = useRef<HTMLDivElement>(null);
+
+    const handleGridScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        if (headerContainerRef.current) {
+            headerContainerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+        }
+    };
 
     // Feature 7: Visit details editing
     const [bookingVisitDetails, setBookingVisitDetails] = useState('');
@@ -1108,12 +1118,55 @@ const Agenda: React.FC = () => {
             )}
 
             {/* CALENDAR GRID (COLUMN BASED) */}
-            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden relative">
-                <div className="overflow-x-auto pb-4">
+            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 relative">
+                
+                {/* STICKY HEADER CONTAINER */}
+                <div 
+                    ref={headerContainerRef}
+                    className="sticky top-[64px] z-[20] bg-white overflow-hidden mb-4"
+                >
+                    <div className="flex w-max min-w-full">
+                        {/* TIME COLUMN HEADER - Empty space for layout match */}
+                        <div className="w-16 flex-shrink-0 pr-4 bg-white">
+                            <div className="h-[48px] flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
+                        </div>
+                        
+                        {/* DOCTORS / DAYS HEADER */}
+                        <div className="flex-1 overflow-visible">
+                            <div className="flex h-[48px] min-w-max">
+                                {viewMode === 'daily' ? (
+                                    selectedDoctorId === 'all' ? (
+                                        doctorsOnDuty.map(doc => (
+                                            <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide text-xs flex items-center justify-center px-3 whitespace-nowrap ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
+                                                }`}>
+                                                {doc.name}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="flex-1 min-w-[180px] text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase flex items-center justify-center">
+                                            {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
+                                        </div>
+                                    )
+                                ) : (
+                                    Array.from({ length: 7 }).map((_, i) => (
+                                        <div key={i} className="min-w-[140px] flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
+                                            {getDayName(currentDate, i)}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div 
+                    ref={gridContainerRef}
+                    onScroll={handleGridScroll}
+                    className="overflow-x-auto pb-4 custom-scrollbar"
+                >
                     <div className="flex">
                         {/* TIME COLUMN - Always visible */}
                         <div className="w-16 flex-shrink-0 pr-4 sticky left-0 bg-white z-[5] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                            <div className="h-[48px] mb-4 flex items-end pb-2 ml-2 font-bold text-xs text-slate-400">Hora</div>
                             {TIME_SLOTS.map((time, idx) => {
                                 const hour = parseInt(time.split(':')[0], 10);
                                 // Render on the start of each hour (every 12 slots of 5 mins)
@@ -1133,29 +1186,7 @@ const Agenda: React.FC = () => {
                         {/* SCHEDULER GRID */}
                         <div className="flex-1 relative overflow-visible">
                             <div className="w-max min-w-full relative">
-                                {/* HEADERS */}
-                                <div className="flex h-[48px] mb-4 min-w-max">
-                                    {viewMode === 'daily' ? (
-                                        selectedDoctorId === 'all' ? (
-                                            doctorsOnDuty.map(doc => (
-                                                <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-2 border-b-2 font-black uppercase tracking-wide text-xs flex items-center justify-center px-3 whitespace-nowrap ${isDateClosedForDoctor(currentDate, doc.id) ? 'border-red-300 text-red-400 line-through' : 'border-slate-100 text-slate-900'
-                                                    }`}>
-                                                    {doc.name}
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="flex-1 text-center pb-2 border-b-2 border-blue-500 font-black text-slate-900 uppercase flex items-center justify-center">
-                                                {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
-                                            </div>
-                                        )
-                                    ) : (
-                                        Array.from({ length: 7 }).map((_, i) => (
-                                            <div key={i} className="min-w-[140px] flex-1 text-center pb-2 border-b-2 border-slate-100 font-black text-slate-400 uppercase text-xs flex items-center justify-center">
-                                                {getDayName(currentDate, i)}
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
+                                {/* HEADERS ARE NOW ABOVE */}
 
                                 {/* TIME GRID BACKGROUND & EVENTS LAYER */}
                                 <div className="relative">
