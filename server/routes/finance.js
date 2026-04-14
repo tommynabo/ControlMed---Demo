@@ -377,8 +377,6 @@ router.post('/payments/transfer', async (req, res) => {
             }
         }
 
-        await supabase.from('ClinicalRecord').insert([{ id: crypto.randomUUID(), patientId, date: new Date().toISOString(), text: JSON.stringify({ treatment: 'Asignación de Saldo', observation: `Saldo de ${amount}€ asignado a: ${treatmentName || 'Tratamiento'}`, specialization: 'Administración' }), authorId: 'system' }]);
-
         res.json({ success: true, transfer, message: 'Saldo transferido correctamente. No se ha generado nueva factura.' });
     } catch (e) {
         console.error('❌ Transfer error:', e);
@@ -466,6 +464,59 @@ router.delete('/expenses/:id', async (req, res) => {
         const { error } = await supabase.from('expenses').delete().eq('id', req.params.id);
         if (error) throw error;
         res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── CAJA: Patient cash history ───────────────────────────────────────────────
+router.get('/caja/:patientId', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { patientId } = req.params;
+
+        const { data: payments, error: pmtErr } = await supabase
+            .from('Payment')
+            .select('*')
+            .eq('patientId', patientId)
+            .order('createdAt', { ascending: false });
+
+        if (pmtErr) return res.status(500).json({ error: pmtErr.message });
+
+        const doctorIds = [...new Set((payments || []).map(p => p.doctorId).filter(Boolean))];
+        const doctorMap = {};
+        if (doctorIds.length > 0) {
+            const { data: doctors } = await supabase.from('Doctor').select('id, name').in('id', doctorIds);
+            (doctors || []).forEach(d => { doctorMap[d.id] = d.name; });
+        }
+
+        const { data: invoices } = await supabase
+            .from('Invoice')
+            .select('id, invoiceNumber, amount, date, status, paymentMethod, concept, relatedPaymentId')
+            .eq('patientId', patientId)
+            .order('date', { ascending: false });
+
+        const invoiceByPaymentId = {};
+        (invoices || []).forEach(inv => {
+            if (inv.relatedPaymentId) invoiceByPaymentId[inv.relatedPaymentId] = inv;
+        });
+
+        const result = (payments || []).map(p => ({
+            id: p.id,
+            fecha: p.createdAt,
+            doctorId: p.doctorId || null,
+            doctorName: p.doctorId ? (doctorMap[p.doctorId] || 'Doctor no asignado') : 'Administración',
+            concepto: p.notes || 'Pago',
+            importe: p.amount,
+            metodo: p.method,
+            tipo: p.type,
+            facturaNumero: invoiceByPaymentId[p.id]?.invoiceNumber || null,
+            facturaEstado: invoiceByPaymentId[p.id]?.status || null,
+        }));
+
+        res.json(result);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

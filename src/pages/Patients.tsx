@@ -204,6 +204,16 @@ const Patients: React.FC = () => {
         }
     }, [selectedPatient, patientTab]);
 
+    // Caja State
+    const [cajaData, setCajaData] = useState<any[]>([]);
+    React.useEffect(() => {
+        if (selectedPatient && patientTab === 'caja') {
+            (api as any).caja.getByPatient(selectedPatient.id)
+                .then(setCajaData)
+                .catch((err: any) => console.error("Failed to load caja data", err));
+        }
+    }, [selectedPatient, patientTab]);
+
     // Modal & Form States
     const [isNewPatientModalOpen, setIsNewPatientModalOpen] = useState(false);
     const [isEditingPatient, setIsEditingPatient] = useState(false);
@@ -1077,7 +1087,7 @@ const Patients: React.FC = () => {
                     {/* HEADER SIDEBAR (Mobile/Desktop split logic from App.tsx simplified here) */}
                     <div className="px-8 pt-8 pb-4 border-b border-slate-100 flex items-center justify-between bg-white/80 backdrop-blur-xl sticky top-0 z-10">
                         <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                            {['ficha', 'history', 'visitas', 'plan', 'whatsapp', 'odontogram', 'treatments', 'prescriptions', 'billing', 'docs', 'budget'].map(tab => (
+                            {['ficha', 'history', 'caja', 'visitas', 'plan', 'whatsapp', 'odontogram', 'treatments', 'prescriptions', 'billing', 'docs', 'budget'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setPatientTab(tab)}
@@ -1088,7 +1098,7 @@ const Patients: React.FC = () => {
                                         }
 `}
                                 >
-                                    {tab === 'history' ? 'Historial' : tab === 'visitas' ? 'Visitas' : tab === 'plan' ? 'Plan Tto' : tab === 'treatments' ? 'Tratamientos' : tab === 'prescriptions' ? 'Recetas' : tab === 'billing' ? 'Pagos' : tab === 'docs' ? 'Docs' : tab === 'budget' ? 'Pptos' : tab}
+                                    {tab === 'history' ? 'Historial' : tab === 'caja' ? 'Caja' : tab === 'visitas' ? 'Visitas' : tab === 'plan' ? 'Plan Tto' : tab === 'treatments' ? 'Tratamientos' : tab === 'prescriptions' ? 'Recetas' : tab === 'billing' ? 'Pagos' : tab === 'docs' ? 'Docs' : tab === 'budget' ? 'Pptos' : tab}
                                 </button>
                             ))}
                         </div>
@@ -1807,10 +1817,10 @@ const Patients: React.FC = () => {
                                         <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Texto</div>
                                         <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Acciones</div>
                                     </div>
-                                    {clinicalRecords.filter(r => r.patientId === selectedPatient.id).length === 0 ? (
+                                    {clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system').length === 0 ? (
                                         <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase">No hay historial clínico registrado</p></div>
                                     ) : (
-                                        clinicalRecords.filter(r => r.patientId === selectedPatient.id)
+                                        clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system')
                                             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                             .map((r, idx) => {
                                                 const dateObj = new Date(r.date);
@@ -1842,6 +1852,55 @@ const Patients: React.FC = () => {
                                                     </div>
                                                 );
                                             })
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* CAJA TAB */}
+                        {patientTab === 'caja' && (
+                            <div className="space-y-6 animate-in fade-in max-w-4xl mx-auto">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-3xl font-black text-slate-900 tracking-tight">Caja</h3>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                    <div className="grid border-b border-slate-200 bg-slate-50" style={{ gridTemplateColumns: '120px 90px 1fr 160px 110px 110px 110px' }}>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Fecha</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Hora</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Concepto</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Doctor</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Método</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Factura</div>
+                                        <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Importe</div>
+                                    </div>
+                                    {cajaData.length === 0 ? (
+                                        <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase">No hay movimientos de caja registrados</p></div>
+                                    ) : (
+                                        cajaData.map((entry, idx) => {
+                                            const dateObj = new Date(entry.fecha);
+                                            const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                                            const timeStr = dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                                            const metodoLabel: Record<string, string> = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', wallet: 'Monedero' };
+                                            return (
+                                                <div key={entry.id} className={`grid border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`} style={{ gridTemplateColumns: '120px 90px 1fr 160px 110px 110px 110px' }}>
+                                                    <div className="px-4 py-4 text-xs font-bold text-slate-700">{dateStr}</div>
+                                                    <div className="px-4 py-4 text-xs font-bold text-slate-600">{timeStr}</div>
+                                                    <div className="px-4 py-4 text-xs text-slate-700 leading-relaxed">{entry.concepto}</div>
+                                                    <div className="px-4 py-4 text-xs font-bold text-slate-700">{entry.doctorName}</div>
+                                                    <div className="px-4 py-4 text-xs text-slate-500">{metodoLabel[entry.metodo] || entry.metodo || '—'}</div>
+                                                    <div className="px-4 py-4 text-xs text-slate-500">{entry.facturaNumero || '—'}</div>
+                                                    <div className="px-4 py-4 text-xs font-black text-emerald-700 text-right">{entry.importe != null ? `${entry.importe}€` : '—'}</div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                    {cajaData.length > 0 && (
+                                        <div className="grid border-t-2 border-slate-200 bg-slate-50" style={{ gridTemplateColumns: '120px 90px 1fr 160px 110px 110px 110px' }}>
+                                            <div className="px-4 py-3 col-span-6 text-xs font-black uppercase text-slate-500 text-right">Total</div>
+                                            <div className="px-4 py-3 text-sm font-black text-emerald-700 text-right">
+                                                {cajaData.reduce((sum, e) => sum + (e.importe || 0), 0).toFixed(2)}€
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>

@@ -253,6 +253,14 @@ export const api = {
         }
     },
 
+    caja: {
+        getByPatient: async (patientId: string) => {
+            const res = await fetch(`${API_URL}/finance/caja/${patientId}`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch caja data');
+            return res.json();
+        }
+    },
+
     prescriptions: {
         create: async (data: any) => {
             const res = await fetch(`${API_URL}/prescriptions`, {
