@@ -660,8 +660,9 @@ const Agenda: React.FC = () => {
         try {
             setIsBooking(true);
             const createdAppt = await api.appointments.create(newAppt);
-            // Optimistic update: add immediately so it shows without waiting for refetch
-            addAppointment(createdAppt);
+            // Inject updated_by_name so it shows immediately without waiting for refetch
+            const enrichedAppt = { ...createdAppt, updated_by_name: (createdAppt as any).updated_by_name || currentUser?.name || null };
+            addAppointment(enrichedAppt);
             // Force cache invalidation so the agenda refetches from server
             await refreshAppointments();
             
@@ -2064,6 +2065,13 @@ const Agenda: React.FC = () => {
                                     onChange={e => setBookingVisitDetails(e.target.value)}
                                 />
                             </div>
+
+                            {/* Última modificación */}
+                            {selectedAppt && (selectedAppt as any).updated_by_name && (
+                                <div className="text-xs text-slate-400 pt-1">
+                                    <span className="font-semibold">Última modificación:</span> ✎ {(selectedAppt as any).updated_by_name}
+                                </div>
+                            )}
 
                         </div>{/* end scrollable area */}
                         <div className="px-8 pb-8 flex gap-4 pt-4 border-t border-slate-100">

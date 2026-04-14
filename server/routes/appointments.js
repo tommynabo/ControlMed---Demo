@@ -3,6 +3,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { prisma, getSupabase } = require('../lib/db');
 const { logAudit } = require('../lib/audit');
+const { resolveUserNames } = require('../lib/utils');
 
 const router = express.Router();
 
@@ -100,7 +101,17 @@ router.post('/', async (req, res) => {
             userAgent:    req.headers['user-agent'],
         });
 
-        res.json(data);
+        // Enrich POST response so Agenda local-state shows updated_by_name immediately
+        let response = data;
+        try {
+            const lookupId = data.created_by || data.updated_by;
+            if (lookupId) {
+                const nameMap = await resolveUserNames(supabase, [lookupId]);
+                response = { ...data, updated_by_name: nameMap.get(lookupId) || null };
+            }
+        } catch (_) {}
+
+        res.json(response);
     } catch (e) {
         console.error('Error saving appointment:', e);
         res.status(500).json({ error: e.message });
