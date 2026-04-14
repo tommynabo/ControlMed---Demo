@@ -1123,7 +1123,7 @@ const Agenda: React.FC = () => {
                 {/* STICKY HEADER CONTAINER */}
                 <div 
                     ref={headerContainerRef}
-                    className="sticky top-[64px] z-[20] bg-white overflow-hidden mb-4"
+                    className="sticky top-0 z-[20] bg-white overflow-hidden mb-4"
                 >
                     <div className="flex w-max min-w-full">
                         {/* TIME COLUMN HEADER - Empty space for layout match */}
@@ -1162,7 +1162,7 @@ const Agenda: React.FC = () => {
                 <div 
                     ref={gridContainerRef}
                     onScroll={handleGridScroll}
-                    className="overflow-x-auto pb-4 custom-scrollbar"
+                    className="overflow-x-auto pb-4 pt-3 custom-scrollbar"
                 >
                     <div className="flex">
                         {/* TIME COLUMN - Always visible */}
