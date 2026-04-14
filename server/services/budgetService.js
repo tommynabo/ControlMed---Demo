@@ -1,6 +1,6 @@
 // server/services/budgetService.js
 
-const createBudget = async (supabase, patientId, items = [], title = "") => {
+const createBudget = async (supabase, patientId, items = [], title = "", userId = null) => {
     const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
 
     // 1. Create Budget
@@ -13,7 +13,8 @@ const createBudget = async (supabase, patientId, items = [], title = "") => {
             status: 'DRAFT',
             totalAmount,
             date: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            updated_by: userId,
         }])
         .select()
         .single();
@@ -96,10 +97,10 @@ const getBudgetsByPatient = async (supabase, patientId) => {
     return data;
 };
 
-const updateBudgetStatus = async (supabase, budgetId, status) => {
+const updateBudgetStatus = async (supabase, budgetId, status, userId = null) => {
     const { data, error } = await supabase
         .from('Budget')
-        .update({ status, updatedAt: new Date().toISOString() })
+        .update({ status, updatedAt: new Date().toISOString(), updated_by: userId })
         .eq('id', budgetId)
         .select()
         .single();
@@ -179,7 +180,7 @@ const deleteItem = async (supabase, itemId) => {
     return { success: true };
 };
 
-const convertBudgetToInvoice = async (supabase, budgetId) => {
+const convertBudgetToInvoice = async (supabase, budgetId, userId = null) => {
     // 1. Get Budget
     const { data: budget, error: budgetError } = await supabase
         .from('Budget')
@@ -220,7 +221,7 @@ const convertBudgetToInvoice = async (supabase, budgetId) => {
     // 4. Update Budget Status
     const { error: updateError } = await supabase
         .from('Budget')
-        .update({ status: 'CONVERTED', updatedAt: new Date().toISOString() })
+        .update({ status: 'CONVERTED', updatedAt: new Date().toISOString(), updated_by: userId })
         .eq('id', budgetId);
 
     if (updateError) {
@@ -231,13 +232,13 @@ const convertBudgetToInvoice = async (supabase, budgetId) => {
     return invoice;
 };
 
-const updateBudget = async (supabase, budgetId, items = [], title = "") => {
+const updateBudget = async (supabase, budgetId, items = [], title = "", userId = null) => {
     const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
 
     // Update budget title & total
     const { error: budgetError } = await supabase
         .from('Budget')
-        .update({ title: title || "Presupuesto General", totalAmount, updatedAt: new Date().toISOString() })
+        .update({ title: title || "Presupuesto General", totalAmount, updatedAt: new Date().toISOString(), updated_by: userId })
         .eq('id', budgetId);
 
     if (budgetError) throw new Error("Error updating budget: " + budgetError.message);

@@ -135,6 +135,9 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                                     </h4>
                                     <p className="text-sm font-bold text-slate-800">{bg.title || "Sin título"}</p>
                                     <p className="text-xs text-slate-500">{new Date(bg.date).toLocaleDateString()}</p>
+                                    {(bg as any).updated_by_name && (
+                                        <p className="text-[10px] text-slate-400 mt-0.5">✎ {(bg as any).updated_by_name}</p>
+                                    )}
                                 </div>
                                 <span className={`px-3 py-1 rounded-full text-xs font-bold 
                                     ${bg.status === 'accepted' ? 'bg-green-100 text-green-700' :

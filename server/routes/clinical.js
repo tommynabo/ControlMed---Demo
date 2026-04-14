@@ -106,6 +106,22 @@ router.delete('/patients/:patientId/prescriptions/:id', async (req, res) => {
 });
 
 // ─── TREATMENTS (patient treatments) ─────────────────────────────────────────
+
+// Alias: DELETE /treatments/:id (frontend calls this directly without patientId)
+router.delete('/treatments/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { data: oldT } = await supabase.from('PatientTreatment').select('*').eq('id', req.params.id).single();
+        const { error } = await supabase.from('PatientTreatment').delete().eq('id', req.params.id);
+        if (error) throw error;
+        logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'DELETE', resourceType: 'treatments', resourceId: req.params.id, oldValues: oldT || undefined, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.get('/patients/:patientId/treatments', async (req, res) => {
     try {
         let supabase;
@@ -260,7 +276,14 @@ router.get('/patients/:patientId/budgets', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
         const data = await budgetService.getBudgetsByPatient(supabase, req.params.patientId);
-        res.json(data);
+        // Enrich with user names (graceful fallback)
+        const rows = data || [];
+        let nameMap = new Map();
+        try {
+            const userIds = rows.map(b => b.updated_by).filter(Boolean);
+            nameMap = await resolveUserNames(supabase, userIds);
+        } catch (_) {}
+        res.json(rows.map(b => ({ ...b, updated_by_name: b.updated_by ? (nameMap.get(b.updated_by) || null) : null })));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -269,7 +292,7 @@ router.post('/patients/:patientId/budgets', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
         const { items, title } = req.body;
-        const data = await budgetService.createBudget(supabase, req.params.patientId, items, title);
+        const data = await budgetService.createBudget(supabase, req.params.patientId, items, title, req.user?.id);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -288,7 +311,7 @@ router.put('/budgets/:id', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
         const { items, title } = req.body;
-        const data = await budgetService.updateBudget(supabase, req.params.id, items, title);
+        const data = await budgetService.updateBudget(supabase, req.params.id, items, title, req.user?.id);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -298,7 +321,7 @@ router.put('/budgets/:id/status', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
         const { status } = req.body;
-        const data = await budgetService.updateBudgetStatus(supabase, req.params.id, status);
+        const data = await budgetService.updateBudgetStatus(supabase, req.params.id, status, req.user?.id);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -307,7 +330,7 @@ router.post('/budgets/:id/convert', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-        const data = await budgetService.convertBudgetToInvoice(supabase, req.params.id);
+        const data = await budgetService.convertBudgetToInvoice(supabase, req.params.id, req.user?.id);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });

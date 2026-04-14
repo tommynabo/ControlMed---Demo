@@ -175,11 +175,11 @@ router.get('/patient/:patientId', async (req, res) => {
         if (error) return res.status(500).json({ error: error.message });
 
         // Enrich with user names (graceful fallback)
-        let enriched = rows;
+        let enriched = data || [];
         try {
-            const userIds = rows.flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
+            const userIds = (data || []).flatMap(a => [a.updated_by, a.created_by]).filter(Boolean);
             const nameMap = await resolveUserNames(supabase, userIds);
-            enriched = rows.map(a => ({
+            enriched = (data || []).map(a => ({
                 ...a,
                 updated_by_name: a.updated_by ? (nameMap.get(a.updated_by) || null) : (a.created_by ? (nameMap.get(a.created_by) || null) : null),
             }));
@@ -293,7 +293,16 @@ router.put('/:id', async (req, res) => {
             userAgent:    req.headers['user-agent'],
         });
 
-        res.json(data);
+        // Enrich PUT response so Agenda local-state update shows updated_by_name immediately
+        let response = data;
+        try {
+            if (data?.updated_by) {
+                const nameMap = await resolveUserNames(supabase, [data.updated_by]);
+                response = { ...data, updated_by_name: nameMap.get(data.updated_by) || null };
+            }
+        } catch (_) {}
+
+        res.json(response);
     } catch (e) {
         console.error('Error updating appointment:', e);
         res.status(500).json({ error: e.message });
