@@ -190,17 +190,11 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       .catch((e: unknown) => console.error('treatments:', e));
   }, [patientId, api]);
 
-  const handleToothClick = (toothId: number, e: React.MouseEvent) => {
+  const handleToothClick = (toothId: number) => {
     if (!isEditable) return;
-    if (e.ctrlKey || e.metaKey) {
-      setSelectedTeeth(prev =>
-        prev.includes(toothId) ? prev.filter(id => id !== toothId) : [...prev, toothId],
-      );
-    } else {
-      setSelectedTeeth(prev =>
-        prev.length === 1 && prev[0] === toothId ? [] : [toothId],
-      );
-    }
+    setSelectedTeeth(prev =>
+      prev.includes(toothId) ? prev.filter(id => id !== toothId) : [...prev, toothId],
+    );
   };
 
   const handleAddTreatment = (service: Service) => {
@@ -288,7 +282,7 @@ export const Odontogram: React.FC<OdontogramProps> = ({
       isSelected={selectedTeeth.includes(id)}
       isChild={isChild}
       isEditable={isEditable}
-      onClick={e => handleToothClick(id, e)}
+      onClick={() => handleToothClick(id)}
     />
   );
 
