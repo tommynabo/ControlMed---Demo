@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye, ShieldCheck, ChevronDown } from 'lucide-react';
+import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye, ShieldCheck, ChevronDown, Mail } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { DocumentTemplate } from '../../types';
 import { api } from '../services/api';
@@ -8,6 +8,7 @@ import ClinicInfo from '../components/ClinicInfo';
 import ScheduleAvailability from '../components/ScheduleAvailability';
 import Vacations from '../components/Vacations';
 import Users from '../components/Users';
+import GmailSettings from '../components/GmailSettings';
 
 interface Service {
     id: string;
@@ -33,7 +34,7 @@ const Settings: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const tabFromUrl = searchParams.get('tab') as any;
 
-    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users' | 'audit'>(tabFromUrl || 'templates');
+    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'gmail' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users' | 'audit'>(tabFromUrl || 'templates');
     // Ref so URL→State effect can read latest tab without being re-triggered by it
     const settingsTabRef = React.useRef(settingsTab);
     settingsTabRef.current = settingsTab;
@@ -62,7 +63,7 @@ const Settings: React.FC = () => {
 
     // SECURITY: Limit tabs for RECEPTION role
     useEffect(() => {
-        if (isReception && !['templates', 'whatsapp'].includes(settingsTab)) {
+        if (isReception && !['templates', 'whatsapp', 'gmail'].includes(settingsTab)) {
             setSettingsTab('templates');
         }
     }, [isReception, settingsTab]);
@@ -357,6 +358,9 @@ const Settings: React.FC = () => {
                     </button>
                     <button onClick={() => setSettingsTab('whatsapp')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${settingsTab === 'whatsapp' ? 'bg-green-50 text-green-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         WhatsApp & CRM
+                    </button>
+                    <button onClick={() => setSettingsTab('gmail')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'gmail' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <Mail size={14} /> Gmail
                     </button>
                     {!isReception && (
                     <>
@@ -848,6 +852,8 @@ const Settings: React.FC = () => {
                         </div>
                     );
                 })()}
+
+                {settingsTab === 'gmail' && <GmailSettings />}
 
                 {settingsTab === 'templates' && (
                     <div className="space-y-8 animate-in fade-in slide-in-from-right-4">

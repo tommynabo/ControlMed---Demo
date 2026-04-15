@@ -32,6 +32,7 @@ const aiRouter = require('./routes/ai');
 const agendaRouter = require('./routes/agenda');
 const systemUsersRouter = require('./routes/system-users');
 const auditRouter = require('./routes/audit');
+const gmailRouter = require('./routes/gmail');
 
 const { errorHandler } = require('./lib/errors');
 
@@ -79,7 +80,7 @@ app.use('/api/auth/login', loginLimiter); // Rate limiting for login
 // --- Auth Middleware ---
 const authMiddleware = (req, res, next) => {
     // Cuando usamos app.use('/api', ...), req.path pierde el prefijo '/api'
-    const PUBLIC_PATHS = ['/auth/login', '/health'];
+    const PUBLIC_PATHS = ['/auth/login', '/health', '/gmail/callback'];
     if (PUBLIC_PATHS.includes(req.path) || req.path.startsWith('/cron/')) return next();
 
     const authHeader = req.headers['authorization'];
@@ -116,6 +117,7 @@ app.use('/api/ai', aiLimiter, aiRouter);
 app.use('/api', agendaRouter);
 app.use('/api/system-users', systemUsersRouter);
 app.use('/api/audit', auditRouter);
+app.use('/api/gmail', gmailRouter);
 
 // --- Initialization ---
 whatsappService.initialize();

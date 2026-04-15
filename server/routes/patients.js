@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { prisma, getSupabase } = require('../lib/db');
 const { normalizePatient, calculateWalletBalance } = require('../lib/utils');
 const { logAudit } = require('../lib/audit');
+const gmailService = require('../services/gmailService');
 
 const router = express.Router();
 
@@ -322,6 +323,39 @@ router.patch('/:patientId/consents/:consentId', async (req, res) => {
             }
         });
         res.json(consent);
+
+        // Gmail consent copy (fire-and-forget)
+        if (isSigned) {
+            (async () => {
+                try {
+                    const patient = await prisma.patient.findUnique({
+                        where: { id: req.params.patientId },
+                        select: { name: true, email: true }
+                    });
+                    if (!patient?.email) return;
+
+                    const signedDate = new Date().toLocaleString('es-ES');
+                    await gmailService.sendGmail({
+                        to: patient.email,
+                        subject: 'Copia de su consentimiento firmado',
+                        htmlBody: `
+                            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">
+                                <h2 style="color:#7c3aed;">Consentimiento Informado Firmado</h2>
+                                <p>Estimado/a <strong>${patient.name}</strong>,</p>
+                                <p>Le enviamos confirmaci&#243;n de que ha firmado su consentimiento informado en nuestra cl&#237;nica.</p>
+                                <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+                                    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Documento:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">${consent.title}</td></tr>
+                                    <tr><td style="padding:8px;"><strong>Fecha de firma:</strong></td><td style="padding:8px;">${signedDate}</td></tr>
+                                </table>
+                                <p style="color:#64748b;font-size:13px;">Guarde este correo como comprobante. Si tiene alguna pregunta, contacte con la cl&#237;nica.</p>
+                            </div>`,
+                    });
+                    console.log(`📧 Consent copy sent to ${patient.email}`);
+                } catch (mailErr) {
+                    console.warn('⚠️ Email consent failed (non-critical):', mailErr.message);
+                }
+            })();
+        }
     } catch (e) {
         console.error('Error updating consent:', e);
         res.status(500).json({ error: e.message });

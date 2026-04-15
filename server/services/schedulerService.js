@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const whatsappService = require('./whatsappService');
+const gmailService = require('./gmailService');
 
 const startScheduler = (prisma) => {
     console.log('⏰ Starting WhatsApp Scheduler...');
@@ -101,6 +102,29 @@ const startScheduler = (prisma) => {
                             content: msg,
                             error: err.message
                         }
+                    });
+                }
+
+                // Gmail reminder (fire-and-forget — does not block WhatsApp flow)
+                if (appt.patient.email) {
+                    gmailService.sendGmail({
+                        to: appt.patient.email,
+                        subject: `Recordatorio de cita — ${new Date(appt.date).toLocaleDateString('es-ES')}`,
+                        htmlBody: `
+                            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">
+                                <h2 style="color:#0f766e;">Recordatorio de su cita</h2>
+                                <p>Estimado/a <strong>${appt.patient.name}</strong>,</p>
+                                <p>Le recordamos que tiene una cita programada:</p>
+                                <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+                                    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Fecha:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">${new Date(appt.date).toLocaleDateString('es-ES')}</td></tr>
+                                    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Hora:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">${appt.time}</td></tr>
+                                    <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Doctor/a:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">${appt.doctor?.name || 'Su médico'}</td></tr>
+                                    <tr><td style="padding:8px;"><strong>Tratamiento:</strong></td><td style="padding:8px;">${appt.treatment?.name || 'Consulta'}</td></tr>
+                                </table>
+                                <p style="color:#64748b;font-size:13px;">Si necesita cancelar o modificar su cita, por favor contacte con la clínica.</p>
+                            </div>`,
+                    }).catch((emailErr) => {
+                        console.warn(`⚠️ Email reminder failed for ${appt.patient.name}:`, emailErr.message);
                     });
                 }
             }

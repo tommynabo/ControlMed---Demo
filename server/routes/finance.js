@@ -1,11 +1,13 @@
 'use strict';
 const express = require('express');
 const crypto = require('crypto');
+const axios = require('axios');
 const { prisma, getSupabase } = require('../lib/db');
 const financeService = require('../services/financeService');
 const quipuService = require('../services/quipuService');
 const invoiceService = require('../services/invoiceService');
 const budgetService = require('../services/budgetService');
+const gmailService = require('../services/gmailService');
 const { calculateWalletBalance } = require('../lib/utils');
 const { logAudit } = require('../lib/audit');
 
@@ -315,6 +317,54 @@ router.post('/payments/create', async (req, res) => {
         });
 
         res.status(200).json({ success: true, ...result });
+
+        // Gmail invoice email (fire-and-forget, never blocks the response)
+        if (patient.email && result.invoice) {
+            (async () => {
+                try {
+                    const invoiceNumber = result.invoice.invoiceNumber;
+                    const pdfUrl = result.pdfUrl;
+                    let attachments = [];
+
+                    if (pdfUrl) {
+                        try {
+                            const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer', timeout: 10000 });
+                            attachments = [{ filename: `factura_${invoiceNumber}.pdf`, content: Buffer.from(pdfResponse.data) }];
+                        } catch (pdfErr) {
+                            console.warn('⚠️ No se pudo descargar el PDF de Quipu:', pdfErr.message);
+                        }
+                    }
+
+                    const pdfSection = pdfUrl
+                        ? `<p style="margin:16px 0;"><a href="${pdfUrl}" style="background:#1d4ed8;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;">Ver / Descargar Factura PDF</a></p>`
+                        : '';
+
+                    const htmlBody = `
+                        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">
+                            <h2 style="color:#1d4ed8;">Factura #${invoiceNumber}</h2>
+                            <p>Estimado/a <strong>${patient.name}</strong>,</p>
+                            <p>Le enviamos su factura correspondiente al pago realizado en nuestra clínica.</p>
+                            <table style="width:100%;border-collapse:collapse;margin:20px 0;">
+                                <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Concepto:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">${result.invoice.concept}</td></tr>
+                                <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Importe:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">€${numericAmount.toFixed(2)}</td></tr>
+                                <tr><td style="padding:8px;"><strong>Método de pago:</strong></td><td style="padding:8px;">${method}</td></tr>
+                            </table>
+                            ${pdfSection}
+                            <p style="margin-top:24px;color:#64748b;font-size:13px;">Gracias por confiar en nosotros.</p>
+                        </div>`;
+
+                    await gmailService.sendGmail({
+                        to: patient.email,
+                        subject: `Factura #${invoiceNumber} — Su recibo`,
+                        htmlBody,
+                        attachments,
+                    });
+                    console.log(`📧 Factura enviada por email a ${patient.email}`);
+                } catch (mailErr) {
+                    console.error('⚠️ Error enviando email de factura (no crítico):', mailErr.message);
+                }
+            })();
+        }
 
         // Audit log (fire-and-forget, never throws)
         try {

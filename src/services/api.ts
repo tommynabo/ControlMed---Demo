@@ -926,6 +926,25 @@ export const api = {
         }
     },
 
+    // Gmail OAuth Integration
+    gmail: {
+        getStatus: async (): Promise<{ connected: boolean; email: string | null }> => {
+            const res = await fetch(`${API_URL}/gmail/status`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch Gmail status');
+            return res.json();
+        },
+        getAuthUrl: async (): Promise<{ url: string }> => {
+            const res = await fetch(`${API_URL}/gmail/auth-url`, { headers });
+            if (!res.ok) throw new Error('Failed to get Gmail auth URL');
+            return res.json();
+        },
+        disconnect: async (): Promise<{ success: boolean }> => {
+            const res = await fetch(`${API_URL}/gmail/disconnect`, { method: 'DELETE', headers });
+            if (!res.ok) throw new Error('Failed to disconnect Gmail');
+            return res.json();
+        },
+    },
+
     // Clinic Info (Supabase Direct)
     clinic: {
         getInfo: async () => {
