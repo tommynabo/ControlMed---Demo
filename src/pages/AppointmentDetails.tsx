@@ -10,7 +10,7 @@ export const AppointmentDetails: React.FC = () => {
     const { appointmentId } = useParams<{ appointmentId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
-    const { patients, api, refreshAppointments, refreshInvoices, doctors } = useAppContext();
+    const { patients, api, refreshAppointments, refreshInvoices, doctors, setAppointments } = useAppContext();
 
     const [appointment, setAppointment] = useState<Appointment | null>(null);
     const [patient, setPatient] = useState<Patient | null>(null);
@@ -67,6 +67,13 @@ export const AppointmentDetails: React.FC = () => {
 
         // Mark appointment as paid locally to update UI immediately 
         setAppointment({ ...appointment, paid: true, status: 'Completed' });
+
+        // Update global appointments array immediately so Agenda turns green without needing to reload
+        if (appointment) {
+            setAppointments(prev => prev.map(a =>
+                a.id === appointment.id ? { ...a, paid: true, status: 'Completed' } : a
+            ));
+        }
 
         if (invoiceData?.invoice) {
             setInvoice(invoiceData.invoice);
