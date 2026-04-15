@@ -634,15 +634,6 @@ const Agenda: React.FC = () => {
         // Force date to be treated as UTC midnight of the selected day to avoid timezone shifts
         const isoDate = `${bookingDate}T00:00:00.000Z`;
 
-        // Check for overlaps before saving
-        if (checkOverlap(isoDate, bookingTime, bookingDuration || 30, bookingDoctorId, selectedAppt?.id)) {
-            toast.error(`El doctor ya tiene una cita reservada en este horario. Revisa la disponibilidad.`, {
-                style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' },
-                icon: '🚫'
-            });
-            return;
-        }
-
         const newAppt: any = {
             date: isoDate, // Send full ISO at UTC midnight
             time: bookingTime,
@@ -732,12 +723,6 @@ const Agenda: React.FC = () => {
         const dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}T00:00:00.000Z`;
 
         const newDrId = drId || draggingAppt.doctorId;
-        if (checkOverlap(dateStr, time, draggingAppt.duration || 30, newDrId, draggingAppt.id)) {
-            toast.error(`No se puede mover aquí: El doctor ya tiene cita en ese horario.`);
-            setDraggingAppt(null);
-            setDragOverSlot(null);
-            return;
-        }
 
         try {
             const updated = await api.appointments.update(draggingAppt.id, {
@@ -790,13 +775,6 @@ const Agenda: React.FC = () => {
             const newDuration = Math.max(5, (appt.duration || 30) + deltaMins);
 
             if (newDuration !== appt.duration) {
-                // Pre-check for overlapping extension
-                if (checkOverlap(appt.date, appt.time, newDuration, appt.doctorId, appt.id)) {
-                    toast.error(`La nueva duración choca con otra cita del doctor.`);
-                    setResizingAppt(null);
-                    return;
-                }
-
                 try {
                     const updated = await api.appointments.update(appt.id, {
                         duration: newDuration
@@ -1805,7 +1783,7 @@ const Agenda: React.FC = () => {
                                         <option value="">-- Sin vincular --</option>
                                         {patientBudgets.map(b => (
                                             <option key={b.id} value={b.id}>
-                                                #{b.id ? b.id.slice(0, 8) : ''} - {b.title || 'Presupuesto'} ({b.total}€) - {new Date(b.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
+                                                {b.title || 'Presupuesto'}{b.items && b.items.length > 0 ? ` — ${b.items.map((i: any) => i.name).join(', ')}` : ''} ({b.total}€) · {new Date(b.date).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                                             </option>
                                         ))}
                                     </select>
