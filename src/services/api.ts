@@ -1375,6 +1375,34 @@ export const api = {
         getDownloadUrl: (filename: string) => `${API_URL}/templates/file/${filename}`,
     },
 
+    // Cash Register Closing
+    cashRegister: {
+        getToday: async () => {
+            try {
+                const res = await fetch(`${API_URL}/finance/cash-register/today`, { headers });
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data || null;
+            } catch { return null; }
+        },
+        close: async (payload: {
+            totalIncome: number; totalExpense: number; balance: number;
+            cashIncome: number; cardIncome: number; transferIncome: number;
+            cashExpenses: number; netCash: number; physicalCash: number;
+            cashDiff: number; invoiceCount: number; completedAppointments: number;
+            closedBy?: string;
+        }) => {
+            const res = await fetch(`${API_URL}/finance/cash-register/close`, {
+                method: 'POST', headers, body: JSON.stringify(payload)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Error al cerrar la caja');
+            }
+            return res.json();
+        }
+    },
+
     audit: {
         getLogs: async (params?: {
             resource_type?: string;

@@ -475,3 +475,24 @@ model AgendaClosure {
   @@map("agenda_closures")
   @@index([date])
 }
+
+model CashRegisterClosing {
+  id                    String   @id @default(uuid())
+  date                  String   @unique
+  closedAt              DateTime @default(now())
+  closedBy              String?
+  totalIncome           Float    @default(0)
+  totalExpense          Float    @default(0)
+  balance               Float    @default(0)
+  cashIncome            Float    @default(0)
+  cardIncome            Float    @default(0)
+  transferIncome        Float    @default(0)
+  cashExpenses          Float    @default(0)
+  netCash               Float    @default(0)
+  physicalCash          Float    @default(0)
+  cashDiff              Float    @default(0)
+  invoiceCount          Int      @default(0)
+  completedAppointments Int      @default(0)
+
+  @@map("cash_register_closings")
+}

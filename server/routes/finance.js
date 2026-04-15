@@ -572,4 +572,64 @@ router.get('/caja/:patientId', async (req, res) => {
     }
 });
 
+// ─── CASH REGISTER: Today's closing status ───────────────────────────────────
+router.get('/cash-register/today', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const closing = await prisma.$queryRawUnsafe(
+            `SELECT * FROM cash_register_closings WHERE date = $1 LIMIT 1`,
+            today
+        );
+        const record = Array.isArray(closing) && closing.length > 0 ? closing[0] : null;
+        res.json(record);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── CASH REGISTER: Close the day ────────────────────────────────────────────
+router.post('/cash-register/close', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const existing = await prisma.$queryRawUnsafe(
+            `SELECT id FROM cash_register_closings WHERE date = $1 LIMIT 1`,
+            today
+        );
+        if (Array.isArray(existing) && existing.length > 0) {
+            return res.status(409).json({ error: 'La caja ya fue cerrada hoy.' });
+        }
+
+        const {
+            totalIncome = 0, totalExpense = 0, balance = 0,
+            cashIncome = 0, cardIncome = 0, transferIncome = 0,
+            cashExpenses = 0, netCash = 0, physicalCash = 0,
+            cashDiff = 0, invoiceCount = 0, completedAppointments = 0,
+            closedBy = null
+        } = req.body;
+
+        const id = require('crypto').randomUUID();
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO cash_register_closings
+             (id, date, "closedAt", "closedBy", "totalIncome", "totalExpense", balance,
+              "cashIncome", "cardIncome", "transferIncome", "cashExpenses", "netCash",
+              "physicalCash", "cashDiff", "invoiceCount", "completedAppointments")
+             VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+            id, today, closedBy,
+            totalIncome, totalExpense, balance,
+            cashIncome, cardIncome, transferIncome,
+            cashExpenses, netCash, physicalCash, cashDiff,
+            invoiceCount, completedAppointments
+        );
+
+        const record = await prisma.$queryRawUnsafe(
+            `SELECT * FROM cash_register_closings WHERE id = $1`,
+            id
+        );
+        res.status(201).json(Array.isArray(record) ? record[0] : record);
+    } catch (e) {
+        console.error('Error closing cash register:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;

@@ -23,7 +23,7 @@ const DENOMINATIONS = [
 ];
 
 const CashRegister: React.FC = () => {
-    const { invoices, expenses, appointments, patients } = useAppContext();
+    const { invoices, expenses, appointments, patients, api, currentUser } = useAppContext();
 
     // Arqueo state
     const [arqueoCompleted, setArqueoCompleted] = useState(false);
@@ -32,6 +32,11 @@ const CashRegister: React.FC = () => {
     const [billCounts, setBillCounts] = useState<Record<string, number>>(
         Object.fromEntries(DENOMINATIONS.map(d => [d.value.toString(), 0]))
     );
+
+    // Cash register closing state
+    const [isClosed, setIsClosed] = useState(false);
+    const [closingData, setClosingData] = useState<any>(null);
+    const [isClosing, setIsClosing] = useState(false);
 
     // Stats for TODAY
     const [todayInvoices, setTodayInvoices] = useState<any[]>([]);
@@ -42,6 +47,16 @@ const CashRegister: React.FC = () => {
         setTodayInvoices(invoices.filter(i => i.date && i.date.startsWith(today)));
         setTodayExpenses(expenses.filter(e => e.date === today));
     }, [invoices, expenses]);
+
+    // Load today's closing status on mount
+    useEffect(() => {
+        (api as any).cashRegister.getToday().then((data: any) => {
+            if (data) {
+                setIsClosed(true);
+                setClosingData(data);
+            }
+        }).catch(() => {});
+    }, []);
 
     const stats = React.useMemo(() => {
         const totalIncome = todayInvoices.reduce((acc, curr) => acc + curr.amount, 0);
@@ -66,7 +81,8 @@ const CashRegister: React.FC = () => {
         setShowArqueoModal(false);
     };
 
-    const handleCloseCashRegister = () => {
+    const handleCloseCashRegister = async () => {
+        if (isClosed) return;
         if (!arqueoCompleted) {
             alert('⚠️ Debes realizar el Arqueo de Caja antes de cerrar.\n\nHaz clic en "Hacer Arqueo" para contabilizar el efectivo del cajón.');
             return;
@@ -122,7 +138,41 @@ const CashRegister: React.FC = () => {
             `¿Confirmar cierre de caja?`;
 
         if (confirm(summary)) {
-            alert('✅ Caja cerrada correctamente. Los datos han sido registrados.');
+            setIsClosing(true);
+            try {
+                const today = new Date().toISOString().split('T')[0];
+                const todayAppointments = appointments.filter(a => {
+                    const apptDate = typeof a.date === 'string' ? a.date.split('T')[0] : new Date(a.date).toISOString().split('T')[0];
+                    return apptDate === today;
+                });
+                const completedCount = todayAppointments.filter(a =>
+                    ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')
+                ).length;
+
+                const cashDiff = physicalCashTotal - stats.netCash;
+                const record = await (api as any).cashRegister.close({
+                    totalIncome: stats.totalIncome,
+                    totalExpense: stats.totalExpense,
+                    balance: stats.balance,
+                    cashIncome: stats.cashIncome,
+                    cardIncome: stats.cardIncome,
+                    transferIncome: stats.transferIncome,
+                    cashExpenses: stats.cashExpenses,
+                    netCash: stats.netCash,
+                    physicalCash: physicalCashTotal,
+                    cashDiff,
+                    invoiceCount: todayInvoices.length,
+                    completedAppointments: completedCount,
+                    closedBy: (currentUser as any)?.name || null,
+                });
+                setIsClosed(true);
+                setClosingData(record);
+                alert('✅ Caja cerrada correctamente. Los datos han sido registrados.');
+            } catch (e: any) {
+                alert('❌ Error al cerrar la caja: ' + (e.message || e));
+            } finally {
+                setIsClosing(false);
+            }
         }
     };
 
@@ -185,10 +235,25 @@ const CashRegister: React.FC = () => {
                     <div className="bg-slate-900 p-10 rounded-2xl text-white shadow-2xl flex flex-col justify-between gap-4">
                         <div>
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Estado de Caja</p>
-                            <div className="flex items-center gap-2 mb-6">
-                                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
-                                <span className="text-xl font-bold">ABIERTA</span>
-                            </div>
+                            {isClosed ? (
+                                <div className="mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                        <span className="text-xl font-bold text-red-400">CERRADA</span>
+                                    </div>
+                                    {closingData?.closedAt && (
+                                        <p className="text-[11px] text-red-400/70 mt-1">
+                                            Cerrada a las {new Date(closingData.closedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                                            {closingData.closedBy ? ` · ${closingData.closedBy}` : ''}
+                                        </p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2 mb-6">
+                                    <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+                                    <span className="text-xl font-bold">ABIERTA</span>
+                                </div>
+                            )}
                             {arqueoCompleted ? (
                                 <div className="flex items-center gap-2 p-3 bg-emerald-900/40 border border-emerald-700/50 rounded-xl mb-4">
                                     <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
@@ -214,11 +279,12 @@ const CashRegister: React.FC = () => {
                             </button>
                             <button
                                 onClick={handleCloseCashRegister}
-                                disabled={!arqueoCompleted}
+                                disabled={!arqueoCompleted || isClosed || isClosing}
                                 className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-4 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 group"
+                                title={isClosed ? 'La caja ya fue cerrada hoy' : ''}
                             >
                                 <DollarSign size={16} className="group-hover:rotate-12 transition-transform" />
-                                Cerrar Caja del Día
+                                {isClosing ? 'Guardando...' : isClosed ? 'Caja Cerrada' : 'Cerrar Caja del Día'}
                             </button>
                         </div>
                     </div>
