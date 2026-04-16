@@ -17,15 +17,27 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
     const [showBudgetModal, setShowBudgetModal] = useState(false);
     const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
+    const normalize = (data: any[]) =>
+        data.map((b: any) => ({ ...b, status: b.status?.toLowerCase() }));
+
     const loadBudgets = async () => {
         setLoading(true);
         try {
             const data = await api.budget.getByPatient(patientId);
-            setBudgets(data);
+            setBudgets(normalize(Array.isArray(data) ? data : []));
         } catch (e) {
             console.error("Failed to load budgets", e);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const refreshBudgets = async () => {
+        try {
+            const data = await api.budget.getByPatient(patientId);
+            setBudgets(normalize(Array.isArray(data) ? data : []));
+        } catch (e) {
+            console.error("Failed to refresh budgets", e);
         }
     };
 
@@ -294,9 +306,12 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
 
             <BudgetModal
                 isOpen={showBudgetModal}
-                onClose={() => setShowBudgetModal(false)}
+                onClose={() => {
+                    setShowBudgetModal(false);
+                    setEditingBudget(null);
+                }}
                 patientId={patientId}
-                onSave={loadBudgets}
+                onSave={refreshBudgets}
                 initialBudget={editingBudget}
             />
         </div>
