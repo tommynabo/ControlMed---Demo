@@ -836,6 +836,7 @@ const Patients: React.FC = () => {
                 observation: editingRecord.clinicalData?.observation || '',
                 specialization: editingRecord.specialization || 'General',
                 doctorId: editingRecord.authorId || '',
+                date: editingRecord.date || undefined,
             });
             setClinicalRecords(prev => prev.map(r => r.id === editingRecord.id ? updated : r));
             toast.success('Registro actualizado correctamente');
@@ -2554,6 +2555,32 @@ const Patients: React.FC = () => {
                         <div className="bg-white max-w-lg w-full rounded-[2rem] p-8 shadow-2xl">
                             <h3 className="text-2xl font-black text-slate-900 mb-6">Editar Entrada Historial</h3>
                             <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Fecha</label>
+                                        <input
+                                            type="date"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            value={editingRecord.date ? editingRecord.date.slice(0, 10) : ''}
+                                            onChange={e => {
+                                                const timePart = editingRecord.date ? editingRecord.date.slice(11, 16) : '00:00';
+                                                setEditingRecord({ ...editingRecord, date: `${e.target.value}T${timePart}:00.000Z` });
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Hora</label>
+                                        <input
+                                            type="time"
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            value={editingRecord.date ? editingRecord.date.slice(11, 16) : ''}
+                                            onChange={e => {
+                                                const datePart = editingRecord.date ? editingRecord.date.slice(0, 10) : new Date().toISOString().slice(0, 10);
+                                                setEditingRecord({ ...editingRecord, date: `${datePart}T${e.target.value}:00.000Z` });
+                                            }}
+                                        />
+                                    </div>
+                                </div>
                                 <div>
                                     <label className="text-[10px] font-black uppercase text-slate-400">Tratamiento / Título</label>
                                     <input

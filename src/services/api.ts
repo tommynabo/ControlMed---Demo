@@ -457,7 +457,7 @@ export const api = {
             const res = await fetch(`${API_URL}/clinical-records/${id}`, { method: 'DELETE', headers });
             if (!res.ok) throw new Error('Failed to delete clinical record');
         },
-        update: async (id: string, data: { treatment?: string, observation?: string, specialization?: string, doctorId?: string }): Promise<ClinicalRecord> => {
+        update: async (id: string, data: { treatment?: string, observation?: string, specialization?: string, doctorId?: string, date?: string }): Promise<ClinicalRecord> => {
             const res = await fetch(`${API_URL}/clinical-records/${id}`, {
                 method: 'PUT',
                 headers,

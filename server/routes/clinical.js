@@ -431,7 +431,7 @@ router.post('/clinical-records', async (req, res) => {
 router.put('/clinical-records/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { treatment, observation, specialization, doctorId } = req.body;
+        const { treatment, observation, specialization, doctorId, date } = req.body;
 
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
@@ -450,9 +450,12 @@ router.put('/clinical-records/:id', async (req, res) => {
             doctorId: doctorId || parsed.doctorId || existing.authorId
         };
 
+        const updatePayload = { text: JSON.stringify(updated), authorId: updated.doctorId, updated_by: req.user?.id || null };
+        if (date) updatePayload.date = new Date(date).toISOString();
+
         const { data, error } = await supabase
             .from('ClinicalRecord')
-            .update({ text: JSON.stringify(updated), authorId: updated.doctorId, updated_by: req.user?.id || null })
+            .update(updatePayload)
             .eq('id', id).select().single();
 
         if (error) return res.status(500).json({ error: error.message });
