@@ -645,6 +645,7 @@ const Patients: React.FC = () => {
 
     // Budget
     const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+    const [editingBudget, setEditingBudget] = useState<any>(null);
 
     // Wallet / Payment Modal
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -2305,6 +2306,19 @@ const Patients: React.FC = () => {
                                                                 <Printer size={16} />
                                                             </button>
 
+                                                            {budget.status !== 'CONVERTED' && budget.status !== 'REJECTED' && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setEditingBudget(budget);
+                                                                        setIsBudgetModalOpen(true);
+                                                                    }}
+                                                                    className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                                                                    title="Editar presupuesto"
+                                                                >
+                                                                    <Edit size={16} />
+                                                                </button>
+                                                            )}
+
                                                             <button
                                                                 onClick={() => handleDeleteBudget(budget.id)}
                                                                 className="px-3 py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
@@ -2781,12 +2795,14 @@ const Patients: React.FC = () => {
                 )
             }
 
-            {/* BUDGET MODAL (New Component) */}
+            {/* BUDGET MODAL (New + Edit) */}
             <BudgetModal
                 isOpen={isBudgetModalOpen}
-                onClose={() => setIsBudgetModalOpen(false)}
+                onClose={() => { setIsBudgetModalOpen(false); setEditingBudget(null); }}
                 patientId={selectedPatient?.id || ''}
+                initialBudget={editingBudget}
                 onSave={async () => {
+                    setEditingBudget(null);
                     // Refresh Budgets List
                     if (selectedPatient) {
                         const updatedBudgets = await api.budget.getByPatient(selectedPatient.id);
