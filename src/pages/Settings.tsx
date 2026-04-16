@@ -70,7 +70,7 @@ const Settings: React.FC = () => {
 
     // SECURITY: Limit tabs for RECEPTION role
     useEffect(() => {
-        if (isReception && !['templates', 'whatsapp', 'gmail'].includes(settingsTab)) {
+        if (isReception && !['templates', 'whatsapp', 'gmail', 'pagos'].includes(settingsTab)) {
             setSettingsTab('templates');
         }
     }, [isReception, settingsTab]);
@@ -354,9 +354,6 @@ const Settings: React.FC = () => {
                     <button onClick={() => setSettingsTab('audit')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'audit' ? 'bg-rose-50 text-rose-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <ShieldCheck size={14} /> Auditoría
                     </button>
-                    <button onClick={() => { setSettingsTab('pagos'); api.clinicSettings.hasPaymentPin().then(setPinHasValue).catch(() => {}); }} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'pagos' ? 'bg-amber-50 text-amber-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-                        <Lock size={14} /> Cobros
-                    </button>
                 </div>
                 )}
 
@@ -371,6 +368,9 @@ const Settings: React.FC = () => {
                     </button>
                     <button onClick={() => setSettingsTab('gmail')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'gmail' ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <Mail size={14} /> Gmail
+                    </button>
+                    <button onClick={() => { setSettingsTab('pagos'); api.clinicSettings.hasPaymentPin().then(setPinHasValue).catch(() => {}); }} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'pagos' ? 'bg-amber-50 text-amber-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <Lock size={14} /> Cobros
                     </button>
                     {!isReception && (
                     <>
@@ -1020,7 +1020,7 @@ const Settings: React.FC = () => {
                 {settingsTab === 'users' && !isReception && <Users />}
 
                 {/* ─── PAGOS / PIN SECTION ─────────────────────────────────────────── */}
-                {settingsTab === 'pagos' && !isReception && (
+                {settingsTab === 'pagos' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                         <div>
                             <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
