@@ -124,8 +124,9 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                                 <div>
                                     <h4 className="font-bold text-lg flex items-center gap-2">
                                         Presupuesto #{bg.id.slice(0, 8)} 
-                                        {(bg.status === 'pending' || bg.status === 'draft') && (
+                                        {(bg.status === 'pending' || bg.status === 'draft' || bg.status === 'accepted') && (
                                             <button onClick={() => {
+                                                setSelectedBudget(null);
                                                 setEditingBudget(bg);
                                                 setShowBudgetModal(true);
                                             }} className="text-blue-600 hover:text-blue-800 transition-colors ml-2" title="Editar Presupuesto">
@@ -221,6 +222,13 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                                     </div>
 
                                     <div className="flex gap-2 justify-end pt-2 border-t border-slate-50">
+                                        <button onClick={() => {
+                                            setSelectedBudget(null);
+                                            setEditingBudget(bg);
+                                            setShowBudgetModal(true);
+                                        }} className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg text-sm font-bold">
+                                            <Edit size={16} /> Editar
+                                        </button>
                                         <button onClick={() => handleReject(bg)} className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-bold">
                                             <X size={16} /> Rechazar
                                         </button>
@@ -231,9 +239,34 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                                 </div>
                             )}
 
+                            {/* Actions for Accepted */}
+                            {bg.status === 'accepted' && selectedBudget?.id !== bg.id && (
+                                <div className="flex gap-2 justify-end pt-2 border-t border-slate-50">
+                                    <button onClick={() => {
+                                        setSelectedBudget(null);
+                                        setEditingBudget(bg);
+                                        setShowBudgetModal(true);
+                                    }} className="flex items-center gap-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg text-sm font-bold">
+                                        <Edit size={16} /> Editar
+                                    </button>
+                                    <button onClick={() => handleAccept(bg)} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-lg hover:bg-slate-800 text-sm font-bold">
+                                        <Check size={16} /> Procesar Pago
+                                    </button>
+                                </div>
+                            )}
+
                             {/* If just clicked accept, show options */}
                             {selectedBudget?.id === bg.id && (bg.status === 'pending' || bg.status === 'draft' || bg.status === 'accepted') && (
                                 <div className="mt-4 p-4 bg-slate-50 rounded-xl flex gap-4 animate-in slide-in-from-top-2">
+                                    <button onClick={() => {
+                                        setSelectedBudget(null);
+                                        setEditingBudget(bg);
+                                        setShowBudgetModal(true);
+                                    }} className="flex-1 flex flex-col items-center gap-2 p-4 bg-white border border-slate-200 rounded-xl hover:border-green-500 transition-colors group">
+                                        <div className="p-3 bg-green-50 rounded-full text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors"><Edit size={20} /></div>
+                                        <span className="font-bold text-sm">Editar</span>
+                                        <span className="text-xs text-slate-500">Modificar presupuesto</span>
+                                    </button>
                                     <button onClick={handleConvertToInvoice} className="flex-1 flex flex-col items-center gap-2 p-4 bg-white border border-slate-200 rounded-xl hover:border-blue-500 transition-colors group">
                                         <div className="p-3 bg-blue-50 rounded-full text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors"><FileText size={20} /></div>
                                         <span className="font-bold text-sm">Pago Único</span>
