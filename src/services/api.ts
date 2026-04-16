@@ -1426,8 +1426,43 @@ export const api = {
             if (!res.ok) throw new Error('Error al cargar el log de auditoría');
             return res.json();
         },
-    }
+    },
+
+    clinicSettings: {
+        async getPaymentPinHash(): Promise<string | null> {
+            const { data, error } = await supabase
+                .from('clinic_settings')
+                .select('value')
+                .eq('key', 'payment_auth_pin_hash')
+                .maybeSingle();
+            if (error) throw error;
+            return data?.value ?? null;
+        },
+
+        async setPaymentPin(pin: string): Promise<void> {
+            const hash = await sha256(pin);
+            const { error } = await supabase
+                .from('clinic_settings')
+                .upsert({ key: 'payment_auth_pin_hash', value: hash, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+            if (error) throw error;
+        },
+
+        async hasPaymentPin(): Promise<boolean> {
+            const hash = await api.clinicSettings.getPaymentPinHash();
+            return hash !== null;
+        },
+    },
 };
+
+/** SHA-256 hash using built-in Web Crypto API */
+async function sha256(text: string): Promise<string> {
+    const msgBuffer = new TextEncoder().encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export { sha256 };
 
 
 

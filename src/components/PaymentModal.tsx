@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft } from 'lucide-react';
+import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft, Lock, AlertTriangle } from 'lucide-react';
 import { Payment, Patient, Budget } from '../../types';
 import { api } from '../services/api';
 
@@ -53,6 +53,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const [splits, setSplits] = useState<PaymentSplit[]>([]);
     const [walletAmount, setWalletAmount] = useState('');
 
+    // PIN authorization state
+    const [pinStep, setPinStep] = useState(false);
+    const [pinInput, setPinInput] = useState('');
+    const [pinAttempts, setPinAttempts] = useState(0);
+    const [pinBlocked, setPinBlocked] = useState(false);
+    const [pinError, setPinError] = useState('');
+
     const availableWallet = patient.wallet || 0;
 
     useEffect(() => {
@@ -68,6 +75,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             setWalletAmount('');
             setSelectedBudgetId('');
             setSelectedDoctorId('');
+            // Reset PIN state on open
+            setPinStep(false);
+            setPinInput('');
+            setPinAttempts(0);
+            setPinBlocked(false);
+            setPinError('');
 
             // Fetch doctors if no appointment is linked to allow attribution
             if (!appointment) {
@@ -129,6 +142,52 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             return;
         }
 
+        // If payment includes card or transfer, require PIN authorization
+        const needsPin = breakdown.some(b => b.method === 'card' || b.method === 'transfer');
+        if (needsPin) {
+            try {
+                const pinHash = await api.clinicSettings.getPaymentPinHash();
+                if (pinHash !== null) {
+                    setPinStep(true);
+                    return;
+                }
+            } catch {
+                // If we can't reach Supabase, proceed without PIN (degraded mode)
+            }
+        }
+
+        await processPayment();
+    };
+
+    const handlePinConfirm = async () => {
+        if (pinBlocked) return;
+        const { sha256 } = await import('../services/api');
+        const enteredHash = await sha256(pinInput);
+        const storedHash = await api.clinicSettings.getPaymentPinHash();
+
+        if (enteredHash === storedHash) {
+            setPinStep(false);
+            setPinInput('');
+            setPinAttempts(0);
+            setPinError('');
+            await processPayment();
+        } else {
+            const newAttempts = pinAttempts + 1;
+            setPinAttempts(newAttempts);
+            setPinInput('');
+            if (newAttempts >= 3) {
+                setPinBlocked(true);
+                setPinError('Demasiados intentos fallidos. El cobro ha sido bloqueado.');
+            } else {
+                setPinError(`PIN incorrecto. Intentos restantes: ${3 - newAttempts}`);
+            }
+        }
+    };
+
+    const processPayment = async () => {
+        const numericAmount = parseFloat(totalAmount);
+        const breakdown = getPaymentBreakdown();
+
         setIsProcessing(true);
 
         try {
@@ -179,7 +238,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             onPaymentComplete(payment, response);
 
-            alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);
+        alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);
 
             // Usar la URL efímera pública de Quipu si viene en la respuesta,
             // si no, pedirla al endpoint de descarga local
@@ -232,7 +291,72 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in">
-            <div className="bg-white max-w-2xl w-full rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 duration-500">
+            <div className="bg-white max-w-2xl w-full rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 duration-500 relative">
+
+                {/* PIN Authorization Overlay */}
+                {pinStep && (
+                    <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-[2.5rem] p-10 space-y-6">
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center ${pinBlocked ? 'bg-red-100' : 'bg-slate-100'}`}>
+                            {pinBlocked
+                                ? <AlertTriangle size={32} className="text-red-500" />
+                                : <Lock size={32} className="text-slate-700" />}
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-xl font-black text-slate-900">
+                                {pinBlocked ? 'Cobro Bloqueado' : 'Se requiere autorización'}
+                            </h3>
+                            <p className="text-sm text-slate-500 mt-1">
+                                {pinBlocked
+                                    ? 'Se han agotado los intentos. Cierra y vuelve a intentarlo.'
+                                    : 'Introduce el PIN de autorización para confirmar el cobro por TPV.'}
+                            </p>
+                        </div>
+
+                        {!pinBlocked && (
+                            <div className="w-full max-w-xs space-y-3">
+                                <input
+                                    type="password"
+                                    value={pinInput}
+                                    onChange={e => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                                    onKeyDown={e => e.key === 'Enter' && handlePinConfirm()}
+                                    placeholder="PIN de autorización"
+                                    autoFocus
+                                    maxLength={8}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-center text-2xl font-black tracking-[0.5em] outline-none focus:ring-2 focus:ring-slate-400"
+                                />
+                                {pinAttempts > 0 && (
+                                    <p className="text-xs font-bold text-center text-amber-600">
+                                        Intentos restantes: {3 - pinAttempts}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {pinError && (
+                            <p className="text-xs font-black text-red-600 flex items-center gap-1">
+                                <AlertTriangle size={13} /> {pinError}
+                            </p>
+                        )}
+
+                        <div className="flex gap-3 w-full max-w-xs">
+                            <button
+                                onClick={() => { setPinStep(false); setPinInput(''); setPinError(''); }}
+                                className="flex-1 py-3 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            {!pinBlocked && (
+                                <button
+                                    onClick={handlePinConfirm}
+                                    disabled={pinInput.length < 4}
+                                    className="flex-1 bg-slate-900 text-white py-3 rounded-xl text-sm font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors"
+                                >
+                                    Confirmar
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Header */}
                 <div className="bg-gradient-to-r from-slate-900 to-slate-700 p-8 flex justify-between items-center">

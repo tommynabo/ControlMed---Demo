@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye, ShieldCheck, ChevronDown, Mail } from 'lucide-react';
+import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye, ShieldCheck, ChevronDown, Mail, Lock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { DocumentTemplate } from '../../types';
 import { api } from '../services/api';
@@ -34,7 +34,14 @@ const Settings: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const tabFromUrl = searchParams.get('tab') as any;
 
-    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'gmail' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users' | 'audit'>(tabFromUrl || 'templates');
+    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'gmail' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users' | 'audit' | 'pagos'>(tabFromUrl || 'templates');
+
+    // PIN management state
+    const [pinInput, setPinInput] = useState('');
+    const [pinConfirm, setPinConfirm] = useState('');
+    const [pinHasValue, setPinHasValue] = useState(false);
+    const [pinSaving, setPinSaving] = useState(false);
+    const [pinSaved, setPinSaved] = useState(false);
     // Ref so URL→State effect can read latest tab without being re-triggered by it
     const settingsTabRef = React.useRef(settingsTab);
     settingsTabRef.current = settingsTab;
@@ -346,6 +353,9 @@ const Settings: React.FC = () => {
                     </button>
                     <button onClick={() => setSettingsTab('audit')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'audit' ? 'bg-rose-50 text-rose-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <ShieldCheck size={14} /> Auditoría
+                    </button>
+                    <button onClick={() => { setSettingsTab('pagos'); api.clinicSettings.hasPaymentPin().then(setPinHasValue).catch(() => {}); }} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'pagos' ? 'bg-amber-50 text-amber-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <Lock size={14} /> Cobros
                     </button>
                 </div>
                 )}
@@ -1008,6 +1018,93 @@ const Settings: React.FC = () => {
 
                 {/* USERS SECTION */}
                 {settingsTab === 'users' && !isReception && <Users />}
+
+                {/* ─── PAGOS / PIN SECTION ─────────────────────────────────────────── */}
+                {settingsTab === 'pagos' && !isReception && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                        <div>
+                            <h3 className="text-3xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
+                                <Lock className="text-amber-500" size={28} />
+                                Seguridad de Cobros
+                            </h3>
+                            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">
+                                PIN obligatorio para autorizar cobros por Tarjeta y Transferencia
+                            </p>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5">
+                            <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                                <Lock size={16} className="text-amber-600 flex-shrink-0" />
+                                <p className="text-xs font-bold text-amber-700">
+                                    {pinHasValue
+                                        ? 'El PIN de autorización está configurado. Cámbialo introduciendo uno nuevo.'
+                                        : 'No hay PIN configurado. Los cobros por Tarjeta y Transferencia no lo requerirán hasta que establezcas uno.'}
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Nuevo PIN (4–8 dígitos)</label>
+                                    <input
+                                        type="password"
+                                        value={pinInput}
+                                        onChange={e => { setPinInput(e.target.value.replace(/\D/g, '').slice(0, 8)); setPinSaved(false); }}
+                                        placeholder="••••"
+                                        maxLength={8}
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-amber-100 tracking-widest"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Confirmar PIN</label>
+                                    <input
+                                        type="password"
+                                        value={pinConfirm}
+                                        onChange={e => { setPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 8)); setPinSaved(false); }}
+                                        placeholder="••••"
+                                        maxLength={8}
+                                        className={`w-full bg-slate-50 border rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 tracking-widest ${
+                                            pinConfirm && pinInput !== pinConfirm
+                                                ? 'border-red-300 focus:ring-red-100'
+                                                : 'border-slate-200 focus:ring-amber-100'
+                                        }`}
+                                    />
+                                    {pinConfirm && pinInput !== pinConfirm && (
+                                        <p className="text-[10px] text-red-500 font-bold mt-1">Los PINs no coinciden</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <button
+                                    disabled={pinSaving || pinInput.length < 4 || pinInput !== pinConfirm}
+                                    onClick={async () => {
+                                        setPinSaving(true);
+                                        try {
+                                            await api.clinicSettings.setPaymentPin(pinInput);
+                                            setPinHasValue(true);
+                                            setPinSaved(true);
+                                            setPinInput('');
+                                            setPinConfirm('');
+                                        } catch {
+                                            alert('Error al guardar el PIN');
+                                        } finally {
+                                            setPinSaving(false);
+                                        }
+                                    }}
+                                    className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl text-xs font-black uppercase disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors"
+                                >
+                                    {pinSaving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+                                    Guardar PIN
+                                </button>
+                                {pinSaved && (
+                                    <span className="text-xs text-emerald-600 font-black flex items-center gap-1">
+                                        <CheckCircle2 size={14} /> PIN guardado correctamente
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* ─── AUDIT LOG SECTION (ADMIN only) ─────────────────────────────── */}
                 {settingsTab === 'audit' && (
