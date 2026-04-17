@@ -229,13 +229,6 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                 budgetId: appointment?.budgetId
             };
 
-            if (appointment) {
-                await api.appointments.update(appointment.id, {
-                    paid: !isPartialPayment,
-                    status: isPartialPayment ? 'EN_PROCESO' : 'COMPLETADO'
-                });
-            }
-
             onPaymentComplete(payment, response);
 
         alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);

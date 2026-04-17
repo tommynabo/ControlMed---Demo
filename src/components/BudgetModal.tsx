@@ -41,7 +41,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
             api.services.getAll()
                 .then(fetched => {
                     const packs = [
-                        { id: 'pack-1', name: 'Pack: 1ª Visita + OPG', price: 45, isPack: true },
+                        { id: 'pack-1', name: 'Pack: 1ª Visita + OPG', price: 60, isPack: true },
                         { id: 'pack-2', name: 'Pack: 1ª Visita + OPG + Tartrectomía', price: 60, isPack: true }
                     ];
                     setAvailableServices([...packs, ...fetched]);
@@ -68,7 +68,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 setItems(prev => [
                     ...prev,
                     { serviceId: 'srv-11', name: 'Primera visita', price: 0, quantity: 1, tooth: '' },
-                    { serviceId: 'srv-12', name: 'OPG', price: 45, quantity: 1, tooth: '' }
+                    { serviceId: 'srv-12', name: 'OPG', price: 60, quantity: 1, tooth: '' }
                 ]);
             } else if (service.id === 'pack-2') {
                 setItems(prev => [

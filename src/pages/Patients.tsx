@@ -340,6 +340,8 @@ const Patients: React.FC = () => {
             let clinicPhone = '';
             let clinicEmail = '';
             let clinicIBAN = '';
+            let clinicResponsibleName = '';
+            let clinicResponsibleEmail = '';
             try {
                 const [clinicInfo, addresses, billing] = await Promise.all([
                     api.clinic.getInfo(),
@@ -353,8 +355,10 @@ const Patients: React.FC = () => {
                 }
                 if (billing) {
                     clinicCIF = billing.cif || billing.tax_id || '';
-                    clinicSubtitle = billing.business_name || billing.razon_social || clinicSubtitle;
-                    clinicIBAN = billing.iban || '';
+                    clinicSubtitle = billing.business_name || billing.razon_social || billing.company_name || clinicSubtitle;
+                    clinicIBAN = billing.iban || billing.bank_account || '';
+                    clinicResponsibleName = billing.responsible_name || '';
+                    clinicResponsibleEmail = billing.responsible_email || clinicEmail || '';
                 }
                 if (addresses && addresses.length > 0) {
                     const addr = addresses[0];
@@ -474,9 +478,28 @@ const Patients: React.FC = () => {
             </div>
         </div>
 
+        <!-- FIRMA -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:30px;margin-bottom:30px;gap:40px">
+            <div style="flex:1">
+                <div style="font-weight:700;font-size:12px;margin-bottom:40px"><strong>Firma:</strong></div>
+                <div style="border-top:1px solid #333;width:200px;margin-top:8px"></div>
+            </div>
+            <div style="text-align:right;flex:1">
+                <img src="${logoUrl}" onerror="this.style.display='none'" style="height:55px;max-width:100px;object-fit:contain;display:block;margin-left:auto;margin-bottom:6px" />
+                <div style="font-size:10px;color:#444;line-height:1.6">
+                    <div style="font-weight:700">${clinicSubtitle || clinicName}</div>
+                    ${clinicCIF ? `<div>${clinicCIF}</div>` : ''}
+                    ${clinicAddress ? `<div style="white-space:pre-line">${clinicAddress}</div>` : ''}
+                    ${clinicPhone ? `<div>${clinicPhone}</div>` : ''}
+                    ${clinicEmail ? `<div>${clinicEmail}</div>` : ''}
+                </div>
+            </div>
+        </div>
+
         <!-- FOOTER TEXT -->
         <div style="font-size:10px;color:#555;line-height:1.7;margin-top:8px">
-            <p>Este presupuesto tiene una validez de 90 días a partir de la fecha de emisión. Pasado este plazo, ${clinicSubtitle || clinicName} se reserva el derecho de revisar los precios y condiciones según posibles cambios en tarifas, materiales o necesidades clínicas del paciente. La aceptación del presente presupuesto implica la conformidad del paciente con los tratamientos, precios y condiciones indicadas.</p>
+            <p style="margin-bottom:8px">Este presupuesto tiene una validez de 90 días a partir de la fecha de emisión. Pasado este plazo, ${clinicSubtitle || clinicName} se reserva el derecho de revisar los precios y condiciones según posibles cambios en tarifas, materiales o necesidades clínicas del paciente. La aceptación del presente presupuesto implica la conformidad del paciente con los tratamientos, precios y condiciones indicadas.</p>
+            <p style="font-size:9px;color:#666;line-height:1.6"><strong>PROTECCION DE DATOS:</strong> De conformidad con lo dispuesto en el Reglamento (UE) 2016/679 de 27 de abril (RGPD) y la Ley Orgánica 3/2018 de 5 de diciembre (LOPDGDD), le informamos que los datos personales y dirección de correo electrónico del interesado, serán tratados bajo la responsabilidad de ${clinicResponsibleName || clinicSubtitle || clinicName}${clinicAddress ? ` con domicilio en ${clinicAddress.replace(/\n/g, ', ')}` : ''} con la finalidad de gestionar la relación contractual con nuestros clientes. Le informamos que puede ejercer los derechos de acceso, rectificación, supresión, limitación, portabilidad y oposición mediante petición escrita dirigida al titular del fichero o soporte, acreditando su identidad, bien por vía postal o bien por vía electrónica a ${clinicResponsibleEmail || clinicEmail}.</p>
         </div>
     </div>
 </body>

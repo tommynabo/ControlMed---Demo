@@ -298,8 +298,8 @@ router.post('/payments/create', async (req, res) => {
                     url: quipuResult.success ? quipuResult.pdf_url : null,
                     patientId, amount: numericAmount, date: new Date(), status: 'issued',
                     paymentMethod: method,
-                    concept: isPartial ? `${solvedTreatmentName} (Pago Parcial)` : solvedTreatmentName,
-                    appointmentId: (appointmentId && !isPartial) ? appointmentId : null,
+                    concept: isPartialPayment ? `${solvedTreatmentName} (Pago Parcial)` : solvedTreatmentName,
+                    appointmentId: (appointmentId && !isPartialPayment) ? appointmentId : null,
                     relatedPaymentId: payment.id
                 }
             });
