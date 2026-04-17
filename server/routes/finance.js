@@ -192,7 +192,16 @@ router.get('/payments', async (req, res) => {
 
         const { data, error } = await supabase.from('Payment').select('*').order('createdAt', { ascending: false });
         if (error) return res.status(500).json({ error: error.message });
-        res.json(data);
+
+        // Enrich with doctor names
+        const doctorIds = [...new Set((data || []).filter(p => p.doctorId).map(p => p.doctorId))];
+        let doctorMap = {};
+        if (doctorIds.length > 0) {
+            const { data: doctors } = await supabase.from('Doctor').select('id, name').in('id', doctorIds);
+            (doctors || []).forEach(d => { doctorMap[d.id] = d.name; });
+        }
+        const enriched = (data || []).map(p => ({ ...p, doctorName: p.doctorId ? (doctorMap[p.doctorId] || null) : null }));
+        res.json(enriched);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

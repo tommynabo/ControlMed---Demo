@@ -23,7 +23,7 @@ const DENOMINATIONS = [
 ];
 
 const CashRegister: React.FC = () => {
-    const { invoices, expenses, appointments, patients, api, currentUser } = useAppContext();
+    const { invoices, expenses, appointments, patients, doctors, api, currentUser } = useAppContext();
 
     // Arqueo state
     const [arqueoCompleted, setArqueoCompleted] = useState(false);
@@ -306,12 +306,16 @@ const CashRegister: React.FC = () => {
                                     <tr>
                                         <th className="p-6 pl-8">Hora</th>
                                         <th className="p-6">Concepto / Paciente</th>
+                                        <th className="p-6">Doctor</th>
                                         <th className="p-6 text-center">Tipo</th>
                                         <th className="p-6 text-right pr-8">Importe</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-sm">
-                                    {todayInvoices.map(inv => (
+                                    {todayInvoices.map(inv => {
+                                        const appt = appointments.find(a => a.id === inv.appointmentId);
+                                        const doctor = appt ? doctors.find(d => d.id === appt.doctorId) : null;
+                                        return (
                                         <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="p-6 pl-8 font-mono text-slate-500 text-xs">
                                                 {inv.date ? new Date(inv.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
@@ -322,6 +326,13 @@ const CashRegister: React.FC = () => {
                                                     {patients.find(p => p.id === inv.patientId)?.name || 'Paciente'}
                                                 </span>
                                             </td>
+                                            <td className="p-6">
+                                                {doctor ? (
+                                                    <span className="text-xs font-bold text-violet-700">{doctor.name}</span>
+                                                ) : (
+                                                    <span className="text-xs text-slate-300">—</span>
+                                                )}
+                                            </td>
                                             <td className="p-6 text-center">
                                                 <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase">
                                                     Ingreso ({inv.paymentMethod})
@@ -331,13 +342,17 @@ const CashRegister: React.FC = () => {
                                                 +{inv.amount.toFixed(2)}€
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                     {todayExpenses.map(exp => (
                                         <tr key={exp.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="p-6 pl-8 font-mono text-slate-500 text-xs">--:--</td>
                                             <td className="p-6 font-bold text-slate-700">
                                                 {exp.description}
                                                 <span className="block text-xs font-normal text-slate-400">{exp.category}</span>
+                                            </td>
+                                            <td className="p-6">
+                                                <span className="text-xs text-slate-300">—</span>
                                             </td>
                                             <td className="p-6 text-center">
                                                 <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold uppercase">

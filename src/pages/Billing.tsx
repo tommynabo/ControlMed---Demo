@@ -9,7 +9,7 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { Invoice, Expense } from '../../types';
 
 const Billing: React.FC = () => {
-    const { patients, setPatients, invoices, setInvoices, expenses, setExpenses, currentUserRole, refreshPatients, appointments } = useAppContext();
+    const { patients, setPatients, invoices, setInvoices, expenses, setExpenses, currentUserRole, refreshPatients, appointments, doctors } = useAppContext();
     const api = apiService; // Use direct import
 
     const [billingTab, setBillingTab] = useState<'invoices' | 'payments' | 'expenses'>('invoices');
@@ -465,6 +465,7 @@ const Billing: React.FC = () => {
                                             <th className="p-6 pl-10">Fecha</th>
                                             <th className="p-6">Paciente</th>
                                             <th className="p-6">Concepto / Notas</th>
+                                            <th className="p-6">Doctor</th>
                                             <th className="p-6 text-center">Método</th>
                                             <th className="p-6 text-right pr-10">Importe</th>
                                         </tr>
@@ -473,7 +474,7 @@ const Billing: React.FC = () => {
                                         {allPayments
                                             .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
                                             .length === 0 ? (
-                                            <tr><td colSpan={5} className="p-16 text-center text-slate-400 font-bold uppercase tracking-widest opacity-50">
+                                            <tr><td colSpan={6} className="p-16 text-center text-slate-400 font-bold uppercase tracking-widest opacity-50">
                                                 {paymentsFilterDate ? 'No hay cobros para esta fecha' : 'No hay cobros registrados'}
                                             </td></tr>
                                         ) : (
@@ -489,6 +490,16 @@ const Billing: React.FC = () => {
                                                         </td>
                                                         <td className="p-6">
                                                             <span className="text-sm text-slate-500 font-medium">{pmt.notes || pmt.type || '—'}</span>
+                                                        </td>
+                                                        <td className="p-6">
+                                                            {pmt.doctorName ? (
+                                                                <span className="inline-flex items-center gap-1.5 text-sm font-bold text-violet-700">
+                                                                    <User size={13} className="text-violet-400" />
+                                                                    {pmt.doctorName}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-slate-300 text-sm">—</span>
+                                                            )}
                                                         </td>
                                                         <td className="p-6 text-center">
                                                             <span className="bg-slate-100 px-4 py-2 rounded-xl text-[10px] font-black uppercase text-slate-500 tracking-wider">{pmt.method}</span>
