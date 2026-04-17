@@ -1,0 +1,9 @@
+idProvee;idEmpresa;nombre;tipo;estado;tele1;tele2;email;forma;nombref;nif;domicilio;cp;pobla;provi;idPais;notas;domiciliof;cpf;poblaf;provif;iconos;fax;web;idImport;iban;ncuenta;idFranquicia;alta;num;idlistado;seoga_id;ncuentacontable
+238909;24878;Anthogyr;2;1;;;;;;;;;;;1;;;;;;yynnnnnnnn;;;0;;;0;"0000-00-00 00:00:00";1;0;0;0
+238911;24878;ClinicCloud;2;1;;;;;;;;;;;1;;;;;;yynnnnnnnn;;;0;;;0;"0000-00-00 00:00:00";2;0;0;0
+242747;24878;LABORDENT;2;1;;;;;;;"C/ DE LES ARTS I ELS OFICIS, 25-29";08901;"L'HOSPITALET DE LLOBREGAT";BARCELONA;1;;;;;;yynnnnnnnn;;;0;;;0;"0000-00-00 00:00:00";3;176998;0;0
+242753;24878;"PROCLINIC SAU";2;0;;;;;;;;;;;1;;;;;;yynnnnnnnn;;;0;;;0;"0000-00-00 00:00:00";4;176999;0;0
+242811;24878;"SEMAPRIN, SL";2;0;;933072288;semaprin@semaprin.com;EFECTIVO;;;"C/SELVA DE MAR, 60";08019;BARCELONA;BARCELONA;1;;;;;;yynnnnnnnn;;;0;;;0;"0000-00-00 00:00:00";5;0;0;0
+242812;24878;"GARCIA DE POU";2;0;;933196260;;TARJETA;"GARCIA DE POU";A17060864;"PASEO PICASSO, 12";08003;BARCELONA;BARCELONA;1;;;;;;yynnnnnnnn;;www.garciadepou.com;0;;;0;"0000-00-00 00:00:00";6;176999;0;0
+242873;24878;STRAUMANN;2;1;;;;;;;;;;;1;;;;;;yynnnnnnnn;;;0;;;0;"0000-00-00 00:00:00";7;176999;0;0
+248799;24878;"LABORATORIO DENTAL SANT ANDREU, SL";2;1;;;;;;;;;;;1;;;;;;yynnnnnnnn;;;0;;;0;"0000-00-00 00:00:00";8;176998;0;0

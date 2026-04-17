@@ -1,0 +1,33 @@
+idListado;idEmpresa;tipo;valor;orden;estado;idListadoRel;color;codigo;valorNumerico;idFranquicia;mostrarInput;nombre;procedenciaInput;estadopendiente;estadofinalizado;doctoralia;idImport
+176972;24878;1;Instagram;1;1;0;0;;0;0;0;;0;0;0;0;0
+176973;24878;1;Facebook;2;1;0;0;;0;0;0;;0;0;0;0;0
+176974;24878;1;"Referido ";3;1;0;0;;0;0;1;;0;0;0;0;0
+176975;24878;1;Google;4;1;0;0;;0;0;0;;0;0;0;0;0
+176976;24878;1;"Por la calle";5;1;0;0;;0;0;0;;0;0;0;0;0
+176977;24878;22;Pre-tratamiento;1;1;0;0;;0;0;0;;0;0;0;0;0
+176978;24878;22;"En tratamiento";2;1;0;0;;0;0;0;;0;0;0;0;0
+176979;24878;22;"tratamiento Finalizado";3;1;0;0;;0;0;0;;0;0;0;0;0
+176980;24878;22;"Presupuesto entregado";4;1;0;0;;0;0;0;;0;0;0;0;0
+176981;24878;22;"A la espera de presupuesto";5;1;0;0;;0;0;0;;0;0;0;0;0
+176982;24878;28;"Toma Anticoagulantes";1;1;0;0;;0;0;0;;0;0;0;0;0
+176983;24878;28;Diabetico;2;1;0;0;;0;0;0;;0;0;0;0;0
+176984;24878;28;Hipertenso;3;1;0;0;;0;0;0;;0;0;0;0;0
+176985;24878;28;"De Riesgo";4;1;0;0;;0;0;0;;0;0;0;0;0
+176986;24878;28;Hepatitis;5;1;0;0;;0;0;0;;0;0;0;0;0
+176987;24878;28;VIH+;6;1;0;0;;0;0;0;;0;0;0;0;0
+176988;24878;4;"CAIXA Financieros";1;1;0;0;;0;0;0;;0;0;0;0;0
+176989;24878;4;Bizum;2;1;0;0;;0;0;0;;0;0;0;0;0
+176990;24878;29;Telefono;1;1;0;0;;0;0;0;;0;0;0;0;0
+176991;24878;29;Whatsapp;2;1;0;0;;0;0;0;;0;0;0;0;0
+176992;24878;29;"Correo electronico";3;1;0;0;;0;0;0;;0;0;0;0;0
+176993;24878;35;"Se tiene que abonar el 50% el dia de la toma de medidas y 50% el dia de la entrega.";1;1;0;0;;0;0;0;Protesis;0;0;0;0;0
+176994;24878;37;"Todo tipo de protesis tiene garantia de 1 año.";1;1;0;0;;0;0;0;;0;0;0;0;0
+176995;24878;39;Pendiente;1;1;0;0;;0;0;0;;0;0;0;0;0
+176996;24878;39;Aceptado;2;1;0;0;;0;0;1;;0;0;0;0;0
+176997;24878;39;Rechazado;3;1;0;0;;0;0;0;;0;0;0;0;0
+176998;24878;26;"Gasos de laboratorio";1;1;0;0;;0;0;0;;0;0;0;0;0
+176999;24878;26;"Gastos de materiales";2;1;0;0;;0;0;0;;0;0;0;0;0
+177000;24878;26;"Nomina de empleados";3;1;0;0;;0;0;0;;0;0;0;0;0
+177001;24878;26;ClinicCloud;4;1;0;0;;0;0;0;;0;0;0;0;0
+182377;24878;29;DOCTORALIA;4;1;0;#6A6969;;0;0;0;0;0;0;0;1;0
+182378;24878;1;DOCTORALIA;6;1;0;#6A6969;;0;0;0;0;0;0;0;1;0

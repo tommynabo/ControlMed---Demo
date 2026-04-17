@@ -91,6 +91,9 @@ const Agenda: React.FC = () => {
     const [showMiniCal, setShowMiniCal] = useState(false);
     const [miniCalMonth, setMiniCalMonth] = useState(new Date());
 
+    // Panel: citas anuladas / no presentadas
+    const [showCancelledPanel, setShowCancelledPanel] = useState(false);
+
     // Sticky Header Refs
     const headerContainerRef = useRef<HTMLDivElement>(null);
     const gridContainerRef = useRef<HTMLDivElement>(null);
@@ -849,12 +852,21 @@ const Agenda: React.FC = () => {
     const isVisibleFilter = (a: Appointment) => {
         if (!a.date) return false;
         const s = (a.status || '').toLowerCase();
-        return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada';
+        return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada' && s !== 'noshow' && s !== 'no vino';
     };
     const knownDoctorIds = new Set(doctors.map(d => d.id));
+    // Citas anuladas o no presentadas del día actual (para el panel separado)
+    const todayDateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+    const cancelledApptsToday = viewMode === 'daily' ? appointments.filter(a => {
+        if (!a.date || !a.time) return false;
+        const s = (a.status || '').toLowerCase();
+        const isCancelledOrNoShow = s === 'cancelled' || s === 'canceled' || s === 'anulada' || s === 'noshow' || s === 'no vino';
+        const matchesDoctor = selectedDoctorId === 'all' || a.doctorId === selectedDoctorId;
+        return isCancelledOrNoShow && apptDateStrFilter(a) === todayDateStr && matchesDoctor;
+    }) : [];
     let unassignedApptsToShow: Appointment[] = [];
     if (viewMode === 'daily') {
-        const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+        const dateStr = todayDateStr;
         unassignedApptsToShow = appointments.filter(a =>
             isVisibleFilter(a) && apptDateStrFilter(a) === dateStr && (!a.doctorId || !knownDoctorIds.has(a.doctorId))
         );
@@ -1445,7 +1457,7 @@ const Agenda: React.FC = () => {
                                             const isVisible = (a: Appointment) => {
                                                 if (!a.date || !a.time) return false; // Cannot render without date+time
                                                 const s = (a.status || '').toLowerCase();
-                                                return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada';
+                                                return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada' && s !== 'noshow' && s !== 'no vino';
                                             };
 
                                             // Build columns
@@ -1614,6 +1626,57 @@ const Agenda: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* PANEL: ANULADAS Y NO PRESENTADOS (solo vista diaria) */}
+            {viewMode === 'daily' && cancelledApptsToday.length > 0 && (
+                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
+                    <button
+                        onClick={() => setShowCancelledPanel(p => !p)}
+                        className="w-full flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className="text-lg">🚫</span>
+                            <span className="font-black text-slate-800 text-sm uppercase tracking-wide">Anuladas / No Presentados</span>
+                            <span className="bg-red-100 text-red-700 text-xs font-black px-2.5 py-0.5 rounded-full">
+                                {cancelledApptsToday.length}
+                            </span>
+                        </div>
+                        <span className="text-slate-400 text-lg">{showCancelledPanel ? '▲' : '▼'}</span>
+                    </button>
+                    {showCancelledPanel && (
+                        <div className="px-6 pb-5 space-y-2">
+                            {[...cancelledApptsToday].sort((a, b) => (a.time || '00:00').localeCompare(b.time || '00:00')).map(appt => {
+                                const s = (appt.status || '').toLowerCase();
+                                const isNoShow = s === 'noshow' || s === 'no vino';
+                                const patientName = patients.find(p => p.id === appt.patientId)?.name || '—';
+                                const docName = doctors.find(d => d.id === appt.doctorId)?.name || '';
+                                return (
+                                    <div
+                                        key={appt.id}
+                                        onClick={(e) => handleAppointmentClick(e, appt)}
+                                        className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer border transition-all hover:scale-[1.01] ${
+                                            isNoShow
+                                                ? 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-800'
+                                                : 'bg-red-50 border-red-200 text-red-800'
+                                        }`}
+                                    >
+                                        <span className="font-black text-sm w-12 shrink-0">{appt.time}</span>
+                                        <span className="font-bold text-sm flex-1 line-through opacity-70">{patientName}</span>
+                                        {docName && <span className="text-xs opacity-60 shrink-0">{docName}</span>}
+                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                                            isNoShow
+                                                ? 'bg-fuchsia-200 text-fuchsia-900'
+                                                : 'bg-red-200 text-red-900'
+                                        }`}>
+                                            {isNoShow ? 'No vino' : 'Anulada'}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* APPOINTMENT MODAL */}
             {isAppointmentModalOpen && (
