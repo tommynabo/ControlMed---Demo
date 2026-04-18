@@ -331,8 +331,10 @@ const Patients: React.FC = () => {
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
-            // Logo URL — Vite serves from public/ automatically
-            const logoDataUrl = '/logo.jpeg';
+            // Logo URL — absolute to work in print window context
+            const host = window.location.host;
+            const protocol = window.location.protocol;
+            const logoDataUrl = `${protocol}//${host}/logo.jpeg`;
             
             // Fetch clinic data dynamically from Settings > Clínica
             let clinicName = 'CHC Clínica Dental';
