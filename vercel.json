@@ -33,7 +33,7 @@
             "destination": "/api/index.js"
         },
         {
-            "source": "/(?!.*\\.).*",
+            "source": "/:path((?!.*\\.).*)",
             "destination": "/index.html"
         }
     ]
