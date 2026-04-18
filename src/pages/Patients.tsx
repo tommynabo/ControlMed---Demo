@@ -331,10 +331,8 @@ const Patients: React.FC = () => {
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
-            // Logo URL — absolute to work in print window context
-            const host = window.location.host;
-            const protocol = window.location.protocol;
-            const logoDataUrl = `${protocol}//${host}/logo.jpeg`;
+            // Logo URL — production Vercel URL
+            const logoDataUrl = 'https://controlmed.vercel.app/logo.jpeg';
             
             // Fetch clinic data dynamically from Settings > Clínica
             let clinicName = 'CHC Clínica Dental';
