@@ -331,20 +331,9 @@ const Patients: React.FC = () => {
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
-            const logoUrl = `${window.location.origin}/logo.jpeg`;
-            // Convert logo to base64 so it renders immediately in the print window
-            let logoDataUrl = '';
-            try {
-                const logoRes = await fetch(logoUrl);
-                const blob = await logoRes.blob();
-                logoDataUrl = await new Promise<string>((resolve) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.readAsDataURL(blob);
-                });
-            } catch {
-                logoDataUrl = logoUrl;
-            }
+            // Logo as direct public URL (renders in print window)
+            const logoDataUrl = '/logo.jpeg';
+            
             // Fetch clinic data dynamically from Settings > Clínica
             let clinicName = 'CHC Clínica Dental';
             let clinicSubtitle = 'CHCMEDIC SL';
