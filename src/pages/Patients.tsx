@@ -331,8 +331,16 @@ const Patients: React.FC = () => {
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
-            // Logo URL — production Vercel URL
-            const logoDataUrl = 'https://controlmed.vercel.app/logo.jpeg';
+            // Fetch logo as blob and convert to data URL
+            let logoDataUrl = '';
+            try {
+                const logoRes = await fetch('https://controlmed.vercel.app/logo.jpeg');
+                const blob = await logoRes.blob();
+                logoDataUrl = URL.createObjectURL(blob);
+            } catch (err) {
+                console.warn('Could not load logo:', err);
+                logoDataUrl = 'https://controlmed.vercel.app/logo.jpeg'; // fallback
+            }
             
             // Fetch clinic data dynamically from Settings > Clínica
             let clinicName = 'CHC Clínica Dental';
