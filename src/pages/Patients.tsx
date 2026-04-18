@@ -332,6 +332,19 @@ const Patients: React.FC = () => {
         const w = window.open('', '_blank');
         if (w) {
             const logoUrl = `${window.location.origin}/logo.jpeg`;
+            // Convert logo to base64 so it renders immediately in the print window
+            let logoDataUrl = '';
+            try {
+                const logoRes = await fetch(logoUrl);
+                const blob = await logoRes.blob();
+                logoDataUrl = await new Promise<string>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.readAsDataURL(blob);
+                });
+            } catch {
+                logoDataUrl = logoUrl;
+            }
             // Fetch clinic data dynamically from Settings > Clínica
             let clinicName = 'CHC Clínica Dental';
             let clinicSubtitle = 'CHCMEDIC SL';
@@ -418,7 +431,7 @@ const Patients: React.FC = () => {
         <!-- HEADER: Logo + Presupuesto box -->
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px">
             <div style="display:flex;align-items:center;gap:14px">
-                <img src="${logoUrl}" onerror="this.style.display='none'" style="height:70px;max-width:120px;object-fit:contain" />
+                <img src="${logoDataUrl}" onerror="this.style.display='none'" style="height:70px;max-width:120px;object-fit:contain" />
                 <div style="font-size:10px;color:#555;line-height:1.7;margin-top:4px">
                     <div style="font-weight:700;font-size:11px;color:#222">CLÍNICA DENTAL</div>
                 </div>
@@ -485,7 +498,7 @@ const Patients: React.FC = () => {
                 <div style="border-top:1px solid #333;width:200px;margin-top:8px"></div>
             </div>
             <div style="text-align:right;flex:1">
-                <img src="${logoUrl}" onerror="this.style.display='none'" style="height:55px;max-width:100px;object-fit:contain;display:block;margin-left:auto;margin-bottom:6px" />
+                <img src="${logoDataUrl}" onerror="this.style.display='none'" style="height:55px;max-width:100px;object-fit:contain;display:block;margin-left:auto;margin-bottom:6px" />
                 <div style="font-size:10px;color:#444;line-height:1.6">
                     <div style="font-weight:700">${clinicSubtitle || clinicName}</div>
                     ${clinicCIF ? `<div>${clinicCIF}</div>` : ''}
