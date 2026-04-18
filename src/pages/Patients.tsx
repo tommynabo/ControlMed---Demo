@@ -331,8 +331,8 @@ const Patients: React.FC = () => {
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
-            // Logo as direct public URL (renders in print window)
-            const logoDataUrl = '/logo.jpeg';
+            // Logo como URL absoluta completa
+            const logoDataUrl = `${window.location.origin}/logo.jpeg`;
             
             // Fetch clinic data dynamically from Settings > Clínica
             let clinicName = 'CHC Clínica Dental';
