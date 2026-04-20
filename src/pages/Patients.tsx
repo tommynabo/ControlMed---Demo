@@ -808,9 +808,6 @@ const Patients: React.FC = () => {
     const [isSubmittingTreatment, setIsSubmittingTreatment] = useState(false);
     const [isSubmittingWhatsapp, setIsSubmittingWhatsapp] = useState(false);
 
-    // Reminder Modal State
-    const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
-
     // Fetch templates and logs when modal or tab opens
     React.useEffect(() => {
         if (patientTab === 'whatsapp' && selectedPatient) {
@@ -3136,13 +3133,6 @@ const Patients: React.FC = () => {
             )}
 
             {/* Reminder Modal */}
-            {selectedPatient && (
-                <ReminderModal
-                    isOpen={isReminderModalOpen}
-                    onClose={() => setIsReminderModalOpen(false)}
-                    patient={selectedPatient}
-                />
-            )}
             {selectedPatient && (
                 <ReminderModal
                     isOpen={isReminderModalOpen}
