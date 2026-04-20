@@ -30,7 +30,7 @@ router.post('/', async (req, res) => {
 
         if (error) throw error;
         res.json(data?.[0] || {});
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error creating reminder:', error);
         res.status(500).json({ error: error.message });
     }
@@ -56,7 +56,7 @@ router.get('/', async (req, res) => {
 
         if (error) throw error;
         res.json(data || []);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error fetching reminders:', error);
         res.status(500).json({ error: error.message });
     }
@@ -78,7 +78,7 @@ router.get('/:id', async (req, res) => {
 
         if (error) throw error;
         res.json(data);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error fetching reminder:', error);
         res.status(500).json({ error: error.message });
     }
@@ -109,7 +109,7 @@ router.put('/:id', async (req, res) => {
 
         if (error) throw error;
         res.json(data);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error updating reminder:', error);
         res.status(500).json({ error: error.message });
     }
@@ -130,7 +130,7 @@ router.delete('/:id', async (req, res) => {
 
         if (error) throw error;
         res.json({ success: true });
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error deleting reminder:', error);
         res.status(500).json({ error: error.message });
     }
@@ -153,7 +153,7 @@ router.get('/pending/due', async (req, res) => {
 
         if (error) throw error;
         res.json(data || []);
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error fetching pending reminders:', error);
         res.status(500).json({ error: error.message });
     }
