@@ -250,7 +250,9 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const addPatient = (p: Patient) => setPatients(prev => [p, ...prev]);
-    const addAppointment = (a: Appointment) => setAppointments(prev => [...prev, a]);
+    const addAppointment = (a: Appointment) => setAppointments(prev =>
+        prev.some(x => x.id === a.id) ? prev.map(x => x.id === a.id ? a : x) : [...prev, a]
+    );
     const addInvoice = (i: Invoice) => setInvoices(prev => [i, ...prev]);
 
     // RBAC helpers bound to current role

@@ -269,12 +269,13 @@ router.post('/payments/create', async (req, res) => {
         }
 
         const result = await prisma.$transaction(async (tx) => {
+            const isPartialPayment = isPartial === true;
+
             const payment = await tx.payment.create({
                 data: { id: crypto.randomUUID(), patientId, budgetId: budgetId || null, amount: numericAmount, method, type, notes: notes || null, doctorId: doctor?.id || null, createdAt: new Date().toISOString() }
             });
 
             if (appointmentId) {
-                const isPartialPayment = isPartial === true;
                 await tx.appointment.update({
                     where: { id: appointmentId },
                     data: isPartialPayment ? { paid: false, status: 'EN_PROCESO' } : { paid: true, status: 'Completed' }

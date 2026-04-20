@@ -102,15 +102,20 @@ router.post('/', async (req, res) => {
         let created;
         if (!data.historyNumber) {
             created = await prisma.$transaction(async (tx) => {
-                const last = await tx.patient.findFirst({
-                    where: { historyNumber: { not: null } },
-                    orderBy: { historyNumber: 'desc' },
+                // Use MAX extraction to avoid lexicographic ordering issues with mixed formats
+                const allNums = await tx.patient.findMany({
+                    where: { historyNumber: { startsWith: 'HC-' } },
                     select: { historyNumber: true }
                 });
                 let next = 1;
-                if (last?.historyNumber) {
-                    const m = last.historyNumber.match(/HC-(\d+)/) || last.historyNumber.match(/HCL-(\d+)/);
-                    if (m) next = parseInt(m[1], 10) + 1;
+                if (allNums.length > 0) {
+                    const max = allNums.reduce((best, p) => {
+                        const m = p.historyNumber.match(/HC-(\d+)/);
+                        if (!m) return best;
+                        const n = parseInt(m[1], 10);
+                        return n > best ? n : best;
+                    }, 0);
+                    if (max > 0) next = max + 1;
                 }
                 data.historyNumber = `HC-${String(next).padStart(4, '0')}`;
                 return tx.patient.create({ data });

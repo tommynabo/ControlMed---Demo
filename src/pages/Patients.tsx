@@ -602,7 +602,7 @@ const Patients: React.FC = () => {
         if (!selectedPatient) return;
 
         try {
-            await (api as any).prescriptions.delete(id);
+            await (api as any).prescriptions.delete(id, selectedPatient.id);
             setLocalPrescriptions(prev => prev.filter(p => p.id !== id));
             toast("✅ Receta eliminada.");
         } catch (e: any) {

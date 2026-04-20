@@ -152,44 +152,13 @@ const Agenda: React.FC = () => {
         
         loadSchedules();
 
-        // Reload schedules every 5 seconds to catch changes from Settings
+        // Reload schedules every 30 seconds to catch changes from Settings
         const interval = setInterval(() => {
             loadSchedules();
-            // ✅ También refresca appointments cada 5 segundos
-            console.log('[Agenda] Refetch de appointments (polling cada 5s)');
-            queryClient.invalidateQueries({ queryKey: ['appointments'] });
-        }, 5000);
-
-        // ✅ FIX: Supabase Realtime Listener with proper cleanup (prevent duplicate subscriptions)
-        let channel: ReturnType<typeof supabase.channel> | null = null;
-        
-        try {
-            channel = supabase.channel('agenda-appointments-main')
-                .on(
-                    'postgres_changes',
-                    { event: '*', schema: 'public', table: 'Appointment' },
-                    () => {
-                        console.log('[Agenda Realtime] Appointment changed, invalidating cache');
-                        queryClient.invalidateQueries({ queryKey: ['appointments'] });
-                    }
-                )
-                .subscribe((status) => {
-                    if (status === 'SUBSCRIBED') {
-                        console.log('[Agenda Realtime] ✅ Subscribed to appointments');
-                    }
-                });
-        } catch (e) {
-            console.warn('[Agenda Realtime] Could not subscribe:', e);
-        }
+        }, 30000);
 
         return () => {
             clearInterval(interval);
-            if (channel) {
-                try {
-                    channel.unsubscribe();
-                    console.log('[Agenda Realtime] 🔌 Unsubscribed');
-                } catch (_) {}
-            }
         };
     }, []);
 

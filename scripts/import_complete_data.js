@@ -228,11 +228,14 @@ async function step1_patients() {
       continue;
     }
 
-    // Safe history number
+    // Safe history number — always stored as HC-XXXX format (4-digit zero-padded)
     let safeNum = null;
-    if (numStr && !claimedNums.has(numStr)) {
-      safeNum = numStr;
-      claimedNums.add(numStr);
+    if (numStr) {
+      const formatted = `HC-${String(parseInt(numStr, 10)).padStart(4, '0')}`;
+      if (!claimedNums.has(formatted)) {
+        safeNum = formatted;
+        claimedNums.add(formatted);
+      }
     }
 
     // Match existing

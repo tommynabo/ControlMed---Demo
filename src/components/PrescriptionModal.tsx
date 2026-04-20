@@ -115,7 +115,10 @@ ${formData.prescriberName}
 
     const handlePrint = () => {
         const w = window.open('', '_blank');
-        if (!w) return;
+        if (!w) {
+            alert('El navegador ha bloqueado la ventana emergente. Permite las ventanas emergentes para esta página e inténtalo de nuevo.');
+            return;
+        }
 
         const patientFullName = [patient.name, patient.lastName1, patient.lastName2].filter(Boolean).join(' ');
         const prescDate = formData.prescriptionDate
@@ -133,9 +136,9 @@ ${formData.prescriberName}
             <div class="rp-prefix">RP/</div>
             <div class="medication-name">${formData.medication || '—'}</div>
             <div class="col-label">Forma Farmacéutica</div>
-            <div class="col-value-sm">${formData.pharmaceuticalForm}</div>
+            <div class="col-value-sm">${formData.pharmaceuticalForm || '—'}</div>
             <div class="col-label">Vía de Administración</div>
-            <div class="col-value-sm">${formData.administrationRoute}</div>
+            <div class="col-value-sm">${formData.administrationRoute || '—'}</div>
             <div class="col-label">Núm. Envases</div>
             <div class="col-value">${formData.packagesNumber || 1}</div>
             <div class="sustituir-block">
@@ -181,11 +184,11 @@ ${formData.prescriberName}
             <div class="prescriptor-section">
                 <div class="section-header">Prescriptor</div>
                 <div class="col-label">Nombre</div>
-                <div class="col-value-sm">${formData.prescriberName}</div>
+                <div class="col-value-sm">${formData.prescriberName || '—'}</div>
                 <div class="col-label">Núm. Colegiado</div>
                 <div class="col-value-sm">—</div>
                 <div class="col-label">Especialidad</div>
-                <div class="col-value-sm">${formData.prescriberSpecialty}</div>
+                <div class="col-value-sm">${formData.prescriberSpecialty || '—'}</div>
                 <div class="col-label">Fecha Prescripción</div>
                 <div class="col-value-sm">${prescDate}</div>
             </div>

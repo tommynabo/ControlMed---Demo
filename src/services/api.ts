@@ -263,7 +263,9 @@ export const api = {
 
     prescriptions: {
         create: async (data: any) => {
-            const res = await fetch(`${API_URL}/prescriptions`, {
+            const patientId = data.patientId;
+            if (!patientId) throw new Error('patientId es requerido para crear una receta');
+            const res = await fetch(`${API_URL}/patients/${patientId}/prescriptions`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(data)
@@ -276,12 +278,14 @@ export const api = {
             if (!res.ok) throw new Error('Failed to fetch prescriptions');
             return res.json();
         },
-        delete: async (id: string) => {
-            const res = await fetch(`${API_URL}/prescriptions/${id}`, { method: 'DELETE', headers });
+        delete: async (id: string, patientId: string) => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/prescriptions/${id}`, { method: 'DELETE', headers });
             if (!res.ok) throw new Error('Failed to delete prescription');
         },
         update: async (id: string, data: any) => {
-            const res = await fetch(`${API_URL}/prescriptions/${id}`, {
+            const patientId = data.patientId;
+            if (!patientId) throw new Error('patientId es requerido para actualizar una receta');
+            const res = await fetch(`${API_URL}/patients/${patientId}/prescriptions/${id}`, {
                 method: 'PUT',
                 headers,
                 body: JSON.stringify(data)
