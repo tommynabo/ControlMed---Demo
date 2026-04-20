@@ -44,6 +44,7 @@ ALTER TABLE "Prescription" ENABLE ROW LEVEL SECURITY;
 
 -- Política permisiva: el backend usa service_role key (bypasses RLS)
 -- Estas políticas son para accesos directos desde el cliente si se necesitan
+DROP POLICY IF EXISTS "prescription_all_authenticated" ON "Prescription";
 CREATE POLICY "prescription_all_authenticated" ON "Prescription"
   FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
 
