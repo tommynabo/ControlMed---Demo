@@ -48,7 +48,14 @@ UPDATE services SET final_price = 45, base_price = 45, updated_at = NOW()
 WHERE name = 'Pack 1ª Visita: 1ª Consulta + OPG';
 
 -- PASO 5: Verificación - Ver servicios actualizados
-SELECT id, name, final_price, base_price, is_active
+SELECT name, final_price, base_price, is_active
 FROM services
-WHERE id IN ('srv-11', 'srv-12', 'srv-13', 'srv-14', 'pack-1a', 'pack-1b')
-ORDER BY id;
+WHERE name IN (
+  'Primera visita',
+  'OPG',
+  'Tartrectomía',
+  'Higiene',
+  'Pack 1ª Visita: 1ª Consulta + OPG + Higiene',
+  'Pack 1ª Visita: 1ª Consulta + OPG'
+)
+ORDER BY name;
