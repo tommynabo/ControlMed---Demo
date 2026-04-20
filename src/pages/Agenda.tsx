@@ -150,27 +150,47 @@ const Agenda: React.FC = () => {
         // Reload schedules every 5 seconds to catch changes from Settings
         const interval = setInterval(loadSchedules, 5000);
 
-        // Supabase Realtime Listener (Agenda-specific)
+        // ✅ FIX: Supabase Realtime Listener with proper cleanup (prevent duplicate subscriptions)
         let channel: ReturnType<typeof supabase.channel> | null = null;
+        let unsubscribeTimeout: NodeJS.Timeout | null = null;
+        
         try {
-            channel = supabase.channel('agenda-appointments')
+            // Use a static channel name to prevent creating multiple channels per mount
+            const channelName = 'agenda-appointments-main';
+            
+            // First, check if we can safely unsubscribe any existing channel with this name
+            try {
+                supabase.removeChannel(channelName);
+            } catch (_) {}
+            
+            channel = supabase.channel(channelName)
                 .on(
                     'postgres_changes',
                     { event: '*', schema: 'public', table: 'Appointment' },
                     () => {
+                        console.log('[Agenda Realtime] Appointment changed, invalidating cache');
                         queryClient.invalidateQueries({ queryKey: ['appointments'] });
                     }
                 )
-                .subscribe();
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        console.log('[Agenda Realtime] ✅ Subscribed to appointments');
+                    }
+                });
         } catch (e) {
-            console.warn('Could not subscribe to realtime:', e);
+            console.warn('[Agenda Realtime] Could not subscribe:', e);
         }
 
         return () => {
             clearInterval(interval);
-            if (channel) supabase.removeChannel(channel);
+            if (channel) {
+                try {
+                    supabase.removeChannel(channel);
+                    console.log('[Agenda Realtime] 🔌 Unsubscribed');
+                } catch (_) {}
+            }
         };
-    }, [api, queryClient]);
+    }, []);
 
     // Fetch Budgets
     React.useEffect(() => {
