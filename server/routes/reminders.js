@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { supabase } = require('../services/supabase');
+const { getSupabase } = require('../lib/db');
 
 /**
  * POST /api/reminders
@@ -14,7 +14,7 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('Reminder')
             .insert([{
                 patient_id: patientId,
@@ -48,7 +48,7 @@ router.get('/', async (req, res) => {
             return res.status(400).json({ error: 'patientId required' });
         }
 
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('Reminder')
             .select('*')
             .eq('patient_id', patientId)
@@ -70,7 +70,7 @@ router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('Reminder')
             .select('*')
             .eq('id', id)
@@ -100,7 +100,7 @@ router.put('/:id', async (req, res) => {
 
         updates.updated_at = new Date().toISOString();
 
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('Reminder')
             .update(updates)
             .eq('id', id)
@@ -123,7 +123,7 @@ router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
-        const { error } = await supabase
+        const { error } = await getSupabase()
             .from('Reminder')
             .delete()
             .eq('id', id);
@@ -144,7 +144,7 @@ router.get('/pending/due', async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
 
-        const { data, error } = await supabase
+        const { data, error } = await getSupabase()
             .from('Reminder')
             .select('*, Patient:patient_id(name, phoneNumber)')
             .eq('status', 'PENDING')
