@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X, Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, Loader2, UserPlus } from 'lucide-react';
 import NewPatientModal from '../components/NewPatientModal';
+import PackSelectionModal from '../components/PackSelectionModal';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -68,6 +69,9 @@ const Agenda: React.FC = () => {
 
     // 🆕 Feature 2: Revisión toggle state
     const [bookingIsRevision, setBookingIsRevision] = useState<boolean>(false);
+
+    // 🆕 Pack Selection Modal State
+    const [isPackSelectionModalOpen, setIsPackSelectionModalOpen] = useState<boolean>(false);
 
     // Budget & Patient State
     const [bookingPatientId, setBookingPatientId] = useState<string>('');
@@ -786,23 +790,21 @@ const Agenda: React.FC = () => {
     };
 
     const handlePackPrimeraVisita = () => {
-        const pack = [
-            { id: 'srv-11', name: 'Primera visita', price: 0 },
-            { id: 'srv-12', name: 'OPG', price: 30 },
-            { id: 'srv-13', name: 'Tartrectomía', price: 50 }
-        ];
-        
+        setIsPackSelectionModalOpen(true);
+    };
+
+    const handleSelectPack = (packId: string, services: Array<{ id: string; name: string; price: number }>) => {
         const newList = [...selectedDbServices];
-        pack.forEach(p => {
-            if (!newList.some(existing => existing.id === p.id)) {
-                newList.push(p);
+        services.forEach(s => {
+            if (!newList.some(existing => existing.id === s.id)) {
+                newList.push(s);
             }
         });
         
         setSelectedDbServices(newList);
         setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
         setBookingTreatment(newList.map(t => t.name).join(', '));
-        toast.success("Pack Primera Visita añadido");
+        toast.success("Pack añadido correctamente");
     };
 
     const handleDuplicate = () => {
@@ -2216,6 +2218,12 @@ const Agenda: React.FC = () => {
                     setBookingPatientId(patient.id);
                     setIsQuickNewPatientOpen(false);
                 }}
+            />
+
+            <PackSelectionModal
+                isOpen={isPackSelectionModalOpen}
+                onClose={() => setIsPackSelectionModalOpen(false)}
+                onSelectPack={handleSelectPack}
             />
         </>
     );

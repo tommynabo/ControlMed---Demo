@@ -134,13 +134,78 @@ const startScheduler = (prisma) => {
         }
     });
 
-    // Job 2: Treatment Follow-ups (Runs daily at 9 AM)
-    // Example: Check "Endodoncia" completed 6 months ago? 
-    // This requires complex rules. For MVP we'll look for general "Follow Up" logic if defined.
-    // Or we will implement the specific "Review" logic described.
+    // Job 2: Patient Reminders (Runs daily at 9 AM)
+    // Sends notifications for reminders due today or overdue
     cron.schedule('0 9 * * *', async () => {
-        console.log('⏳ Running Daily Follow-up Check...');
-        // Implementation placeholder for follow-up logic based on completed treatments
+        console.log('⏳ Running Daily Reminder Check...');
+        try {
+            const today = new Date().toISOString().split('T')[0];
+
+            // Get all pending reminders due today or overdue
+            const { data: reminders, error } = await supabase
+                .from('Reminder')
+                .select('*, Patient:patient_id(name, phone_number, email)')
+                .eq('status', 'PENDING')
+                .lte('due_date', today)
+                .eq('notification_sent', false);
+
+            if (error) {
+                console.error('Error fetching reminders:', error);
+                return;
+            }
+
+            // Process each reminder
+            for (const reminder of reminders || []) {
+                try {
+                    const patient = reminder.Patient;
+                    let notificationSent = false;
+
+                    // Send notifications based on preference
+                    if (reminder.notification_method === 'IN_APP' || reminder.notification_method === 'BOTH') {
+                        // Create in-app notification (could use a notifications table or push service)
+                        console.log(`📱 In-app reminder for ${patient.name}: ${reminder.description}`);
+                        // TODO: Implement in-app notification system if desired
+                    }
+
+                    if ((reminder.notification_method === 'WHATSAPP' || reminder.notification_method === 'BOTH') && patient.phone_number) {
+                        // Send WhatsApp message
+                        try {
+                            const message = `Recordatorio: ${reminder.description}`;
+                            await whatsappService.sendMessage(patient.phone_number, message);
+                            console.log(`✅ WhatsApp sent to ${patient.name}`);
+                            notificationSent = true;
+                        } catch (err) {
+                            console.error(`Failed to send WhatsApp to ${patient.phone_number}:`, err);
+                        }
+                    }
+
+                    if ((reminder.notification_method === 'EMAIL' || reminder.notification_method === 'BOTH') && patient.email) {
+                        // Send email notification
+                        try {
+                            await gmailService.sendEmail(patient.email, 'Recordatorio', `Recordatorio: ${reminder.description}`);
+                            console.log(`✅ Email sent to ${patient.email}`);
+                            notificationSent = true;
+                        } catch (err) {
+                            console.error(`Failed to send email to ${patient.email}:`, err);
+                        }
+                    }
+
+                    // Mark as notification sent
+                    if (notificationSent) {
+                        await supabase
+                            .from('Reminder')
+                            .update({ notification_sent: true })
+                            .eq('id', reminder.id);
+                    }
+                } catch (err) {
+                    console.error(`Error processing reminder ${reminder.id}:`, err);
+                }
+            }
+
+            console.log(`✅ Reminder check complete. Processed ${reminders?.length || 0} reminders.`);
+        } catch (error) {
+            console.error('Error in Reminder Job:', error);
+        }
     });
     // Job 3: Process Scheduled Messages (Messages created with a future date)
     // Runs every 15 minutes to be responsive enough

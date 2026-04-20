@@ -1456,6 +1456,68 @@ export const api = {
             return hash !== null;
         },
     },
+
+    reminders: {
+        create: async (data: {
+            patientId: string;
+            description: string;
+            dueDate: string;
+            priority: 'LOW' | 'MEDIUM' | 'HIGH';
+            notificationMethod: 'IN_APP' | 'WHATSAPP' | 'EMAIL' | 'BOTH';
+            notes?: string;
+        }) => {
+            const res = await fetch(`${API_URL}/reminders`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        },
+
+        getByPatient: async (patientId: string) => {
+            const res = await fetch(`${API_URL}/reminders?patientId=${patientId}`, { headers });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        },
+
+        getById: async (reminderId: string) => {
+            const res = await fetch(`${API_URL}/reminders/${reminderId}`, { headers });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        },
+
+        update: async (reminderId: string, data: Partial<{
+            description: string;
+            dueDate: string;
+            priority: 'LOW' | 'MEDIUM' | 'HIGH';
+            status: 'PENDING' | 'COMPLETED' | 'CANCELLED';
+            notes: string;
+        }>) => {
+            const res = await fetch(`${API_URL}/reminders/${reminderId}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        },
+
+        delete: async (reminderId: string) => {
+            const res = await fetch(`${API_URL}/reminders/${reminderId}`, {
+                method: 'DELETE',
+                headers
+            });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        },
+
+        getPendingDue: async () => {
+            const res = await fetch(`${API_URL}/reminders/pending/due`, { headers });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        }
+    },
 };
 
 /** SHA-256 hash using built-in Web Crypto API */

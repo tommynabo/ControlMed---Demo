@@ -33,6 +33,7 @@ const agendaRouter = require('./routes/agenda');
 const systemUsersRouter = require('./routes/system-users');
 const auditRouter = require('./routes/audit');
 const gmailRouter = require('./routes/gmail');
+const remindersRouter = require('./routes/reminders');
 const { scheduleRouter, durationsRouter } = require('./routes/schedule');
 
 const { errorHandler } = require('./lib/errors');
@@ -120,6 +121,7 @@ app.use('/api', agendaRouter);
 app.use('/api/system-users', systemUsersRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/gmail', gmailRouter);
+app.use('/api/reminders', remindersRouter);
 
 // --- Initialization ---
 whatsappService.initialize();

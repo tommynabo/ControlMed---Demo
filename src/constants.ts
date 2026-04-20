@@ -19,10 +19,12 @@ export const DENTAL_SERVICES = [
   { id: 'srv-8', name: 'Corona Zirconio', price: 350, specialization: Specialization.ESTHETICS }, // Prosthodontics/Esthetics
   { id: 'srv-9', name: 'Extracción Simple', price: 40, specialization: Specialization.GENERAL },
   { id: 'srv-10', name: 'Curetaje por Cuadrante', price: 70, specialization: Specialization.PERIODONTICS },
-  { id: 'srv-11', name: 'Primera visita', price: 0, specialization: Specialization.GENERAL },
-  { id: 'srv-12', name: 'OPG', price: 30, specialization: Specialization.GENERAL },
-  { id: 'srv-13', name: 'Tartrectomía', price: 50, specialization: Specialization.GENERAL },
-  { id: 'pack-1', name: 'Pack: 1ª Visita + OPG', price: 45, specialization: Specialization.GENERAL, isPack: true },
+  { id: 'srv-11', name: 'Primera visita', price: 20, specialization: Specialization.GENERAL },
+  { id: 'srv-12', name: 'OPG', price: 10, specialization: Specialization.GENERAL },
+  { id: 'srv-13', name: 'Tartrectomía', price: 0, specialization: Specialization.GENERAL },
+  { id: 'srv-14', name: 'Higiene', price: 30, specialization: Specialization.GENERAL },
+  { id: 'pack-1a', name: 'Pack 1ª Visita: 1ª Consulta + OPG + Higiene', price: 60, specialization: Specialization.GENERAL, isPack: true, components: ['srv-11', 'srv-12', 'srv-14'] },
+  { id: 'pack-1b', name: 'Pack 1ª Visita: 1ª Consulta + OPG', price: 45, specialization: Specialization.GENERAL, isPack: true, components: ['srv-11-alt', 'srv-12-alt'] },
   { id: 'pack-2', name: 'Pack: 1ª Visita + OPG + Tartrectomía', price: 60, specialization: Specialization.GENERAL, isPack: true }
 ];
 
