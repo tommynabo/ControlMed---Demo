@@ -162,18 +162,9 @@ const Agenda: React.FC = () => {
 
         // ✅ FIX: Supabase Realtime Listener with proper cleanup (prevent duplicate subscriptions)
         let channel: ReturnType<typeof supabase.channel> | null = null;
-        let unsubscribeTimeout: NodeJS.Timeout | null = null;
         
         try {
-            // Use a static channel name to prevent creating multiple channels per mount
-            const channelName = 'agenda-appointments-main';
-            
-            // First, check if we can safely unsubscribe any existing channel with this name
-            try {
-                supabase.removeChannel(channelName);
-            } catch (_) {}
-            
-            channel = supabase.channel(channelName)
+            channel = supabase.channel('agenda-appointments-main')
                 .on(
                     'postgres_changes',
                     { event: '*', schema: 'public', table: 'Appointment' },
@@ -195,7 +186,7 @@ const Agenda: React.FC = () => {
             clearInterval(interval);
             if (channel) {
                 try {
-                    supabase.removeChannel(channel);
+                    channel.unsubscribe();
                     console.log('[Agenda Realtime] 🔌 Unsubscribed');
                 } catch (_) {}
             }
