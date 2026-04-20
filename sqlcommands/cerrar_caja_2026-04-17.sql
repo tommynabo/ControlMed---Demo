@@ -34,7 +34,7 @@ SELECT
     COALESCE(SUM(amount), 0)                                            AS total_gastos,
     COALESCE(SUM(amount) FILTER (WHERE "paymentMethod" = 'cash'), 0)    AS gastos_efectivo
 FROM expenses
-WHERE date = '2026-04-17';
+WHERE date = '2026-04-17'::date;
 
 
 -- ============================================================================
@@ -44,7 +44,7 @@ WHERE date = '2026-04-17';
 
 DO $$
 DECLARE
-    v_date              TEXT    := '2026-04-17';
+    v_date              DATE    := '2026-04-17'::date;
     v_total_income      NUMERIC;
     v_total_expense     NUMERIC;
     v_cash_income       NUMERIC;
@@ -69,7 +69,7 @@ BEGIN
         COUNT(*)
     INTO v_total_income, v_cash_income, v_card_income, v_transfer_income, v_invoice_count
     FROM "Invoice"
-    WHERE date::date = v_date::date
+    WHERE date::date = v_date
       AND status != 'rectified';
 
     -- Calcular gastos desde expenses
@@ -129,4 +129,4 @@ SELECT
     "transferIncome",
     "invoiceCount"
 FROM cash_register_closings
-WHERE date = '2026-04-17';
+WHERE date = '2026-04-17'::date;

@@ -253,6 +253,10 @@ async function step1_patients() {
       if (medications) { patch.medications = medications; changed = true; }
       if (smoker && smoker !== '0') { patch.smoker = true; changed = true; }
       if (phone && !matched.phone) { patch.phone = phone; changed = true; }
+      if (domicilio) { patch.address = domicilio; changed = true; }
+      if (poblacion) { patch.city = poblacion; changed = true; }
+      if (cp) { patch.postalCode = cp; changed = true; }
+      if (provincia) { patch.province = provincia; changed = true; }
       if (changed) toUpdate.push(patch);
       else stat('Patient', 'skipped');
     } else {
@@ -272,6 +276,10 @@ async function step1_patients() {
         email: email || `noreply_${idContacto}@import.local`,
         phone: phone || null,
         insurance: null,
+        address: domicilio || null,
+        city: poblacion || null,
+        postalCode: cp || null,
+        province: provincia || null,
         allergies: allergies || null,
         diseases: diseases || null,
         medications: medications || null,

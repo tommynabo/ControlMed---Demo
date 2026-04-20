@@ -145,10 +145,20 @@ const Agenda: React.FC = () => {
                 console.error('Error loading doctor schedules:', err);
             }
         };
+        
+        // ✅ IMPORTANTE: Forzar refetch de appointments al abrir la página (sin caché)
+        console.log('[Agenda] Forzando refetch de appointments sin caché...');
+        queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        
         loadSchedules();
 
         // Reload schedules every 5 seconds to catch changes from Settings
-        const interval = setInterval(loadSchedules, 5000);
+        const interval = setInterval(() => {
+            loadSchedules();
+            // ✅ También refresca appointments cada 5 segundos
+            console.log('[Agenda] Refetch de appointments (polling cada 5s)');
+            queryClient.invalidateQueries({ queryKey: ['appointments'] });
+        }, 5000);
 
         // ✅ FIX: Supabase Realtime Listener with proper cleanup (prevent duplicate subscriptions)
         let channel: ReturnType<typeof supabase.channel> | null = null;

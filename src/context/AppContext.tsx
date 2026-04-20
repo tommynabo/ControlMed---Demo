@@ -144,7 +144,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         queryKey: ['appointments'],
         queryFn: () => api.appointments.getAll(),
         enabled: isAuthenticated,
-        staleTime: 1000 * 60 * 2,
+        staleTime: 5000, // 5 segundos - casi sin caché para evitar duplicados
+        gcTime: 1000 * 60 * 1, // Mantener en memoria por 1 minuto
     });
     const { data: rqDoctors } = useQuery({
         queryKey: ['doctors'],

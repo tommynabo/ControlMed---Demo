@@ -28,6 +28,12 @@ export interface Patient {
     clinicalHistory?: ClinicalRecord[];
     prescriptions?: Prescription[];
 
+    // Address Info
+    address?: string;
+    city?: string;
+    postalCode?: string;
+    province?: string;
+
     // Medical Info
     smoker?: boolean; // New
     allergies?: string;
