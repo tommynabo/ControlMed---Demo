@@ -4,7 +4,7 @@ import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight
+    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight, Bell
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
