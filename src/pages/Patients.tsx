@@ -26,6 +26,7 @@ import { BalanceBadge } from '../components/BalanceBadge';
 import { DENTAL_SERVICES } from '../constants';
 import { PlanTratamientoTab } from '../components/PlanTratamientoTab';
 import NewPatientModal from '../components/NewPatientModal';
+import { ReminderModal } from '../components/ReminderModal';
 
 // Helper function to normalize patient data, ensuring prescriptions is always an array of objects
 const normalizePrescriptions = (prescriptions: any): any[] => {
@@ -798,11 +799,17 @@ const Patients: React.FC = () => {
     // Documents State (BLOQUE 4.2)
     const [isDocumentsModalOpen, setIsDocumentsModalOpen] = useState(false);
 
+    // Reminder Modal State
+    const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+
     // Submit guards (Block 3)
     const [isSubmittingPatient, setIsSubmittingPatient] = useState(false);
     const [isSubmittingRecord, setIsSubmittingRecord] = useState(false);
     const [isSubmittingTreatment, setIsSubmittingTreatment] = useState(false);
     const [isSubmittingWhatsapp, setIsSubmittingWhatsapp] = useState(false);
+
+    // Reminder Modal State
+    const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
 
     // Fetch templates and logs when modal or tab opens
     React.useEffect(() => {
@@ -1176,12 +1183,20 @@ const Patients: React.FC = () => {
                                         {isEditingPatient ? <><Check size={16} /> Guardar</> : <><Edit size={16} /> Modificar</>}
                                     </button>
                                     {!isEditingPatient && (
-                                        <button
-                                            onClick={() => setIsPaymentModalOpen(true)}
-                                            className="bg-emerald-600 text-white px-6 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-emerald-700 hover:scale-102 transition-all shadow-lg shadow-emerald-600/20"
-                                        >
-                                            <DollarSign size={16} /> Cobrar
-                                        </button>
+                                        <>
+                                            <button
+                                                onClick={() => setIsReminderModalOpen(true)}
+                                                className="bg-blue-600 text-white px-6 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-blue-700 hover:scale-102 transition-all shadow-lg shadow-blue-600/20"
+                                            >
+                                                <Bell size={16} /> Recordatorios
+                                            </button>
+                                            <button
+                                                onClick={() => setIsPaymentModalOpen(true)}
+                                                className="bg-emerald-600 text-white px-6 py-2 rounded-xl text-xs font-black uppercase flex items-center gap-2 hover:bg-emerald-700 hover:scale-102 transition-all shadow-lg shadow-emerald-600/20"
+                                            >
+                                                <DollarSign size={16} /> Cobrar
+                                            </button>
+                                        </>
                                     )}
                                 </div>
 
@@ -3117,6 +3132,22 @@ const Patients: React.FC = () => {
                     onClose={() => setIsDocumentsModalOpen(false)}
                     patientName={selectedPatient.name}
                     patientId={selectedPatient.id}
+                />
+            )}
+
+            {/* Reminder Modal */}
+            {selectedPatient && (
+                <ReminderModal
+                    isOpen={isReminderModalOpen}
+                    onClose={() => setIsReminderModalOpen(false)}
+                    patient={selectedPatient}
+                />
+            )}
+            {selectedPatient && (
+                <ReminderModal
+                    isOpen={isReminderModalOpen}
+                    onClose={() => setIsReminderModalOpen(false)}
+                    patient={selectedPatient}
                 />
             )}
         </div>
