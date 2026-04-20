@@ -315,12 +315,12 @@ router.post('/payments/create', async (req, res) => {
             await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
 
             let liquidation = null;
-            if (doctor && type === 'DIRECT_CHARGE') {
+            if (doctor && type === 'DIRECT_CHARGE' && !isPartialPayment) {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
                 const finalAmount = (numericAmount - labCost) * (rawRate / 100);
                 liquidation = await tx.liquidation.create({
-                    data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: (appointmentId && !isPartialPayment) ? appointmentId : null, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                    data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: appointmentId || null, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                 });
             }
 
