@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS "Prescription" (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "patientId"             TEXT NOT NULL REFERENCES "Patient"(id) ON DELETE CASCADE,
-  "doctorId"              TEXT,
+  "doctorId"              TEXT,          -- nullable: no siempre hay doctor vinculado
   medication              TEXT NOT NULL,
   "pharmaceuticalForm"    TEXT,
   "administrationRoute"   TEXT,
@@ -27,6 +27,12 @@ CREATE TABLE IF NOT EXISTS "Prescription" (
   "createdAt"             TIMESTAMP DEFAULT NOW(),
   deleted_at              TIMESTAMP
 );
+
+-- Correcciones sobre tabla existente (si ya fue creada por Prisma)
+ALTER TABLE IF EXISTS "Prescription" ALTER COLUMN "doctorId" DROP NOT NULL;
+ALTER TABLE IF EXISTS "Prescription" ADD COLUMN IF NOT EXISTS "prescriberName" TEXT;
+ALTER TABLE IF EXISTS "Prescription" ADD COLUMN IF NOT EXISTS "prescriberSpecialty" TEXT;
+ALTER TABLE IF EXISTS "Prescription" ALTER COLUMN id SET DEFAULT gen_random_uuid();
 
 -- Índices
 CREATE INDEX IF NOT EXISTS idx_prescription_patient ON "Prescription"("patientId");
