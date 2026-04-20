@@ -33,6 +33,7 @@ const agendaRouter = require('./routes/agenda');
 const systemUsersRouter = require('./routes/system-users');
 const auditRouter = require('./routes/audit');
 const gmailRouter = require('./routes/gmail');
+const { scheduleRouter, durationsRouter } = require('./routes/schedule');
 
 const { errorHandler } = require('./lib/errors');
 
@@ -104,7 +105,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/patients', patientsRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/doctors', doctorsRouter);
-app.use('/api/doctor-schedules', doctorsRouter);
+app.use('/api/doctor-schedules', scheduleRouter);
+app.use('/api/schedule/durations', durationsRouter);
 app.use('/api', clinicalRouter); 
 app.use('/api/finance', financeRouter);
 app.use('/api/payments', financeRouter);

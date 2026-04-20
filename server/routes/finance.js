@@ -284,12 +284,18 @@ router.post('/payments/create', async (req, res) => {
             let invoiceNumber = quipuResult.success ? quipuResult.number : null;
             if (!invoiceNumber || invoiceNumber === 'PENDING') {
                 const year = new Date().getFullYear();
-                const ts   = Date.now();
-                const rand = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-                invoiceNumber = `F-${year}-${ts}-${rand}`;
+                const prefix = `F-${year}-`;
+                const existing = await tx.invoice.findMany({
+                    where: { invoiceNumber: { startsWith: prefix } },
+                    select: { invoiceNumber: true }
+                });
+                const maxNum = existing.reduce((max, inv) => {
+                    const suffix = inv.invoiceNumber.slice(prefix.length);
+                    const num = parseInt(suffix, 10);
+                    return isNaN(num) ? max : Math.max(max, num);
+                }, 0);
+                invoiceNumber = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
             }
-            const collision = await tx.invoice.findUnique({ where: { invoiceNumber } });
-            if (collision) invoiceNumber += `-${Math.random().toString(36).substring(2, 5)}`;
 
             const invoice = await tx.invoice.create({
                 data: {
