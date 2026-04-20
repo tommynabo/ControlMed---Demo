@@ -57,7 +57,7 @@ export const PackSelectionModal: React.FC<PackSelectionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[150] animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 animate-in zoom-in-95 duration-300">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
