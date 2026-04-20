@@ -574,7 +574,8 @@ const Patients: React.FC = () => {
                     patientId: selectedPatient.id,
                     treatment: `RECETA: ${formData.medication}`,
                     observation: `Pauta: ${formData.schedulePattern}. ${formData.patientInstructions || ''}`,
-                    specialization: 'General'
+                    specialization: 'General',
+                    doctorId: (currentUser as any)?.id || '00000000-0000-0000-0000-000000000000'
                 });
                 toast("✅ Receta guardada y registrada en el historial.");
             }
