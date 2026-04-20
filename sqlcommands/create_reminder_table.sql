@@ -5,7 +5,7 @@
 -- Tabla Reminder para almacenar recordatorios personalizados
 CREATE TABLE IF NOT EXISTS "Reminder" (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  patient_id UUID NOT NULL REFERENCES "Patient"(id) ON DELETE CASCADE,
+  patient_id TEXT NOT NULL REFERENCES "Patient"(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
   due_date DATE NOT NULL,
   priority VARCHAR(20) DEFAULT 'MEDIUM' CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH')),

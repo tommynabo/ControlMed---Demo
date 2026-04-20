@@ -27,28 +27,25 @@ SET final_price = 0, base_price = 0
 WHERE name = 'Tartrectomía';
 
 -- PASO 2: Crear nuevo servicio "Higiene" si no existe
-INSERT INTO services (id, name, specialty_name, base_price, discount_percent, tax_percent, final_price, duration_min, is_active, created_at, updated_at)
-VALUES ('srv-14', 'Higiene', 'General', 30, 0, 0, 30, 30, true, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET
-  final_price = 30,
-  base_price = 30,
-  updated_at = NOW();
+INSERT INTO services (name, specialty_name, base_price, discount_percent, tax_percent, final_price, duration_min, is_active, created_at, updated_at)
+SELECT 'Higiene', 'General', 30, 0, 0, 30, 30, true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM services WHERE name = 'Higiene');
 
 -- PASO 3: Actualizar o crear Pack 1a (60€: 1ª visita 20€ + OPG 10€ + Higiene 30€)
-INSERT INTO services (id, name, specialty_name, base_price, discount_percent, tax_percent, final_price, duration_min, is_active, created_at, updated_at)
-VALUES ('pack-1a', 'Pack 1ª Visita: 1ª Consulta + OPG + Higiene', 'General', 60, 0, 0, 60, 90, true, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET
-  final_price = 60,
-  base_price = 60,
-  updated_at = NOW();
+INSERT INTO services (name, specialty_name, base_price, discount_percent, tax_percent, final_price, duration_min, is_active, created_at, updated_at)
+SELECT 'Pack 1ª Visita: 1ª Consulta + OPG + Higiene', 'General', 60, 0, 0, 60, 90, true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM services WHERE name = 'Pack 1ª Visita: 1ª Consulta + OPG + Higiene');
+
+UPDATE services SET final_price = 60, base_price = 60, updated_at = NOW()
+WHERE name = 'Pack 1ª Visita: 1ª Consulta + OPG + Higiene';
 
 -- PASO 4: Crear Pack 1b (45€: 1ª visita 25€ + OPG 20€)
-INSERT INTO services (id, name, specialty_name, base_price, discount_percent, tax_percent, final_price, duration_min, is_active, created_at, updated_at)
-VALUES ('pack-1b', 'Pack 1ª Visita: 1ª Consulta + OPG', 'General', 45, 0, 0, 45, 60, true, NOW(), NOW())
-ON CONFLICT (id) DO UPDATE SET
-  final_price = 45,
-  base_price = 45,
-  updated_at = NOW();
+INSERT INTO services (name, specialty_name, base_price, discount_percent, tax_percent, final_price, duration_min, is_active, created_at, updated_at)
+SELECT 'Pack 1ª Visita: 1ª Consulta + OPG', 'General', 45, 0, 0, 45, 60, true, NOW(), NOW()
+WHERE NOT EXISTS (SELECT 1 FROM services WHERE name = 'Pack 1ª Visita: 1ª Consulta + OPG');
+
+UPDATE services SET final_price = 45, base_price = 45, updated_at = NOW()
+WHERE name = 'Pack 1ª Visita: 1ª Consulta + OPG';
 
 -- PASO 5: Verificación - Ver servicios actualizados
 SELECT id, name, final_price, base_price, is_active
