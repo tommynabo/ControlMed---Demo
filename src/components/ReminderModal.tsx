@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Clock, CheckCircle2, Bell } from 'lucide-react';
+import { X, AlertCircle, Clock, CheckCircle2, Bell, RotateCcw } from 'lucide-react';
 import { Patient } from '../../types';
 import { api } from '../services/api';
 import toast from 'react-hot-toast';
@@ -103,6 +103,16 @@ export const ReminderModal: React.FC<ReminderModalProps> = ({
             loadReminders();
         } catch (error: any) {
             toast.error(error.message || 'Error al actualizar recordatorio');
+        }
+    };
+
+    const handleReopenReminder = async (reminderId: string) => {
+        try {
+            await api.reminders.update(reminderId, { status: 'PENDING' });
+            toast.success('Recordatorio reabierto');
+            loadReminders();
+        } catch (error: any) {
+            toast.error(error.message || 'Error al reabrir recordatorio');
         }
     };
 
@@ -288,7 +298,7 @@ export const ReminderModal: React.FC<ReminderModalProps> = ({
                                                             <div className="flex items-center gap-3 mt-1.5 text-xs opacity-75">
                                                                 <div className="flex items-center gap-1">
                                                                     <Clock size={12} />
-                                                                    {new Date(reminder.dueDate).toLocaleDateString('es-ES')}
+                                                                    {(() => { const d = new Date(reminder.dueDate ?? reminder.due_date); return isNaN(d.getTime()) ? 'Sin fecha' : d.toLocaleDateString('es-ES'); })()}
                                                                 </div>
                                                                 <span>• {getPriorityLabel(reminder.priority)}</span>
                                                             </div>
@@ -327,8 +337,15 @@ export const ReminderModal: React.FC<ReminderModalProps> = ({
                                         </h4>
                                         <div className="space-y-1.5 opacity-60">
                                             {completedReminders.map((reminder) => (
-                                                <div key={reminder.id} className="text-xs text-slate-600 line-through p-2 bg-slate-50 rounded">
-                                                    {reminder.description}
+                                                <div key={reminder.id} className="flex items-center justify-between text-xs text-slate-600 p-2 bg-slate-50 rounded gap-2">
+                                                    <span className="line-through flex-1">{reminder.description}</span>
+                                                    <button
+                                                        onClick={() => handleReopenReminder(reminder.id)}
+                                                        className="p-1 hover:bg-slate-200 rounded transition-colors flex-shrink-0"
+                                                        title="Reabrir recordatorio"
+                                                    >
+                                                        <RotateCcw size={12} />
+                                                    </button>
                                                 </div>
                                             ))}
                                         </div>

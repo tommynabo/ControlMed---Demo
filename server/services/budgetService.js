@@ -31,6 +31,8 @@ const createBudget = async (supabase, patientId, items = [], title = "", userId 
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,
             face: item.face || null,
+            discount: Number(item.discount) || 0,
+            originalPrice: item.originalPrice != null ? Number(item.originalPrice) : null,
             treatmentId: null  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
         }));
 
@@ -131,6 +133,8 @@ const addItemToDraftBudget = async (supabase, patientId, item) => {
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,
             face: item.face || null,
+            discount: Number(item.discount) || 0,
+            originalPrice: item.originalPrice != null ? Number(item.originalPrice) : null,
             treatmentId: item.treatmentId || null
         }])
         .select()
@@ -239,6 +243,8 @@ const updateBudget = async (supabase, budgetId, items = [], title = "", userId =
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,
             face: item.face || null,
+            discount: Number(item.discount) || 0,
+            originalPrice: item.originalPrice != null ? Number(item.originalPrice) : null,
             treatmentId: null  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
         }));
 

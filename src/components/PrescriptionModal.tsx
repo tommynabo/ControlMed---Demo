@@ -120,7 +120,7 @@ ${formData.prescriberName}
             return;
         }
 
-        const patientFullName = [patient.name, patient.lastName1, patient.lastName2].filter(Boolean).join(' ');
+        const patientFullName = patient.name || '';
         const prescDate = formData.prescriptionDate
             ? new Date(formData.prescriptionDate + 'T12:00:00').toLocaleDateString('es-ES')
             : '—';
@@ -473,7 +473,7 @@ ${formData.prescriberName}
                             <p className="text-center text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Vista Previa — Idéntica al documento impreso</p>
                             {/* Simulate both copies as they appear in print */}
                             {(['EJEMPLAR PARA EL FARMACÉUTICO', 'EJEMPLAR PARA EL PACIENTE'] as const).map(label => {
-                                const patientFullName = [patient.name, patient.lastName1, patient.lastName2].filter(Boolean).join(' ');
+        const patientFullName = patient.name || '';
                                 const prescDate = formData.prescriptionDate
                                     ? new Date(formData.prescriptionDate + 'T12:00:00').toLocaleDateString('es-ES')
                                     : '—';

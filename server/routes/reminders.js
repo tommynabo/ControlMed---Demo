@@ -98,6 +98,10 @@ router.put('/:id', async (req, res) => {
             updates.completed_at = new Date().toISOString();
         }
 
+        if (updates.status === 'PENDING') {
+            updates.completed_at = null;
+        }
+
         updates.updated_at = new Date().toISOString();
 
         const { data, error } = await getSupabase()

@@ -97,7 +97,12 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     };
 
     const handleUpdateItem = (index: number, field: string, value: any) => {
-        setItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item));
+        setItems(prev => prev.map((item, i) => {
+            if (i !== index) return item;
+            // Manual price edit clears stored discount
+            if (field === 'price') return { ...item, price: value, discount: 0, originalPrice: undefined };
+            return { ...item, [field]: value };
+        }));
     };
 
     const toggleSelection = (index: number) => {
@@ -121,14 +126,27 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         const val = prompt(type === 'percent' ? "Porcentaje de descuento (ej: 10):" : "Importe de descuento fijo (ej: 50):");
         if (!val) return;
         const num = parseFloat(val);
-        if (isNaN(num)) return;
+        if (isNaN(num) || num < 0) return;
 
         setItems(prev => prev.map((item, idx) => {
             if (!selectedIndices.has(idx)) return item;
-            let newPrice = Number(item.price);
-            if (type === 'percent') newPrice = newPrice * (1 - num / 100);
-            else newPrice = newPrice - num;
-            return { ...item, price: Math.max(0, newPrice).toFixed(2) };
+            // Use originalPrice as base so repeated discounts don't compound
+            const base = Number(item.originalPrice ?? item.price);
+            let newPrice: number;
+            let discountPct: number;
+            if (type === 'percent') {
+                newPrice = base * (1 - num / 100);
+                discountPct = num;
+            } else {
+                newPrice = base - num;
+                discountPct = base > 0 ? parseFloat(((num / base) * 100).toFixed(2)) : 0;
+            }
+            return {
+                ...item,
+                originalPrice: base,
+                discount: discountPct,
+                price: Math.max(0, newPrice).toFixed(2)
+            };
         }));
     };
 
@@ -166,7 +184,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
             .map(item => ({
                 ...item,
                 price: isNaN(Number(item.price)) || item.price === '' ? 0 : Number(item.price),
-                quantity: Math.max(1, Number(item.quantity) || 1)
+                quantity: Math.max(1, Number(item.quantity) || 1),
+                discount: Number(item.discount) || 0,
+                originalPrice: item.originalPrice != null ? Number(item.originalPrice) : undefined
             }));
 
         if (sanitizedItems.length === 0) return toast.error("Todos los items están incompletos. Añade al menos un tratamiento con nombre.");
@@ -361,6 +381,13 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                                 />
                                                 <span className="absolute right-2 top-2 text-xs text-slate-400">€</span>
                                             </div>
+                                            {item.discount > 0 && (
+                                                <div className="mt-1 text-center">
+                                                    <span className="text-[9px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
+                                                        -{item.discount}% dto.
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="h-full flex items-end pb-1">
                                             <button

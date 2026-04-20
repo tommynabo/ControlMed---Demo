@@ -1478,7 +1478,17 @@ export const api = {
         getByPatient: async (patientId: string) => {
             const res = await fetch(`${API_URL}/reminders?patientId=${patientId}`, { headers });
             if (!res.ok) throw new Error(await res.text());
-            return res.json();
+            const data = await res.json();
+            // Normalize snake_case fields returned by the DB to camelCase
+            return (Array.isArray(data) ? data : []).map((r: any) => ({
+                ...r,
+                dueDate: r.dueDate ?? r.due_date,
+                patientId: r.patientId ?? r.patient_id,
+                notificationMethod: r.notificationMethod ?? r.notification_method,
+                createdAt: r.createdAt ?? r.created_at,
+                completedAt: r.completedAt ?? r.completed_at,
+                updatedAt: r.updatedAt ?? r.updated_at,
+            }));
         },
 
         getById: async (reminderId: string) => {

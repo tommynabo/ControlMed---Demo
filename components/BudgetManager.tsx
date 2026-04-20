@@ -169,7 +169,16 @@ export const BudgetManager: React.FC<BudgetManagerProps> = ({ patientId }) => {
                                             <span>{item.name}</span>
                                         </div>
                                         <div className="flex items-center gap-4">
-                                            <span className="font-mono font-bold">{item.price}€</span>
+                                            <div className="text-right">
+                                                <span className="font-mono font-bold">{item.price}€</span>
+                                                {item.discount > 0 && (
+                                                    <div>
+                                                        <span className="text-[10px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
+                                                            -{item.discount}% dto.
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
                                             {item.quantity > 1 && <span className="text-slate-400 text-xs text-right">x{item.quantity}</span>}
                                             {(bg.status === 'pending' || bg.status === 'draft') && (
                                                 <button onClick={async () => {
