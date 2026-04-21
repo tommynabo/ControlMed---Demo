@@ -29,6 +29,18 @@ import NewPatientModal from '../components/NewPatientModal';
 import { ReminderModal } from '../components/ReminderModal';
 
 // Helper function to normalize patient data, ensuring prescriptions is always an array of objects
+// Normalize appointment/visit date strings before parsing to prevent timezone off-by-one.
+// Supabase DATE columns return "YYYY-MM-DD" (UTC midnight) but TIMESTAMP columns may
+// return "YYYY-MM-DDTHH:MM:SS" without a 'Z', which browsers parse as *local* time.
+// Treating both as UTC noon avoids the classic "shows Sunday when it's Monday" bug.
+const normalizeDateStr = (d: string): string => {
+    if (!d) return d;
+    const s = String(d);
+    if (s.includes('Z') || /[+-]\d{2}:\d{2}$/.test(s)) return s; // already UTC-anchored
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s + 'T12:00:00Z';  // pure date → UTC noon
+    return s + 'Z';                                                 // datetime → UTC
+};
+
 const normalizePrescriptions = (prescriptions: any): any[] => {
     if (Array.isArray(prescriptions)) return prescriptions;
     if (typeof prescriptions === 'string') {
@@ -1594,7 +1606,7 @@ const Patients: React.FC = () => {
                                                 <div className="space-y-3">
                                                     {patientAppointments
                                                         .filter(a => a.status === 'Scheduled' || a.status === 'PENDIENTE')
-                                                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                                                        .sort((a, b) => new Date(normalizeDateStr(a.date)).getTime() - new Date(normalizeDateStr(b.date)).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
                                                             const isEditing = editingVisitId === visit.id;
@@ -1604,11 +1616,11 @@ const Patients: React.FC = () => {
                                                                     <div className="p-4 flex items-center justify-between">
                                                                         <div className="flex items-center gap-4">
                                                                             <div className="w-12 h-12 bg-blue-500 text-white rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0">
-                                                                                {new Date(visit.date).getUTCDate()}
+                                                                                {new Date(normalizeDateStr(visit.date)).getUTCDate()}
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
-                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
+                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(normalizeDateStr(visit.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
                                                                                 {visitDoctor && <p className="text-[10px] text-blue-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
                                                                                 {(visit as any).updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {(visit as any).updated_by_name}</p>}
                                                                             </div>
@@ -1682,7 +1694,7 @@ const Patients: React.FC = () => {
                                                 <div className="space-y-3">
                                                     {patientAppointments
                                                         .filter(a => a.status === 'EN_PROCESO' || a.status === 'PRESUPUESTADO')
-                                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                                        .sort((a, b) => new Date(normalizeDateStr(b.date)).getTime() - new Date(normalizeDateStr(a.date)).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
                                                             const isEditing = editingVisitId === visit.id;
@@ -1691,11 +1703,11 @@ const Patients: React.FC = () => {
                                                                     <div className="p-4 flex items-center justify-between">
                                                                         <div className="flex items-center gap-4">
                                                                             <div className="w-12 h-12 bg-amber-500 text-white rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0">
-                                                                                {new Date(visit.date).getUTCDate()}
+                                                                                {new Date(normalizeDateStr(visit.date)).getUTCDate()}
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
-                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
+                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(normalizeDateStr(visit.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
                                                                                 {visitDoctor && <p className="text-[10px] text-amber-500 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
                                                                                 {(visit as any).updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {(visit as any).updated_by_name}</p>}
                                                                             </div>
@@ -1769,7 +1781,7 @@ const Patients: React.FC = () => {
                                                 <div className="space-y-3">
                                                     {patientAppointments
                                                         .filter(a => a.status === 'COMPLETADO' || a.status === 'Completed')
-                                                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                                        .sort((a, b) => new Date(normalizeDateStr(b.date)).getTime() - new Date(normalizeDateStr(a.date)).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
                                                             const isEditing = editingVisitId === visit.id;
@@ -1778,11 +1790,11 @@ const Patients: React.FC = () => {
                                                                     <div className="p-4 flex items-center justify-between">
                                                                         <div className="flex items-center gap-4">
                                                                             <div className="w-12 h-12 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0">
-                                                                                {new Date(visit.date).getUTCDate()}
+                                                                                {new Date(normalizeDateStr(visit.date)).getUTCDate()}
                                                                             </div>
                                                                             <div>
                                                                                 <p className="text-sm font-black text-slate-900">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
-                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(visit.date).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
+                                                                                <p className="text-xs text-slate-500 font-medium">{new Date(normalizeDateStr(visit.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
                                                                                 {visitDoctor && <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">Dr. {visitDoctor.name}</p>}
                                                                                 {(visit as any).updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {(visit as any).updated_by_name}</p>}
                                                                             </div>
@@ -2878,6 +2890,7 @@ const Patients: React.FC = () => {
                 onClose={() => { setIsBudgetModalOpen(false); setEditingBudget(null); }}
                 patientId={selectedPatient?.id || ''}
                 initialBudget={editingBudget}
+                doctors={doctors}
                 onSave={async () => {
                     setEditingBudget(null);
                     // Refresh Budgets List
@@ -2894,6 +2907,7 @@ const Patients: React.FC = () => {
                 isOpen={isVisitBudgetOpen}
                 onClose={() => { setIsVisitBudgetOpen(false); setVisitForBudget(null); }}
                 patientId={selectedPatient?.id || ''}
+                doctors={doctors}
                 onSave={async () => {
                     setIsVisitBudgetOpen(false);
                     setVisitForBudget(null);

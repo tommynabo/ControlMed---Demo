@@ -33,7 +33,8 @@ const createBudget = async (supabase, patientId, items = [], title = "", userId 
             face: item.face || null,
             discount: Number(item.discount) || 0,
             originalPrice: item.originalPrice != null ? Number(item.originalPrice) : null,
-            treatmentId: null  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
+            treatmentId: null,  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
+            doctorId: item.doctorId || null
         }));
 
         const { error: itemsError } = await supabase
@@ -135,7 +136,8 @@ const addItemToDraftBudget = async (supabase, patientId, item) => {
             face: item.face || null,
             discount: Number(item.discount) || 0,
             originalPrice: item.originalPrice != null ? Number(item.originalPrice) : null,
-            treatmentId: item.treatmentId || null
+            treatmentId: item.treatmentId || null,
+            doctorId: item.doctorId || null
         }])
         .select()
         .single();
@@ -245,7 +247,8 @@ const updateBudget = async (supabase, budgetId, items = [], title = "", userId =
             face: item.face || null,
             discount: Number(item.discount) || 0,
             originalPrice: item.originalPrice != null ? Number(item.originalPrice) : null,
-            treatmentId: null  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
+            treatmentId: null,  // FK points to Treatment catalog; PatientTreatment IDs are tracked separately
+            doctorId: item.doctorId || null
         }));
 
         const { error: itemsError } = await supabase.from('BudgetLineItem').insert(lineItems);

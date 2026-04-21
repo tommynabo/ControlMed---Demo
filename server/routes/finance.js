@@ -568,6 +568,81 @@ router.delete('/expenses/:id', async (req, res) => {
     }
 });
 
+// ─── PAYMENTS: EDIT (amount + date + method + notes) ─────────────────────────
+// Used by recepción to correct historical partial payment records.
+// Also updates the linked Invoice amount/date to keep them in sync.
+router.put('/payments/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { id } = req.params;
+        const { amount, createdAt, method, notes } = req.body;
+
+        if (!id) return res.status(400).json({ error: 'Payment ID is required' });
+
+        // Validate amount if provided
+        const numericAmount = amount !== undefined ? parseFloat(amount) : undefined;
+        if (numericAmount !== undefined && (isNaN(numericAmount) || numericAmount <= 0)) {
+            return res.status(400).json({ error: 'amount must be a positive number' });
+        }
+
+        // Validate and parse date if provided
+        let isoDate;
+        if (createdAt) {
+            const parsed = new Date(createdAt);
+            if (isNaN(parsed.getTime())) return res.status(400).json({ error: 'Invalid createdAt date' });
+            isoDate = parsed.toISOString();
+        }
+
+        // Build Payment update payload (only include fields that were sent)
+        const paymentUpdate = {};
+        if (numericAmount !== undefined) paymentUpdate.amount = numericAmount;
+        if (isoDate) paymentUpdate.createdAt = isoDate;
+        if (method) paymentUpdate.method = method;
+        if (notes !== undefined) paymentUpdate.notes = notes || null;
+
+        if (Object.keys(paymentUpdate).length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        // Fetch existing payment to get invoiceId
+        const { data: existing, error: fetchErr } = await supabase
+            .from('Payment').select('id, invoiceId, amount').eq('id', id).single();
+        if (fetchErr || !existing) return res.status(404).json({ error: 'Payment not found' });
+
+        // Update Payment
+        const { data: updatedPayment, error: pmtErr } = await supabase
+            .from('Payment').update(paymentUpdate).eq('id', id).select().single();
+        if (pmtErr) return res.status(500).json({ error: pmtErr.message });
+
+        // Update linked Invoice (amount + date) if one exists
+        let updatedInvoice = null;
+        if (existing.invoiceId) {
+            const invoiceUpdate = {};
+            if (numericAmount !== undefined) invoiceUpdate.amount = numericAmount;
+            if (isoDate) invoiceUpdate.date = isoDate;
+
+            if (Object.keys(invoiceUpdate).length > 0) {
+                const { data: inv, error: invErr } = await supabase
+                    .from('Invoice').update(invoiceUpdate).eq('id', existing.invoiceId).select().single();
+                if (!invErr) {
+                    updatedInvoice = inv;
+                    // Also update the InvoiceItem price to keep PDF/reports consistent
+                    if (numericAmount !== undefined) {
+                        await supabase
+                            .from('InvoiceItem').update({ price: numericAmount }).eq('invoiceId', existing.invoiceId);
+                    }
+                }
+            }
+        }
+
+        res.json({ success: true, payment: updatedPayment, invoice: updatedInvoice });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ─── CAJA: Patient cash history ───────────────────────────────────────────────
 router.get('/caja/:patientId', async (req, res) => {
     try {

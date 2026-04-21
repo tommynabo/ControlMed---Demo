@@ -141,6 +141,7 @@ model Doctor {
   appointments         Appointment[]
   liquidations         Liquidation[]
   schedules            DoctorSchedule[]
+  budgetLineItems      BudgetLineItem[]
 }
 
 model DoctorSchedule {
@@ -350,6 +351,8 @@ model BudgetLineItem {
   budget      Budget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
   treatmentId String?
   treatment   Treatment? @relation(fields: [treatmentId], references: [id])
+  doctorId    String?
+  doctor      Doctor?    @relation(fields: [doctorId], references: [id], onDelete: SetNull)
   name        String
   price       Float
   quantity    Int        @default(1)

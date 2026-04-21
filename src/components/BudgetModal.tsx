@@ -9,9 +9,10 @@ interface BudgetModalProps {
     patientId: string;
     onSave: () => void;
     initialBudget?: any;
+    doctors?: { id: string; name: string }[];
 }
 
-export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patientId, onSave, initialBudget }) => {
+export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patientId, onSave, initialBudget, doctors = [] }) => {
     const [title, setTitle] = useState('');
     const [items, setItems] = useState<any[]>([]);
     const [availableServices, setAvailableServices] = useState<any[]>([]);
@@ -87,7 +88,8 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
             name: service.name,
             price: service.price || service.final_price || 0,
             quantity: 1,
-            tooth: ''
+            tooth: '',
+            doctorId: ''
         }]);
         setSearchQuery(''); // Reset search
     };
@@ -389,6 +391,21 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                                 </div>
                                             )}
                                         </div>
+                                        {doctors.length > 0 && (
+                                            <div className="w-28">
+                                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">Doctor</label>
+                                                <select
+                                                    value={item.doctorId || ''}
+                                                    onChange={(e) => handleUpdateItem(idx, 'doctorId', e.target.value || null)}
+                                                    className="w-full bg-slate-50 rounded-lg p-2 text-xs font-bold outline-none"
+                                                >
+                                                    <option value="">Sin asignar</option>
+                                                    {doctors.map(d => (
+                                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
                                         <div className="h-full flex items-end pb-1">
                                             <button
                                                 onClick={() => handleRemoveItem(idx)}
