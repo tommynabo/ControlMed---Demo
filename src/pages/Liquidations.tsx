@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check } from 'lucide-react';
+import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check, Pencil, X } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
 
@@ -35,8 +35,8 @@ export const Liquidations: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [commissionRate, setCommissionRate] = useState<number>(40);
     const [labCosts, setLabCosts] = useState<Record<string, number>>({});
-    const [reassignMap, setReassignMap] = useState<Record<string, string>>({});
-    const [conceptoMap, setConceptoMap] = useState<Record<string, string>>({});
+    const [editingField, setEditingField] = useState<{ id: string; field: 'concepto' | 'doctor' } | null>(null);
+    const [editingValue, setEditingValue] = useState<string>('');
     const [savingId, setSavingId] = useState<string | null>(null);
 
     // Load doctors on mount
@@ -408,7 +408,7 @@ export const Liquidations: React.FC = () => {
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Concepto</th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Paciente</th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">NUM</th>
-                                        <th className="px-4 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Reasignar Doctor</th>
+                                        <th className="px-4 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Doctor</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Importe</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Coste Lab</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Neto</th>
@@ -423,73 +423,115 @@ export const Liquidations: React.FC = () => {
                                         <tr key={record.id} className="hover:bg-blue-50/30 transition-colors">
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
                                             <td className="px-3 py-2">
-                                                <div className="flex items-center gap-1">
-                                                    <input
-                                                        type="text"
-                                                        value={conceptoMap[record.id] ?? record.concepto}
-                                                        onChange={(e) => setConceptoMap(prev => ({ ...prev, [record.id]: e.target.value }))}
-                                                        disabled={isSaving}
-                                                        className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-blue-400 w-40"
-                                                    />
-                                                    <button
-                                                        onClick={async () => {
-                                                            const newConcepto = conceptoMap[record.id];
-                                                            if (newConcepto === undefined || newConcepto === record.concepto) return;
-                                                            setSavingId(record.id);
-                                                            try {
-                                                                await api.payments.update(record.id, { notes: newConcepto });
-                                                                setRecords(prev => prev.map(r => r.id === record.id ? { ...r, concepto: newConcepto } : r));
-                                                                setConceptoMap(prev => { const n = { ...prev }; delete n[record.id]; return n; });
-                                                            } catch (err) {
-                                                                console.error('Error updating concepto:', err);
-                                                                setError('Error al actualizar el concepto');
-                                                            } finally {
-                                                                setSavingId(null);
-                                                            }
-                                                        }}
-                                                        disabled={conceptoMap[record.id] === undefined || conceptoMap[record.id] === record.concepto || isSaving}
-                                                        className="p-1.5 rounded-md bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
-                                                        title="Guardar concepto"
-                                                    >
-                                                        {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
-                                                    </button>
-                                                </div>
+                                                {editingField?.id === record.id && editingField.field === 'concepto' ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <input
+                                                            type="text"
+                                                            value={editingValue}
+                                                            onChange={(e) => setEditingValue(e.target.value)}
+                                                            disabled={isSaving}
+                                                            autoFocus
+                                                            className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-blue-400 w-40"
+                                                        />
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (editingValue === record.concepto) { setEditingField(null); return; }
+                                                                setSavingId(record.id);
+                                                                try {
+                                                                    await api.payments.update(record.id, { notes: editingValue });
+                                                                    setRecords(prev => prev.map(r => r.id === record.id ? { ...r, concepto: editingValue } : r));
+                                                                    setEditingField(null);
+                                                                } catch (err) {
+                                                                    console.error('Error updating concepto:', err);
+                                                                    setError('Error al actualizar el concepto');
+                                                                } finally {
+                                                                    setSavingId(null);
+                                                                }
+                                                            }}
+                                                            disabled={isSaving}
+                                                            className="p-1.5 rounded-md bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
+                                                            title="Guardar concepto"
+                                                        >
+                                                            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setEditingField(null)}
+                                                            disabled={isSaving}
+                                                            className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-30 text-slate-600 transition-colors flex-shrink-0"
+                                                            title="Cancelar"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 group">
+                                                        <span className="text-xs font-semibold text-slate-700">{record.concepto}</span>
+                                                        <button
+                                                            onClick={() => { setEditingField({ id: record.id, field: 'concepto' }); setEditingValue(record.concepto); }}
+                                                            className="p-1 rounded-md text-slate-400 hover:text-blue-500 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                                                            title="Editar concepto"
+                                                        >
+                                                            <Pencil size={12} />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.nombrePaciente}</td>
                                             <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
                                             <td className="px-4 py-2">
-                                                <div className="flex items-center gap-1">
-                                                    <select
-                                                        value={reassignMap[record.id] ?? record.doctorId ?? ''}
-                                                        onChange={(e) => setReassignMap(prev => ({ ...prev, [record.id]: e.target.value }))}
-                                                        disabled={isSaving}
-                                                        className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-emerald-400 max-w-[150px]"
-                                                    >
-                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                                    </select>
-                                                    <button
-                                                        onClick={async () => {
-                                                            const newDoctorId = reassignMap[record.id];
-                                                            if (!newDoctorId || newDoctorId === record.doctorId) return;
-                                                            setSavingId(record.id);
-                                                            try {
-                                                                await api.payments.update(record.id, { doctorId: newDoctorId });
-                                                                setRecords(prev => prev.filter(r => r.id !== record.id));
-                                                                setReassignMap(prev => { const n = { ...prev }; delete n[record.id]; return n; });
-                                                            } catch (err) {
-                                                                console.error('Error reassigning payment:', err);
-                                                                setError('Error al reasignar el pago');
-                                                            } finally {
-                                                                setSavingId(null);
-                                                            }
-                                                        }}
-                                                        disabled={!reassignMap[record.id] || reassignMap[record.id] === record.doctorId || isSaving}
-                                                        className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
-                                                        title="Guardar reasignación"
-                                                    >
-                                                        {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
-                                                    </button>
-                                                </div>
+                                                {editingField?.id === record.id && editingField.field === 'doctor' ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <select
+                                                            value={editingValue}
+                                                            onChange={(e) => setEditingValue(e.target.value)}
+                                                            disabled={isSaving}
+                                                            autoFocus
+                                                            className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-emerald-400 max-w-[150px]"
+                                                        >
+                                                            {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                                        </select>
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (editingValue === record.doctorId) { setEditingField(null); return; }
+                                                                setSavingId(record.id);
+                                                                try {
+                                                                    await api.payments.update(record.id, { doctorId: editingValue });
+                                                                    setRecords(prev => prev.filter(r => r.id !== record.id));
+                                                                    setEditingField(null);
+                                                                } catch (err) {
+                                                                    console.error('Error reassigning payment:', err);
+                                                                    setError('Error al reasignar el pago');
+                                                                } finally {
+                                                                    setSavingId(null);
+                                                                }
+                                                            }}
+                                                            disabled={isSaving || editingValue === record.doctorId}
+                                                            className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
+                                                            title="Guardar reasignación"
+                                                        >
+                                                            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setEditingField(null)}
+                                                            disabled={isSaving}
+                                                            className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-30 text-slate-600 transition-colors flex-shrink-0"
+                                                            title="Cancelar"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 group">
+                                                        <span className="text-xs font-semibold text-slate-700">{doctors.find(d => d.id === record.doctorId)?.name ?? record.doctorId}</span>
+                                                        <button
+                                                            onClick={() => { setEditingField({ id: record.id, field: 'doctor' }); setEditingValue(record.doctorId ?? ''); }}
+                                                            className="p-1 rounded-md text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
+                                                            title="Reasignar doctor"
+                                                        >
+                                                            <Pencil size={12} />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 text-right font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</td>
                                             <td className="px-6 py-2 text-right">
