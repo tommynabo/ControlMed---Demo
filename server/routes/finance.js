@@ -282,21 +282,20 @@ router.post('/payments/create', async (req, res) => {
                 });
             }
 
-            let invoiceNumber = quipuResult.success ? quipuResult.number : null;
-            if (!invoiceNumber || invoiceNumber === 'PENDING') {
-                const year = new Date().getFullYear();
-                const prefix = `F-${year}-`;
-                const existing = await tx.invoice.findMany({
-                    where: { invoiceNumber: { startsWith: prefix } },
-                    select: { invoiceNumber: true }
-                });
-                const maxNum = existing.reduce((max, inv) => {
-                    const suffix = inv.invoiceNumber.slice(prefix.length);
-                    const num = parseInt(suffix, 10);
-                    return isNaN(num) ? max : Math.max(max, num);
-                }, 0);
-                invoiceNumber = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
-            }
+            // Always generate a sequential invoice number (F-YYYY-NNNN).
+            // Quipu's reference is stored separately in externalId only.
+            const year = new Date().getFullYear();
+            const prefix = `F-${year}-`;
+            const existing = await tx.invoice.findMany({
+                where: { invoiceNumber: { startsWith: prefix } },
+                select: { invoiceNumber: true }
+            });
+            const maxNum = existing.reduce((max, inv) => {
+                const suffix = inv.invoiceNumber.slice(prefix.length);
+                const num = parseInt(suffix, 10);
+                return isNaN(num) ? max : Math.max(max, num);
+            }, 0);
+            const invoiceNumber = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
 
             const invoice = await tx.invoice.create({
                 data: {

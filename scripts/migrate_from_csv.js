@@ -447,7 +447,7 @@ async function migrateBudgets(contactMap) {
     }
 
     for (const line of lines) {
-      const serviceName = clean(line['SERVICIO/PRODUCTO']) || clean(line['CONCEPTO']);
+      const serviceName = clean(line['CONCEPTO']) || clean(line['SERVICIO/PRODUCTO']);
       if (!serviceName) continue;
       const basePrice = parseFloat(clean(line['TOTAL CONCEPTO'])) || 0;
       const qty       = parseInt(clean(line['CANTIDAD'])) || 1;
