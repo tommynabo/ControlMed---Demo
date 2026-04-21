@@ -35,8 +35,7 @@ export const Liquidations: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [commissionRate, setCommissionRate] = useState<number>(40);
     const [labCosts, setLabCosts] = useState<Record<string, number>>({});
-    const [editingField, setEditingField] = useState<{ id: string; field: 'concepto' | 'doctor' } | null>(null);
-    const [editingValue, setEditingValue] = useState<string>('');
+    const [editingRow, setEditingRow] = useState<{ id: string; concepto: string; doctorId: string; importe: number } | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
 
     // Load doctors on mount
@@ -404,6 +403,7 @@ export const Liquidations: React.FC = () => {
                             <table className="w-full text-sm">
                                 <thead className="bg-slate-50 border-b border-slate-200">
                                     <tr>
+                                        <th className="w-10 px-3 py-4"></th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Fecha</th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Concepto</th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Paciente</th>
@@ -417,123 +417,116 @@ export const Liquidations: React.FC = () => {
                                 <tbody className="divide-y divide-slate-200">
                                     {records.map((record) => {
                                         const lab = labCosts[record.id] || 0;
-                                        const net = record.importeCobrado - lab;
+                                        const isEditing = editingRow?.id === record.id;
                                         const isSaving = savingId === record.id;
+                                        const net = (isEditing ? editingRow!.importe : record.importeCobrado) - lab;
                                         return (
-                                        <tr key={record.id} className="hover:bg-blue-50/30 transition-colors">
-                                            <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
-                                            <td className="px-3 py-2">
-                                                {editingField?.id === record.id && editingField.field === 'concepto' ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <input
-                                                            type="text"
-                                                            value={editingValue}
-                                                            onChange={(e) => setEditingValue(e.target.value)}
-                                                            disabled={isSaving}
-                                                            autoFocus
-                                                            className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-blue-400 w-40"
-                                                        />
+                                        <tr key={record.id} className={`transition-colors ${isEditing ? 'bg-amber-50 border-l-4 border-l-amber-400' : 'hover:bg-blue-50/30'}`}>
+                                            {/* Pencil / Save+Cancel column */}
+                                            <td className="px-3 py-2 text-center">
+                                                {isEditing ? (
+                                                    <div className="flex flex-col gap-1 items-center">
                                                         <button
                                                             onClick={async () => {
-                                                                if (editingValue === record.concepto) { setEditingField(null); return; }
+                                                                if (!editingRow) return;
                                                                 setSavingId(record.id);
                                                                 try {
-                                                                    await api.payments.update(record.id, { notes: editingValue });
-                                                                    setRecords(prev => prev.map(r => r.id === record.id ? { ...r, concepto: editingValue } : r));
-                                                                    setEditingField(null);
+                                                                    const doctorChanged = editingRow.doctorId !== record.doctorId;
+                                                                    await api.payments.update(record.id, {
+                                                                        notes: editingRow.concepto,
+                                                                        doctorId: editingRow.doctorId,
+                                                                        amount: editingRow.importe,
+                                                                    });
+                                                                    if (doctorChanged) {
+                                                                        setRecords(prev => prev.filter(r => r.id !== record.id));
+                                                                    } else {
+                                                                        setRecords(prev => prev.map(r => r.id === record.id
+                                                                            ? { ...r, concepto: editingRow.concepto, doctorId: editingRow.doctorId, importeCobrado: editingRow.importe }
+                                                                            : r
+                                                                        ));
+                                                                    }
+                                                                    setEditingRow(null);
                                                                 } catch (err) {
-                                                                    console.error('Error updating concepto:', err);
-                                                                    setError('Error al actualizar el concepto');
+                                                                    console.error('Error saving row:', err);
+                                                                    setError('Error al guardar los cambios');
                                                                 } finally {
                                                                     setSavingId(null);
                                                                 }
                                                             }}
                                                             disabled={isSaving}
-                                                            className="p-1.5 rounded-md bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
-                                                            title="Guardar concepto"
+                                                            className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white transition-colors"
+                                                            title="Guardar cambios"
                                                         >
-                                                            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+                                                            {isSaving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
                                                         </button>
                                                         <button
-                                                            onClick={() => setEditingField(null)}
+                                                            onClick={() => setEditingRow(null)}
                                                             disabled={isSaving}
-                                                            className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-30 text-slate-600 transition-colors flex-shrink-0"
+                                                            className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-600 transition-colors"
                                                             title="Cancelar"
                                                         >
-                                                            <X size={12} />
+                                                            <X size={13} />
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <div className="flex items-center gap-1.5 group">
-                                                        <span className="text-xs font-semibold text-slate-700">{record.concepto}</span>
-                                                        <button
-                                                            onClick={() => { setEditingField({ id: record.id, field: 'concepto' }); setEditingValue(record.concepto); }}
-                                                            className="p-1 rounded-md text-slate-400 hover:text-blue-500 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-                                                            title="Editar concepto"
-                                                        >
-                                                            <Pencil size={12} />
-                                                        </button>
-                                                    </div>
+                                                    <button
+                                                        onClick={() => setEditingRow({ id: record.id, concepto: record.concepto, doctorId: record.doctorId ?? '', importe: record.importeCobrado })}
+                                                        className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                        title="Editar fila"
+                                                    >
+                                                        <Pencil size={14} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
+                                            {/* Concepto */}
+                                            <td className="px-3 py-2">
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        value={editingRow!.concepto}
+                                                        onChange={(e) => setEditingRow(prev => prev ? { ...prev, concepto: e.target.value } : prev)}
+                                                        disabled={isSaving}
+                                                        autoFocus
+                                                        className="bg-white border border-amber-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-amber-400 w-44"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-semibold text-slate-700">{record.concepto}</span>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.nombrePaciente}</td>
                                             <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
+                                            {/* Doctor */}
                                             <td className="px-4 py-2">
-                                                {editingField?.id === record.id && editingField.field === 'doctor' ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <select
-                                                            value={editingValue}
-                                                            onChange={(e) => setEditingValue(e.target.value)}
-                                                            disabled={isSaving}
-                                                            autoFocus
-                                                            className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-emerald-400 max-w-[150px]"
-                                                        >
-                                                            {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                                        </select>
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (editingValue === record.doctorId) { setEditingField(null); return; }
-                                                                setSavingId(record.id);
-                                                                try {
-                                                                    await api.payments.update(record.id, { doctorId: editingValue });
-                                                                    setRecords(prev => prev.filter(r => r.id !== record.id));
-                                                                    setEditingField(null);
-                                                                } catch (err) {
-                                                                    console.error('Error reassigning payment:', err);
-                                                                    setError('Error al reasignar el pago');
-                                                                } finally {
-                                                                    setSavingId(null);
-                                                                }
-                                                            }}
-                                                            disabled={isSaving || editingValue === record.doctorId}
-                                                            className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
-                                                            title="Guardar reasignación"
-                                                        >
-                                                            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setEditingField(null)}
-                                                            disabled={isSaving}
-                                                            className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-30 text-slate-600 transition-colors flex-shrink-0"
-                                                            title="Cancelar"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    </div>
+                                                {isEditing ? (
+                                                    <select
+                                                        value={editingRow!.doctorId}
+                                                        onChange={(e) => setEditingRow(prev => prev ? { ...prev, doctorId: e.target.value } : prev)}
+                                                        disabled={isSaving}
+                                                        className="bg-white border border-amber-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-amber-400 max-w-[160px]"
+                                                    >
+                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                                    </select>
                                                 ) : (
-                                                    <div className="flex items-center gap-1.5 group">
-                                                        <span className="text-xs font-semibold text-slate-700">{doctors.find(d => d.id === record.doctorId)?.name ?? record.doctorId}</span>
-                                                        <button
-                                                            onClick={() => { setEditingField({ id: record.id, field: 'doctor' }); setEditingValue(record.doctorId ?? ''); }}
-                                                            className="p-1 rounded-md text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0"
-                                                            title="Reasignar doctor"
-                                                        >
-                                                            <Pencil size={12} />
-                                                        </button>
-                                                    </div>
+                                                    <span className="text-xs font-semibold text-slate-700">{doctors.find(d => d.id === record.doctorId)?.name ?? record.doctorId}</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-right font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</td>
+                                            {/* Importe */}
+                                            <td className="px-6 py-4 text-right">
+                                                {isEditing ? (
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={editingRow!.importe}
+                                                        onChange={(e) => setEditingRow(prev => prev ? { ...prev, importe: Number(e.target.value) || 0 } : prev)}
+                                                        disabled={isSaving}
+                                                        className="w-24 text-right bg-white border border-amber-300 rounded-md px-2 py-1 text-sm font-black text-emerald-600 outline-none focus:ring-1 focus:ring-amber-400"
+                                                    />
+                                                ) : (
+                                                    <span className="font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-2 text-right">
                                                 <input
                                                     type="number"
@@ -551,7 +544,7 @@ export const Liquidations: React.FC = () => {
                                     })}
                                     {/* Total Row */}
                                     <tr className="bg-emerald-50 border-t-2 border-emerald-200">
-                                        <td colSpan={5} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
+                                        <td colSpan={6} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
                                             TOTALES
                                         </td>
                                         <td className="px-6 py-4 text-right font-black text-emerald-700 text-lg">{totalImporte.toFixed(2)}€</td>
@@ -560,7 +553,7 @@ export const Liquidations: React.FC = () => {
                                     </tr>
                                     {/* Commission Row */}
                                     <tr className="bg-blue-50 border-t border-blue-200">
-                                        <td colSpan={7} className="px-6 py-3 text-right font-black uppercase text-blue-700 text-sm">
+                                        <td colSpan={8} className="px-6 py-3 text-right font-black uppercase text-blue-700 text-sm">
                                             COMISIÓN DOCTOR ({commissionRate}%)
                                         </td>
                                         <td className="px-6 py-3 text-right font-black text-blue-700 text-lg">{commissionAmount.toFixed(2)}€</td>
