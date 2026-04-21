@@ -112,7 +112,16 @@ async function migratePatients() {
     const n = clean(r['NUM']);
     if (n) numCount.set(n, (numCount.get(n) || 0) + 1);
   }
-  const claimedNums = new Set(existing.filter(p => p.historyNumber).map(p => p.historyNumber));
+  // Normalize existing historyNumbers to HC-XXXX when building the claimed set,
+  // so bare-number patients (e.g. "350") and HC-prefixed ones don't collide
+  const claimedNums = new Set(
+    existing
+      .filter(p => p.historyNumber)
+      .map(p => {
+        const m = p.historyNumber.match(/(?:HC-|HCL-)?0*(\d+)/);
+        return m ? `HC-${String(parseInt(m[1], 10)).padStart(4, '0')}` : p.historyNumber;
+      })
+  );
 
   for (const r of rows) {
     const idcontacto = clean(r['IDCONTACTO']);
@@ -128,12 +137,13 @@ async function migratePatients() {
     const notes      = clean(r['NOTAS']);
     const mutua      = clean(r['MUTUA']);
 
-    // Resolve safe historyNumber: only assign if num is unique OR first occurrence
+    // Resolve safe historyNumber: normalize to HC-XXXX and assign if not already claimed
     let safeNum = null;
     if (num) {
-      if (!claimedNums.has(num)) {
-        safeNum = num;
-        claimedNums.add(num);
+      const normalized = `HC-${String(parseInt(num, 10)).padStart(4, '0')}`;
+      if (!claimedNums.has(normalized)) {
+        safeNum = normalized;
+        claimedNums.add(normalized);
       }
       // else: num already taken — leave historyNumber as null for this patient
     }

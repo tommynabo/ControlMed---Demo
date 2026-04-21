@@ -44,7 +44,10 @@ const CashRegister: React.FC = () => {
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
-        setTodayInvoices(invoices.filter(i => i.date && i.date.startsWith(today)));
+        setTodayInvoices(invoices.filter(i =>
+            i.date && i.date.startsWith(today) &&
+            !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
+        ));
         setTodayExpenses(expenses.filter(e => e.date === today));
     }, [invoices, expenses]);
 

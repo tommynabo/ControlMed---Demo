@@ -102,15 +102,17 @@ router.post('/', async (req, res) => {
         let created;
         if (!data.historyNumber) {
             created = await prisma.$transaction(async (tx) => {
-                // Use MAX extraction to avoid lexicographic ordering issues with mixed formats
+                // Scan ALL patients with any historyNumber to find the global maximum,
+                // regardless of format (HC-0350, HCL-0350, bare "350", "0350", etc.)
                 const allNums = await tx.patient.findMany({
-                    where: { historyNumber: { startsWith: 'HC-' } },
+                    where: { historyNumber: { not: null } },
                     select: { historyNumber: true }
                 });
                 let next = 1;
                 if (allNums.length > 0) {
                     const max = allNums.reduce((best, p) => {
-                        const m = p.historyNumber.match(/HC-(\d+)/);
+                        // Matches: HC-0350, HCL-0350, 0350, 350
+                        const m = p.historyNumber.match(/(?:HC-|HCL-)?0*(\d+)/);
                         if (!m) return best;
                         const n = parseInt(m[1], 10);
                         return n > best ? n : best;

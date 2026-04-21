@@ -1286,7 +1286,7 @@ const Patients: React.FC = () => {
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Fecha de Nacimiento</label>
-                                        <input type="date" disabled={!isEditingPatient} value={selectedPatient.birthDate || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, birthDate: e.target.value })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" />
+                                        <input type="date" disabled={!isEditingPatient} value={selectedPatient.birthDate ? selectedPatient.birthDate.substring(0, 10) : ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, birthDate: e.target.value })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" />
                                     </div>
 
                                     {/* MEDICAL CONDITIONS EDITOR */}

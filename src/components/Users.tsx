@@ -11,6 +11,7 @@ interface User {
   role: 'ADMIN' | 'DOCTOR' | 'RECEPTIONIST' | 'ASSISTANT';
   isDoctor?: boolean;
   is_active: boolean;
+  secondary_role?: string;
   created_at?: string;
 }
 
@@ -29,6 +30,7 @@ const Users: React.FC = () => {
     role: 'RECEPTIONIST',
     isDoctor: false,
     is_active: true,
+    secondary_role: '',
     password: ''
   });
 
@@ -77,6 +79,7 @@ const Users: React.FC = () => {
     setEditingUser(user);
     setUserForm({
       ...user,
+      secondary_role: user.secondary_role || '',
       password: ''
     });
     setShowModal(true);
@@ -107,7 +110,8 @@ const Users: React.FC = () => {
           full_name: userForm.full_name,
           role: userForm.role,
           isDoctor: userForm.isDoctor || userForm.role === 'DOCTOR',
-          is_active: userForm.is_active
+          is_active: userForm.is_active,
+          secondary_role: userForm.secondary_role || null
         };
         if (userForm.password) {
           updateData.password = userForm.password;
@@ -120,7 +124,8 @@ const Users: React.FC = () => {
           role: userForm.role,
           isDoctor: userForm.isDoctor || userForm.role === 'DOCTOR',
           is_active: userForm.is_active,
-          password: userForm.password
+          password: userForm.password,
+          secondary_role: userForm.secondary_role || null
         });
       }
       setShowModal(false);
@@ -233,6 +238,14 @@ const Users: React.FC = () => {
                         <span>{roleInfo?.icon}</span>
                         {roleInfo?.label}
                       </span>
+                      {user.secondary_role && user.secondary_role !== user.role && (() => {
+                        const secInfo = getRoleInfo(user.secondary_role!);
+                        return secInfo ? (
+                          <span className={`ml-1 ${secInfo.color} px-2 py-0.5 rounded-full text-[9px] font-bold uppercase inline-flex items-center gap-0.5`}>
+                            +{secInfo.label}
+                          </span>
+                        ) : null;
+                      })()}
                     </td>
                     <td className="p-6 text-center">
                       <button
@@ -348,6 +361,25 @@ const Users: React.FC = () => {
                     <span className="ml-1 text-slate-400 font-normal">(aparece en agendas y citas)</span>
                   </span>
                 </label>
+              </div>
+
+              <div>
+                <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Rol Secundario</label>
+                <select
+                  value={userForm.secondary_role || ''}
+                  onChange={(e) => setUserForm({ ...userForm, secondary_role: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-200"
+                >
+                  <option value="">— Ninguno —</option>
+                  {roles
+                    .filter(r => r.value !== userForm.role)
+                    .map(role => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">Permite que el usuario acceda también con los permisos de este segundo rol</p>
               </div>
 
               <div>

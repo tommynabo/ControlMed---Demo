@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserCog, Plus, Edit2, Trash2, Save, X, Shield, Mail, Eye, EyeOff } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { api } from '../services/api';
 import { UserRole, ROLE_LABELS, ROLE_ALLOWED_PAGES } from '../config/roles';
 
 interface SystemUser {
@@ -10,6 +11,7 @@ interface SystemUser {
     name: string;
     password?: string;
     role: UserRole;
+    secondaryRole?: string;
     isDoctor: boolean;
     doctorId?: string;
     createdAt?: string;
@@ -21,6 +23,7 @@ const EMPTY_USER: Omit<SystemUser, 'id'> = {
     name: '',
     password: '',
     role: 'DOCTOR',
+    secondaryRole: '',
     isDoctor: true,
     doctorId: '',
 };
@@ -57,12 +60,17 @@ const UserManagement: React.FC = () => {
     const loadUsers = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${getApiUrl()}/auth/users`);
-            if (!res.ok) throw new Error('Error cargando usuarios');
-            const data = await res.json();
-            setUsers(data);
+            const data = await api.systemUsers.getAllIncludeInactive();
+            // Map full_name → name for this component's interface
+            const mapped = (data || []).map((u: any) => ({
+                ...u,
+                name: u.full_name || u.name || '',
+                is_active: u.is_active ?? u.isActive ?? true,
+                secondaryRole: u.secondaryRole || u.secondary_role || '',
+            }));
+            setUsers(mapped);
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Error cargando usuarios');
         } finally {
             setLoading(false);
         }
@@ -85,6 +93,7 @@ const UserManagement: React.FC = () => {
             name: user.name,
             password: '',
             role: user.role,
+            secondaryRole: user.secondaryRole || '',
             isDoctor: user.isDoctor ?? (user.role === 'DOCTOR'),
             doctorId: user.doctorId || '',
         });
@@ -113,35 +122,22 @@ const UserManagement: React.FC = () => {
         setError('');
         try {
             const payload: any = {
+                full_name: formData.name,
                 email: formData.email,
-                gmail: formData.gmail || null,
-                name: formData.name,
                 role: formData.role,
+                secondary_role: formData.secondaryRole || null,
                 isDoctor: formData.isDoctor || formData.role === 'DOCTOR',
                 doctorId: formData.doctorId || null,
+                is_active: true,
             };
             if (formData.password) {
                 payload.password = formData.password;
             }
 
-            let res;
             if (isCreating) {
-                res = await fetch(`${getApiUrl()}/auth/users`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
+                await api.systemUsers.create(payload);
             } else if (editingUser) {
-                res = await fetch(`${getApiUrl()}/auth/users/${editingUser.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-            }
-
-            if (!res?.ok) {
-                const errData = await res?.json();
-                throw new Error(errData?.error || 'Error al guardar');
+                await api.systemUsers.update(editingUser.id, payload);
             }
 
             setSuccess(isCreating ? 'Usuario creado correctamente' : 'Usuario actualizado correctamente');
@@ -149,7 +145,7 @@ const UserManagement: React.FC = () => {
             handleCancel();
             loadUsers();
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Error al guardar');
         } finally {
             setSaving(false);
         }
@@ -159,13 +155,12 @@ const UserManagement: React.FC = () => {
         if (!window.confirm(`¿Eliminar al usuario "${user.name}"? Esta acción no se puede deshacer.`)) return;
 
         try {
-            const res = await fetch(`${getApiUrl()}/auth/users/${user.id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Error al eliminar');
+            await api.systemUsers.delete(user.id);
             setSuccess('Usuario eliminado');
             setTimeout(() => setSuccess(''), 3000);
             loadUsers();
         } catch (err: any) {
-            setError(err.message);
+            setError(err.message || 'Error al eliminar');
         }
     };
 
@@ -361,6 +356,23 @@ const UserManagement: React.FC = () => {
                                 </select>
                             </div>
                         )}
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Rol Secundario</label>
+                            <select
+                                value={formData.secondaryRole || ''}
+                                onChange={e => setFormData(p => ({ ...p, secondaryRole: e.target.value }))}
+                                className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-400 outline-none bg-white"
+                            >
+                                <option value="">— Ninguno —</option>
+                                {(Object.keys(ROLE_LABELS) as UserRole[])
+                                    .filter(r => r !== formData.role)
+                                    .map(r => (
+                                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                                    ))}
+                            </select>
+                            <p className="text-[10px] text-slate-400 mt-1">Permite que el usuario acceda también con los permisos de este segundo rol</p>
+                        </div>
                     </div>
 
                     <div className="flex gap-3 mt-5">
@@ -423,6 +435,11 @@ const UserManagement: React.FC = () => {
                                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${getRoleBadgeColor(user.role)}`}>
                                             {ROLE_LABELS[user.role] || user.role}
                                         </span>
+                                        {user.secondaryRole && user.secondaryRole !== user.role && (
+                                            <span className={`ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${getRoleBadgeColor(user.secondaryRole as UserRole)}`}>
+                                                +{ROLE_LABELS[user.secondaryRole as UserRole] || user.secondaryRole}
+                                            </span>
+                                        )}
                                         {user.isDoctor && user.role !== 'DOCTOR' && (
                                             <span className="ml-1 inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200">
                                                 + Doctor
@@ -459,16 +476,5 @@ const UserManagement: React.FC = () => {
         </div>
     );
 };
-
-// Reuse the same API URL logic as api.ts
-function getApiUrl() {
-    if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-        if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return 'http://localhost:3001/api';
-        }
-    }
-    return '/api';
-}
 
 export default UserManagement;

@@ -15,7 +15,8 @@ router.get('/', async (req, res) => {
             ...u,
             full_name: u.name,
             is_active: u.isActive,
-            isDoctor: u.isDoctor
+            isDoctor: u.isDoctor,
+            secondary_role: u.secondaryRole || null
         }));
         res.json(mappedUsers);
     } catch (e) {
@@ -36,7 +37,8 @@ router.get('/all', async (req, res) => {
             ...u,
             full_name: u.name,
             is_active: u.isActive,
-            isDoctor: u.isDoctor
+            isDoctor: u.isDoctor,
+            secondary_role: u.secondaryRole || null
         }));
         res.json(mappedUsers);
     } catch (e) {
@@ -66,7 +68,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
     try {
-        const { email, full_name, role, is_active, password, doctorId, isDoctor } = req.body;
+        const { email, full_name, role, is_active, password, doctorId, isDoctor, secondary_role } = req.body;
 
         const ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
         const prismaRole = ROLE_MAP[role] || 'DOCTOR';
@@ -84,7 +86,8 @@ router.post('/', async (req, res) => {
                     isDoctor: isDoctorFlag,
                     isActive: is_active !== undefined ? is_active : true,
                     password: password || '123',
-                    doctorId: doctorId || null
+                    doctorId: doctorId || null,
+                    secondaryRole: secondary_role ? (ROLE_MAP[secondary_role] || secondary_role) : null
                 }
             });
 
@@ -120,7 +123,8 @@ router.post('/', async (req, res) => {
             ...result,
             full_name: result.name,
             is_active: result.isActive,
-            isDoctor: result.isDoctor
+            isDoctor: result.isDoctor,
+            secondary_role: result.secondaryRole || null
         });
     } catch (e) {
         console.error('Error creating system user:', e);
@@ -131,7 +135,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, full_name, role, is_active, doctorId, isDoctor } = req.body;
+        const { email, full_name, role, is_active, doctorId, isDoctor, secondary_role } = req.body;
 
         const SU_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
         const prismaRole = role ? (SU_ROLE_MAP[role] || role) : undefined;
@@ -145,7 +149,8 @@ router.put('/:id', async (req, res) => {
             ...(prismaRole !== undefined && { role: prismaRole }),
             ...(is_active !== undefined && { isActive: is_active }),
             ...(isDoctorFlag !== undefined && { isDoctor: isDoctorFlag }),
-            ...(doctorId !== undefined && { doctorId: doctorId || null })
+            ...(doctorId !== undefined && { doctorId: doctorId || null }),
+            ...(secondary_role !== undefined && { secondaryRole: secondary_role ? (SU_ROLE_MAP[secondary_role] || secondary_role) : null })
         };
 
         const user = await prisma.$transaction(async (tx) => {
@@ -180,7 +185,8 @@ router.put('/:id', async (req, res) => {
             ...user,
             full_name: user.name,
             is_active: user.isActive,
-            isDoctor: user.isDoctor
+            isDoctor: user.isDoctor,
+            secondary_role: user.secondaryRole || null
         });
     } catch (e) {
         console.error('Error updating system user:', e);
