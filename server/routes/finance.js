@@ -319,9 +319,42 @@ router.post('/payments/create', async (req, res) => {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
                 const finalAmount = (numericAmount - labCost) * (rawRate / 100);
-                liquidation = await tx.liquidation.create({
-                    data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: appointmentId || null, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
-                });
+                
+                // 🔧 FIX: Check if liquidation already exists for this appointment
+                // This handles edge cases where a liquidation exists (e.g., from failed invoice deletion)
+                if (appointmentId) {
+                    const existingLiquidation = await tx.liquidation.findFirst({
+                        where: { appointmentId }
+                    });
+                    
+                    if (existingLiquidation) {
+                        // Liquidation exists → UPDATE instead of CREATE
+                        liquidation = await tx.liquidation.update({
+                            where: { id: existingLiquidation.id },
+                            data: {
+                                doctorId: doctor.id,
+                                grossAmount: numericAmount,
+                                labCost,
+                                commissionRate: rawRate,
+                                finalAmount,
+                                treatmentName: solvedTreatmentName,
+                                patientName: patient?.name || 'Paciente',
+                                paymentMethod: method,
+                                status: 'PENDING'
+                            }
+                        });
+                    } else {
+                        // No existing liquidation → CREATE new one
+                        liquidation = await tx.liquidation.create({
+                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        });
+                    }
+                } else {
+                    // No appointmentId → CREATE without unique constraint concern
+                    liquidation = await tx.liquidation.create({
+                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                    });
+                }
             }
 
             if (type === 'ADVANCE_PAYMENT' || (type === 'DIRECT_CHARGE' && method === 'wallet')) {

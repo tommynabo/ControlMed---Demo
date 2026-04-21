@@ -1546,7 +1546,15 @@ const Agenda: React.FC = () => {
                                                                                             </div>
                                                                                         </div>
                                                                                     )}
-                                                                                    <span className="truncate font-black">{patients.find(p => p.id === appt.patientId)?.name || (appt as any).patient?.name || '⚠️ Paciente Eliminado'}</span>
+                                                                                    <span className="truncate font-black">
+                                                                                        {(() => {
+                                                                                            const patient = patients.find(p => p.id === appt.patientId) || (appt as any).patient;
+                                                                                            if (!patient) return '⚠️ Paciente Eliminado';
+                                                                                            const historyNum = patient.historyNumber || `ID: ${patient.id?.slice(0, 6)}`;
+                                                                                            const patientName = patient.name || 'Sin nombre';
+                                                                                            return `${historyNum} — ${patientName}`;
+                                                                                        })()}
+                                                                                    </span>
                                                                                 </div>
                                                                                 {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
                                                                             </div>
