@@ -257,9 +257,10 @@ router.post('/payments/create', async (req, res) => {
             const contact = await quipuService.getOrCreateContact(contactData);
             if (contact && contact.id) {
                 const today = new Date().toISOString().split('T')[0];
+                const histSuffix = patient.historyNumber ? ` — Nº Historia: ${patient.historyNumber}` : '';
                 quipuResult = await quipuService.createInvoice(
                     contact.id,
-                    [{ name: solvedTreatmentName, quantity: 1, price: numericAmount }],
+                    [{ name: `${solvedTreatmentName}${histSuffix}`, quantity: 1, price: numericAmount }],
                     today, today,
                     method === 'card' ? 'credit_card' : method
                 );
