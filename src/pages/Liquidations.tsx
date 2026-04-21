@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent } from 'lucide-react';
+import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
 
@@ -35,6 +35,8 @@ export const Liquidations: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [commissionRate, setCommissionRate] = useState<number>(40);
     const [labCosts, setLabCosts] = useState<Record<string, number>>({});
+    const [reassignMap, setReassignMap] = useState<Record<string, string>>({});
+    const [savingId, setSavingId] = useState<string | null>(null);
 
     // Load doctors on mount
     useEffect(() => {
@@ -405,6 +407,7 @@ export const Liquidations: React.FC = () => {
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Concepto</th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Paciente</th>
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">NUM</th>
+                                        <th className="px-4 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Reasignar Doctor</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Importe</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Coste Lab</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Neto</th>
@@ -414,12 +417,47 @@ export const Liquidations: React.FC = () => {
                                     {records.map((record) => {
                                         const lab = labCosts[record.id] || 0;
                                         const net = record.importeCobrado - lab;
+                                        const isSaving = savingId === record.id;
                                         return (
                                         <tr key={record.id} className="hover:bg-blue-50/30 transition-colors">
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.concepto}</td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.nombrePaciente}</td>
                                             <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
+                                            <td className="px-4 py-2">
+                                                <div className="flex items-center gap-1">
+                                                    <select
+                                                        value={reassignMap[record.id] ?? record.doctorId ?? ''}
+                                                        onChange={(e) => setReassignMap(prev => ({ ...prev, [record.id]: e.target.value }))}
+                                                        disabled={isSaving}
+                                                        className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-emerald-400 max-w-[150px]"
+                                                    >
+                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                                    </select>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const newDoctorId = reassignMap[record.id];
+                                                            if (!newDoctorId || newDoctorId === record.doctorId) return;
+                                                            setSavingId(record.id);
+                                                            try {
+                                                                await api.payments.update(record.id, { doctorId: newDoctorId });
+                                                                setRecords(prev => prev.filter(r => r.id !== record.id));
+                                                                setReassignMap(prev => { const n = { ...prev }; delete n[record.id]; return n; });
+                                                            } catch (err) {
+                                                                console.error('Error reassigning payment:', err);
+                                                                setError('Error al reasignar el pago');
+                                                            } finally {
+                                                                setSavingId(null);
+                                                            }
+                                                        }}
+                                                        disabled={!reassignMap[record.id] || reassignMap[record.id] === record.doctorId || isSaving}
+                                                        className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
+                                                        title="Guardar reasignación"
+                                                    >
+                                                        {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 text-right font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</td>
                                             <td className="px-6 py-2 text-right">
                                                 <input
@@ -438,7 +476,7 @@ export const Liquidations: React.FC = () => {
                                     })}
                                     {/* Total Row */}
                                     <tr className="bg-emerald-50 border-t-2 border-emerald-200">
-                                        <td colSpan={4} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
+                                        <td colSpan={5} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
                                             TOTALES
                                         </td>
                                         <td className="px-6 py-4 text-right font-black text-emerald-700 text-lg">{totalImporte.toFixed(2)}€</td>
@@ -447,7 +485,7 @@ export const Liquidations: React.FC = () => {
                                     </tr>
                                     {/* Commission Row */}
                                     <tr className="bg-blue-50 border-t border-blue-200">
-                                        <td colSpan={6} className="px-6 py-3 text-right font-black uppercase text-blue-700 text-sm">
+                                        <td colSpan={7} className="px-6 py-3 text-right font-black uppercase text-blue-700 text-sm">
                                             COMISIÓN DOCTOR ({commissionRate}%)
                                         </td>
                                         <td className="px-6 py-3 text-right font-black text-blue-700 text-lg">{commissionAmount.toFixed(2)}€</td>

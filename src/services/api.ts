@@ -251,7 +251,7 @@ export const api = {
             if (!res.ok) throw new Error('Failed to fetch advance balance');
             return res.json();
         },
-        update: async (id: string, data: { amount?: number; createdAt?: string; method?: string; notes?: string }) => {
+        update: async (id: string, data: { amount?: number; createdAt?: string; method?: string; notes?: string; doctorId?: string }) => {
             const res = await fetch(`${API_URL}/finance/payments/${id}`, {
                 method: 'PUT',
                 headers,

@@ -577,7 +577,7 @@ router.put('/payments/:id', async (req, res) => {
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         const { id } = req.params;
-        const { amount, createdAt, method, notes } = req.body;
+        const { amount, createdAt, method, notes, doctorId } = req.body;
 
         if (!id) return res.status(400).json({ error: 'Payment ID is required' });
 
@@ -601,6 +601,8 @@ router.put('/payments/:id', async (req, res) => {
         if (isoDate) paymentUpdate.createdAt = isoDate;
         if (method) paymentUpdate.method = method;
         if (notes !== undefined) paymentUpdate.notes = notes || null;
+        // doctorId: null removes assignment; a string reassigns to another doctor
+        if (doctorId !== undefined) paymentUpdate.doctorId = doctorId || null;
 
         if (Object.keys(paymentUpdate).length === 0) {
             return res.status(400).json({ error: 'No fields to update' });
