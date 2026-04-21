@@ -36,6 +36,7 @@ export const Liquidations: React.FC = () => {
     const [commissionRate, setCommissionRate] = useState<number>(40);
     const [labCosts, setLabCosts] = useState<Record<string, number>>({});
     const [reassignMap, setReassignMap] = useState<Record<string, string>>({});
+    const [conceptoMap, setConceptoMap] = useState<Record<string, string>>({});
     const [savingId, setSavingId] = useState<string | null>(null);
 
     // Load doctors on mount
@@ -421,7 +422,39 @@ export const Liquidations: React.FC = () => {
                                         return (
                                         <tr key={record.id} className="hover:bg-blue-50/30 transition-colors">
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
-                                            <td className="px-6 py-4 text-slate-700 font-semibold">{record.concepto}</td>
+                                            <td className="px-3 py-2">
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        type="text"
+                                                        value={conceptoMap[record.id] ?? record.concepto}
+                                                        onChange={(e) => setConceptoMap(prev => ({ ...prev, [record.id]: e.target.value }))}
+                                                        disabled={isSaving}
+                                                        className="bg-white border border-slate-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-blue-400 w-40"
+                                                    />
+                                                    <button
+                                                        onClick={async () => {
+                                                            const newConcepto = conceptoMap[record.id];
+                                                            if (newConcepto === undefined || newConcepto === record.concepto) return;
+                                                            setSavingId(record.id);
+                                                            try {
+                                                                await api.payments.update(record.id, { notes: newConcepto });
+                                                                setRecords(prev => prev.map(r => r.id === record.id ? { ...r, concepto: newConcepto } : r));
+                                                                setConceptoMap(prev => { const n = { ...prev }; delete n[record.id]; return n; });
+                                                            } catch (err) {
+                                                                console.error('Error updating concepto:', err);
+                                                                setError('Error al actualizar el concepto');
+                                                            } finally {
+                                                                setSavingId(null);
+                                                            }
+                                                        }}
+                                                        disabled={conceptoMap[record.id] === undefined || conceptoMap[record.id] === record.concepto || isSaving}
+                                                        className="p-1.5 rounded-md bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white transition-colors flex-shrink-0"
+                                                        title="Guardar concepto"
+                                                    >
+                                                        {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+                                                    </button>
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.nombrePaciente}</td>
                                             <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
                                             <td className="px-4 py-2">
