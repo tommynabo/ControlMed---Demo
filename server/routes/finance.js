@@ -65,6 +65,35 @@ router.get('/liquidations', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.put('/liquidations/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { treatmentName, doctorId, grossAmount, labCost, commissionRate } = req.body;
+        const data = {};
+        if (treatmentName !== undefined) data.treatmentName = treatmentName;
+        if (doctorId !== undefined) data.doctorId = doctorId;
+        if (grossAmount !== undefined) data.grossAmount = Number(grossAmount);
+        if (labCost !== undefined) data.labCost = Number(labCost);
+        if (commissionRate !== undefined) {
+            data.commissionRate = Number(commissionRate);
+        }
+        // Recalculate finalAmount if numeric fields changed
+        if (data.grossAmount !== undefined || data.labCost !== undefined || data.commissionRate !== undefined) {
+            const existing = await prisma.liquidation.findUnique({ where: { id } });
+            if (!existing) return res.status(404).json({ error: 'Liquidation not found' });
+            const g = data.grossAmount !== undefined ? data.grossAmount : existing.grossAmount;
+            const l = data.labCost !== undefined ? data.labCost : existing.labCost;
+            const r = data.commissionRate !== undefined ? data.commissionRate : existing.commissionRate;
+            data.finalAmount = (g - l) * (r / 100);
+        }
+        const updated = await prisma.liquidation.update({ where: { id }, data });
+        res.json(updated);
+    } catch (e) {
+        console.error('Error updating liquidation:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.get('/liquidations/summary', async (req, res) => {
     try {
         const { doctorId, month, year, dateFrom, dateTo } = req.query;

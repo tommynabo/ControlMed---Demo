@@ -1285,6 +1285,18 @@ export const api = {
             );
             if (!res.ok) throw new Error('Failed to fetch liquidation summary');
             return res.json();
+        },
+        update: async (id: string, data: { treatmentName?: string; doctorId?: string; grossAmount?: number; labCost?: number; commissionRate?: number }) => {
+            const res = await fetch(`${API_URL}/finance/liquidations/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to update liquidation');
+            }
+            return res.json();
         }
     },
 

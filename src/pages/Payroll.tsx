@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Download, Calendar } from 'lucide-react';
+import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Expense, Doctor, Specialization } from '../../types';
 
@@ -12,6 +12,8 @@ const Payroll: React.FC = () => {
     const [editedRecords, setEditedRecords] = useState<Record<string, { grossAmount?: number, labCost?: number, commissionRate?: number }>>({});
     const [manualAdjustment, setManualAdjustment] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
+    const [editingRow, setEditingRow] = useState<{ id: string; treatmentName: string; doctorId: string } | null>(null);
+    const [savingRowId, setSavingRowId] = useState<string | null>(null);
 
     // Fetch Liquidations when filters change
     useEffect(() => {
@@ -299,6 +301,7 @@ const Payroll: React.FC = () => {
                             <table className="w-full min-w-max text-left text-sm">
                                 <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
                                     <tr>
+                                        <th className="w-10 px-3 py-4"></th>
                                         <th className="px-6 py-4">Paciente</th>
                                         <th className="px-6 py-4">Tratamiento</th>
                                         <th className="px-6 py-4">Fecha</th>
@@ -315,11 +318,102 @@ const Payroll: React.FC = () => {
                                         const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
                                         const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
                                         const final = (gross - lab) * (rate / 100);
+                                        const isEditingThis = editingRow?.id === r.id;
+                                        const isSavingThis = savingRowId === r.id;
 
                                         return (
-                                            <tr key={r.id} className="hover:bg-slate-50 transition">
+                                            <tr key={r.id} className={`transition ${isEditingThis ? 'bg-amber-50 border-l-4 border-l-amber-400' : 'hover:bg-slate-50'}`}>
+                                                {/* Pencil / Save+Cancel column */}
+                                                <td className="px-3 py-4 text-center">
+                                                    {isEditingThis ? (
+                                                        <div className="flex flex-col gap-1 items-center">
+                                                            <button
+                                                                onClick={async () => {
+                                                                    if (!editingRow) return;
+                                                                    setSavingRowId(r.id);
+                                                                    try {
+                                                                        const doctorChanged = editingRow.doctorId !== (r.doctorId ?? '');
+                                                                        await api.liquidations.update(r.id, {
+                                                                            treatmentName: editingRow.treatmentName,
+                                                                            doctorId: editingRow.doctorId || undefined,
+                                                                        });
+                                                                        if (doctorChanged) {
+                                                                            setLiquidations((prev: any) => ({
+                                                                                ...prev,
+                                                                                treatments: prev.treatments.filter((t: any) => t.id !== r.id)
+                                                                            }));
+                                                                        } else {
+                                                                            setLiquidations((prev: any) => ({
+                                                                                ...prev,
+                                                                                treatments: prev.treatments.map((t: any) =>
+                                                                                    t.id === r.id
+                                                                                        ? { ...t, treatmentName: editingRow.treatmentName, doctorId: editingRow.doctorId }
+                                                                                        : t
+                                                                                )
+                                                                            }));
+                                                                        }
+                                                                        setEditingRow(null);
+                                                                    } catch (err) {
+                                                                        console.error('Error saving liquidation:', err);
+                                                                        alert('Error al guardar los cambios');
+                                                                    } finally {
+                                                                        setSavingRowId(null);
+                                                                    }
+                                                                }}
+                                                                disabled={isSavingThis}
+                                                                className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white transition-colors"
+                                                                title="Guardar"
+                                                            >
+                                                                {isSavingThis ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setEditingRow(null)}
+                                                                disabled={isSavingThis}
+                                                                className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-600 transition-colors"
+                                                                title="Cancelar"
+                                                            >
+                                                                <X size={13} />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setEditingRow({ id: r.id, treatmentName: r.treatmentName || '', doctorId: r.doctorId || '' })}
+                                                            className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                            title="Editar fila"
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </button>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 font-bold text-slate-900">{r.patientName || '-'}</td>
-                                                <td className="px-6 py-4 font-medium text-slate-700">{r.treatmentName || '-'}</td>
+                                                <td className="px-6 py-4 font-medium text-slate-700">
+                                                    {isEditingThis ? (
+                                                        <div className="space-y-2">
+                                                            <input
+                                                                type="text"
+                                                                value={editingRow!.treatmentName}
+                                                                onChange={(e) => setEditingRow(prev => prev ? { ...prev, treatmentName: e.target.value } : prev)}
+                                                                disabled={isSavingThis}
+                                                                autoFocus
+                                                                placeholder="Concepto del tratamiento"
+                                                                className="w-full bg-white border border-amber-300 rounded px-2 py-1 text-sm font-medium text-slate-700 outline-none focus:ring-1 focus:ring-amber-400"
+                                                            />
+                                                            <select
+                                                                value={editingRow!.doctorId}
+                                                                onChange={(e) => setEditingRow(prev => prev ? { ...prev, doctorId: e.target.value } : prev)}
+                                                                disabled={isSavingThis}
+                                                                className="w-full bg-white border border-amber-300 rounded px-2 py-1 text-sm font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-amber-400"
+                                                            >
+                                                                <option value="">-- Sin doctor --</option>
+                                                                {doctors.map((d: any) => (
+                                                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    ) : (
+                                                        r.treatmentName || '-'
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4 text-slate-600">{r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : '-'}</td>
                                                 <td className="px-6 py-4 text-right">
                                                     <input
