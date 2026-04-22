@@ -215,8 +215,8 @@ const CashRegister: React.FC = () => {
 
         const completedCount = todayAppointments.filter(a => ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')).length;
 
-        const cashDiff = physicalCashTotal - stats.netCash;
-        const diffLabel = cashDiff === 0
+        const cashDiff = physicalCashTotal - stats.expectedCash;
+        const diffLabel = Math.abs(cashDiff) < 0.01
             ? '✅ Cuadra exactamente'
             : cashDiff > 0
                 ? `📈 Sobrante: +${cashDiff.toFixed(2)}€`
@@ -224,18 +224,19 @@ const CashRegister: React.FC = () => {
 
         const summary =
             `✅ CIERRE DE CAJA — ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES')}\n\n` +
+            `🏦 Caja efectivo:\n` +
+            (openingCash != null ? `  Arrastre (caja inicial): ${openingCash.toFixed(2)}€\n` : '') +
+            `  + Efectivo ingresos:     ${stats.cashIncome.toFixed(2)}€\n` +
+            (stats.cashExpenses > 0 ? `  - Gastos efectivo:       ${stats.cashExpenses.toFixed(2)}€\n` : '') +
+            `  = Efectivo esperado:     ${stats.expectedCash.toFixed(2)}€\n` +
+            `  Físico contado:          ${physicalCashTotal.toFixed(2)}€\n` +
+            `  Diferencia (cuadre):     ${diffLabel}\n\n` +
             `📊 Balance del día:\n` +
-            `  Ingresos totales:    ${stats.totalIncome.toFixed(2)}€\n` +
-            `  Gastos:              ${stats.totalExpense.toFixed(2)}€\n` +
-            `  Neto:                ${stats.balance.toFixed(2)}€\n\n` +
-            `💵 Desglose por método:\n` +
-            `  Efectivo ingresos:   ${stats.cashIncome.toFixed(2)}€\n` +
-            (stats.cashExpenses > 0 ? `  Gastos en efectivo:  -${stats.cashExpenses.toFixed(2)}€\n` : '') +
-            `  Efectivo (neto):     ${stats.netCash.toFixed(2)}€\n` +
-            `  Efectivo (físico):   ${physicalCashTotal.toFixed(2)}€\n` +
-            `  Diferencia:          ${diffLabel}\n` +
-            `  Tarjeta:             ${stats.cardIncome.toFixed(2)}€\n` +
-            `  Transferencia:       ${stats.transferIncome.toFixed(2)}€\n\n` +
+            `  Ingresos totales:   ${stats.totalIncome.toFixed(2)}€\n` +
+            `  Gastos totales:     ${stats.totalExpense.toFixed(2)}€\n` +
+            `  Tarjeta:            ${stats.cardIncome.toFixed(2)}€\n` +
+            `  Transferencia:      ${stats.transferIncome.toFixed(2)}€\n` +
+            `  Balance neto:       ${stats.balance.toFixed(2)}€\n\n` +
             `📋 Actividad:\n` +
             `  Citas realizadas: ${completedCount}\n` +
             `  Facturas emitidas: ${todayInvoices.length}\n\n` +
@@ -253,7 +254,7 @@ const CashRegister: React.FC = () => {
                     ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')
                 ).length;
 
-                const cashDiff = physicalCashTotal - stats.netCash;
+                const cashDiff = physicalCashTotal - stats.expectedCash;
                 const record = await (api as any).cashRegister.close({
                     totalIncome: stats.totalIncome,
                     totalExpense: stats.totalExpense,
@@ -265,6 +266,7 @@ const CashRegister: React.FC = () => {
                     netCash: stats.netCash,
                     physicalCash: physicalCashTotal,
                     cashDiff,
+                    openingCash: openingCash ?? 0,
                     invoiceCount: todayInvoices.length,
                     completedAppointments: completedCount,
                     closedBy: (currentUser as any)?.name || null,
@@ -337,46 +339,98 @@ const CashRegister: React.FC = () => {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Stats Card */}
-                    <div className="col-span-2 bg-white p-10 rounded-2xl border border-slate-200 shadow-sm relative">
-                        <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900 flex items-center gap-3 mb-8">
-                            <BarChart3 className="text-blue-500" /> {isToday ? 'Movimientos de Hoy' : `Movimientos del ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`}
-                        </h4>
+                    <div className="col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="p-8 border-b border-slate-100">
+                            <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900 flex items-center gap-3">
+                                <BarChart3 className="text-blue-500" /> {isToday ? 'Movimientos de Hoy' : `Movimientos del ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`}
+                            </h4>
+                        </div>
 
-                        <div className="grid grid-cols-2 gap-8">
-                            <div className="p-6 bg-slate-50 rounded-2xl">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Ingresos</p>
+                        {/* Top row: income / expenses */}
+                        <div className="grid grid-cols-2 gap-0 border-b border-slate-100">
+                            <div className="p-8 border-r border-slate-100">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Ingresos del Día</p>
                                 <p className="text-3xl font-black text-emerald-500">+{stats.totalIncome.toFixed(2)}€</p>
+                                <div className="mt-4 space-y-1.5">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-slate-400 font-medium">💵 Efectivo</span>
+                                        <span className="font-bold text-slate-700">{stats.cashIncome.toFixed(2)}€</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-slate-400 font-medium">💳 Tarjeta</span>
+                                        <span className="font-bold text-slate-700">{stats.cardIncome.toFixed(2)}€</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-slate-400 font-medium">🏦 Transferencia</span>
+                                        <span className="font-bold text-slate-700">{stats.transferIncome.toFixed(2)}€</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="p-6 bg-slate-50 rounded-2xl">
-                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Gastos</p>
+                            <div className="p-8">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Gastos del Día</p>
                                 <p className="text-3xl font-black text-rose-500">-{stats.totalExpense.toFixed(2)}€</p>
+                                {stats.cashExpenses > 0 && (
+                                    <div className="mt-4 space-y-1.5">
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-slate-400 font-medium">💵 Efectivo</span>
+                                            <span className="font-bold text-rose-600">-{stats.cashExpenses.toFixed(2)}€</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        <div className="mt-8 pt-8 border-t border-slate-100 grid grid-cols-4 gap-4">
-                            <div className="text-center">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Efectivo Neto</p>
-                                <p className="text-lg font-bold text-slate-700">{stats.netCash.toFixed(2)}€</p>
+                        {/* Resumen Caja Efectivo */}
+                        <div className="p-8 bg-slate-50">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5">Resumen Caja Efectivo</p>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-slate-600 font-medium">Arrastre (caja inicial)</span>
+                                    <span className="text-sm font-black text-amber-600">
+                                        {openingCash != null ? `${openingCash.toFixed(2)}€` : '—'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-slate-600 font-medium">+ Entradas efectivo</span>
+                                    <span className="text-sm font-black text-emerald-600">+{stats.cashIncome.toFixed(2)}€</span>
+                                </div>
                                 {stats.cashExpenses > 0 && (
-                                    <p className="text-[9px] text-rose-400 mt-0.5">Gastos: -{stats.cashExpenses.toFixed(2)}€</p>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-slate-600 font-medium">− Salidas efectivo</span>
+                                        <span className="text-sm font-black text-rose-600">-{stats.cashExpenses.toFixed(2)}€</span>
+                                    </div>
                                 )}
                                 {arqueoCompleted && (
-                                    <p className="text-[9px] text-slate-400 mt-0.5">Físico: {physicalCashTotal.toFixed(2)}€</p>
+                                    <>
+                                        <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
+                                            <span className="text-sm text-slate-600 font-medium">Efectivo esperado</span>
+                                            <span className="text-sm font-black text-slate-800">{stats.expectedCash.toFixed(2)}€</span>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-sm text-slate-600 font-medium">Cuadre (físico contado)</span>
+                                            <span className={`text-sm font-black ${Math.abs(physicalCashTotal - stats.expectedCash) < 0.01 ? 'text-emerald-600' : physicalCashTotal > stats.expectedCash ? 'text-amber-600' : 'text-rose-600'}`}>
+                                                {physicalCashTotal > stats.expectedCash ? '+' : ''}{(physicalCashTotal - stats.expectedCash).toFixed(2)}€
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                                <div className="border-t-2 border-slate-300 pt-3 flex justify-between items-center">
+                                    <span className="text-sm font-black text-slate-900 uppercase tracking-wide">Total Caja</span>
+                                    <span className="text-xl font-black text-slate-900">
+                                        {arqueoCompleted ? physicalCashTotal.toFixed(2) : stats.expectedCash.toFixed(2)}€
+                                    </span>
+                                </div>
+                                {arqueoCompleted && (
+                                    <p className="text-[10px] text-slate-400">* Total Caja = efectivo físico contado en el arqueo</p>
                                 )}
                             </div>
-                            <div className="text-center border-l border-slate-100">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Tarjeta</p>
-                                <p className="text-lg font-bold text-slate-700">{stats.cardIncome.toFixed(2)}€</p>
-                            </div>
-                            <div className="text-center border-l border-slate-100">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Transfer.</p>
-                                <p className="text-lg font-bold text-slate-700">{stats.transferIncome.toFixed(2)}€</p>
-                            </div>
-                            <div className="text-center border-l border-slate-100">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Balance</p>
-                                <p className={`text-lg font-bold ${stats.balance >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
+
+                            {/* Balance neto general */}
+                            <div className="mt-6 pt-5 border-t border-slate-200 flex justify-between items-center">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Balance Neto del Día</span>
+                                <span className={`text-lg font-black ${stats.balance >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
                                     {stats.balance > 0 ? '+' : ''}{stats.balance.toFixed(2)}€
-                                </p>
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -635,13 +689,14 @@ const CashRegister: React.FC = () => {
                                         <p className="text-3xl font-black mt-1">{calculatedPhysicalCash.toFixed(2)}€</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sistema (Efectivo Neto)</p>
-                                        <p className="text-xl font-black text-slate-300 mt-1">{stats.netCash.toFixed(2)}€</p>
-                                        {stats.cashExpenses > 0 && (
-                                            <p className="text-[10px] text-rose-300 mt-0.5">Gastos: -{stats.cashExpenses.toFixed(2)}€</p>
-                                        )}
-                                        <p className={`text-xs font-bold mt-1 ${Math.abs(calculatedPhysicalCash - stats.netCash) < 0.01 ? 'text-emerald-400' : calculatedPhysicalCash > stats.netCash ? 'text-amber-400' : 'text-rose-400'}`}>
-                                            {calculatedPhysicalCash >= stats.netCash ? '+' : ''}{(calculatedPhysicalCash - stats.netCash).toFixed(2)}€ diferencia
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Efectivo Esperado</p>
+                                        <p className="text-xl font-black text-slate-300 mt-1">{stats.expectedCash.toFixed(2)}€</p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">
+                                            {openingCash != null ? `Arrastre ${openingCash.toFixed(2)}€` : 'Sin arrastre'}
+                                            {' + '}neto {stats.netCash.toFixed(2)}€
+                                        </p>
+                                        <p className={`text-xs font-bold mt-1 ${Math.abs(calculatedPhysicalCash - stats.expectedCash) < 0.01 ? 'text-emerald-400' : calculatedPhysicalCash > stats.expectedCash ? 'text-amber-400' : 'text-rose-400'}`}>
+                                            {calculatedPhysicalCash >= stats.expectedCash ? '+' : ''}{(calculatedPhysicalCash - stats.expectedCash).toFixed(2)}€ diferencia (cuadre)
                                         </p>
                                     </div>
                                 </div>

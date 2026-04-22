@@ -981,6 +981,21 @@ router.get('/caja/:patientId', async (req, res) => {
     }
 });
 
+// ─── CASH REGISTER: Last closing before today (for openingCash / arrastre) ──
+router.get('/cash-register/last-closing', async (req, res) => {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const closing = await prisma.$queryRawUnsafe(
+            `SELECT * FROM cash_register_closings WHERE date < $1 ORDER BY date DESC LIMIT 1`,
+            today
+        );
+        const record = Array.isArray(closing) && closing.length > 0 ? closing[0] : null;
+        res.json(record);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ─── CASH REGISTER: Today's closing status ───────────────────────────────────
 router.get('/cash-register/today', async (req, res) => {
     try {
@@ -1030,6 +1045,7 @@ router.post('/cash-register/close', async (req, res) => {
             cashIncome = 0, cardIncome = 0, transferIncome = 0,
             cashExpenses = 0, netCash = 0, physicalCash = 0,
             cashDiff = 0, invoiceCount = 0, completedAppointments = 0,
+            openingCash = 0,
             closedBy = null
         } = req.body;
 
@@ -1038,13 +1054,13 @@ router.post('/cash-register/close', async (req, res) => {
             `INSERT INTO cash_register_closings
              (id, date, "closedAt", "closedBy", "totalIncome", "totalExpense", balance,
               "cashIncome", "cardIncome", "transferIncome", "cashExpenses", "netCash",
-              "physicalCash", "cashDiff", "invoiceCount", "completedAppointments")
-             VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+              "physicalCash", "cashDiff", "invoiceCount", "completedAppointments", "openingCash")
+             VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
             id, today, closedBy,
             totalIncome, totalExpense, balance,
             cashIncome, cardIncome, transferIncome,
             cashExpenses, netCash, physicalCash, cashDiff,
-            invoiceCount, completedAppointments
+            invoiceCount, completedAppointments, openingCash
         );
 
         const record = await prisma.$queryRawUnsafe(

@@ -504,6 +504,7 @@ model CashRegisterClosing {
   cashDiff              Float    @default(0)
   invoiceCount          Int      @default(0)
   completedAppointments Int      @default(0)
+  openingCash           Float    @default(0)
 
   @@map("cash_register_closings")
 }
