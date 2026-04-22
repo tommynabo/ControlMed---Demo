@@ -135,7 +135,7 @@ router.get('/', async (req, res) => {
         while (keepFetching) {
             const { data: page, error } = await supabase
                 .from('Appointment')
-                .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(name, price, tooth))')
+                .select('*, budget:Budget(id, totalAmount, items:BudgetLineItem(id, name, price, tooth, doctorId))')
                 .gte('date', twoYearsAgo.toISOString())
                 .lte('date', twoYearsAhead.toISOString())
                 .is('deleted_at', null)

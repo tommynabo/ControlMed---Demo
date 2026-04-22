@@ -262,6 +262,27 @@ export const api = {
                 throw new Error(err.error || 'Failed to update payment');
             }
             return res.json();
+        },
+        createSplit: async (data: {
+            patientId: string;
+            totalAmount: number;
+            method: 'cash' | 'card' | 'transfer' | 'wallet';
+            appointmentId?: string;
+            budgetId?: string;
+            concept?: string;
+            notes?: string;
+            splits: Array<{ doctorId: string; amount: number; treatmentName: string; labCost?: number }>;
+        }) => {
+            const res = await fetch(`${API_URL}/finance/payments/create-split`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to create split payment');
+            }
+            return res.json();
         }
     },
 

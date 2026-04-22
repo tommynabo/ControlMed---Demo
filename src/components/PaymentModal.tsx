@@ -62,6 +62,25 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     const availableWallet = patient.wallet || 0;
 
+    // ── Shared treatment split detection ─────────────────────────────────────
+    // If the appointment has budget items with different doctors, compute splits
+    const doctorSplits: Array<{ doctorId: string; amount: number; treatmentName: string }> = (() => {
+        const items: any[] = (appointment as any)?.budget?.items;
+        if (!items || items.length === 0) return [];
+        const itemsWithDoctor = items.filter((i: any) => i.doctorId);
+        if (itemsWithDoctor.length === 0) return [];
+        const uniqueDoctors = new Set(itemsWithDoctor.map((i: any) => i.doctorId));
+        if (uniqueDoctors.size < 2) return []; // only split when 2+ doctors
+        const byDoctor: Record<string, { doctorId: string; amount: number; names: string[] }> = {};
+        for (const item of itemsWithDoctor) {
+            if (!byDoctor[item.doctorId]) byDoctor[item.doctorId] = { doctorId: item.doctorId, amount: 0, names: [] };
+            byDoctor[item.doctorId].amount += Number(item.price) || 0;
+            if (item.name) byDoctor[item.doctorId].names.push(item.name);
+        }
+        return Object.values(byDoctor).map(s => ({ doctorId: s.doctorId, amount: s.amount, treatmentName: s.names.join(', ') }));
+    })();
+    const isSplitPayment = doctorSplits.length >= 2;
+
     useEffect(() => {
         if (isOpen) {
             const amt = defaultAmount ? defaultAmount.toString() : '';
@@ -197,21 +216,45 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             const isPartialPayment = isDirectPayment && originalAmount > 0 && numericAmount < originalAmount;
 
-            const paymentData = {
-                patientId: patient.id,
-                amount: numericAmount,
-                method: mainMethod,
-                type: isDirectPayment ? ('DIRECT_CHARGE' as const) : ('ADVANCE_PAYMENT' as const),
-                appointmentId: appointment?.id,
-                budgetId: selectedBudgetId || (appointment as any)?.budgetId || undefined,
-                doctorId: appointment?.doctorId || selectedDoctorId,
-                treatmentName: concept,
-                notes: notes || undefined,
-                isPartial: isPartialPayment,
-                originalAmount: isPartialPayment ? originalAmount : undefined,
-            };
+            let response: any;
 
-            const response = await api.payments.create(paymentData) as any;
+            if (isSplitPayment && !isPartialPayment) {
+                // Proportionally scale split amounts to the actual payment amount
+                const splitTotal = doctorSplits.reduce((s, x) => s + x.amount, 0);
+                const scaledSplits = doctorSplits.map(s => ({
+                    ...s,
+                    amount: splitTotal > 0 ? parseFloat(((s.amount / splitTotal) * numericAmount).toFixed(2)) : s.amount
+                }));
+                // Absorb rounding difference in the last split
+                const scaledSum = scaledSplits.reduce((s, x) => s + x.amount, 0);
+                if (scaledSplits.length > 0) scaledSplits[scaledSplits.length - 1].amount += parseFloat((numericAmount - scaledSum).toFixed(2));
+
+                response = await api.payments.createSplit({
+                    patientId: patient.id,
+                    totalAmount: numericAmount,
+                    method: mainMethod,
+                    appointmentId: appointment?.id,
+                    budgetId: (appointment as any)?.budgetId || undefined,
+                    concept,
+                    notes: notes || undefined,
+                    splits: scaledSplits
+                });
+            } else {
+                const paymentData = {
+                    patientId: patient.id,
+                    amount: numericAmount,
+                    method: mainMethod,
+                    type: isDirectPayment ? ('DIRECT_CHARGE' as const) : ('ADVANCE_PAYMENT' as const),
+                    appointmentId: appointment?.id,
+                    budgetId: selectedBudgetId || (appointment as any)?.budgetId || undefined,
+                    doctorId: appointment?.doctorId || selectedDoctorId,
+                    treatmentName: concept,
+                    notes: notes || undefined,
+                    isPartial: isPartialPayment,
+                    originalAmount: isPartialPayment ? originalAmount : undefined,
+                };
+                response = await api.payments.create(paymentData);
+            }
 
             if (!response) {
                 throw new Error("No se recibió respuesta del servidor");
@@ -423,6 +466,22 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             <div>
                                 Este proceso emitirá una factura de anticipo y sumará el saldo al paciente.
                             </div>
+                        </div>
+                    )}
+
+                    {/* ── Shared treatment split summary ── */}
+                    {isSplitPayment && (
+                        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 space-y-2">
+                            <p className="text-[10px] font-black uppercase text-violet-600 tracking-wide">Tratamiento Compartido — desglose por doctor</p>
+                            {doctorSplits.map((s, i) => (
+                                <div key={i} className="flex justify-between items-center bg-white rounded-lg px-3 py-2 border border-violet-100">
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-800">{s.treatmentName}</p>
+                                    </div>
+                                    <span className="text-xs font-black text-violet-700">{s.amount.toFixed(2)}€</span>
+                                </div>
+                            ))}
+                            <p className="text-[10px] text-violet-500 font-medium pt-1">Se crearán liquidaciones separadas por doctor automáticamente.</p>
                         </div>
                     )}
 

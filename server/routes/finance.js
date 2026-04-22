@@ -455,9 +455,178 @@ router.post('/payments/create', async (req, res) => {
     }
 });
 
-// ─── PAYMENTS: TRANSFER advance to treatment ─────────────────────────────────
-router.post('/payments/transfer', async (req, res) => {
+// ─── PAYMENTS: CREATE SPLIT (tratamiento compartido entre varios doctores) ────
+// body: { patientId, totalAmount, method, appointmentId?, budgetId?, concept, notes?,
+//         splits: [{ doctorId, amount, treatmentName, labCost? }] }
+// Creates ONE Payment + ONE Invoice + ONE Liquidation per doctor split.
+router.post('/payments/create-split', async (req, res) => {
     try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { patientId, totalAmount, method, appointmentId, budgetId, concept, notes, splits } = req.body;
+
+        if (!patientId || !totalAmount || !method || !splits || !Array.isArray(splits) || splits.length === 0) {
+            return res.status(400).json({ error: 'patientId, totalAmount, method, and splits[] are required' });
+        }
+
+        const numericTotal = parseFloat(totalAmount);
+        if (isNaN(numericTotal) || numericTotal <= 0) {
+            return res.status(400).json({ error: 'Invalid totalAmount' });
+        }
+
+        const { data: patient } = await supabase.from('Patient').select('*').eq('id', patientId).single();
+        if (!patient) return res.status(404).json({ error: 'Patient not found' });
+
+        // Resolve doctors for each split
+        const resolvedSplits = await Promise.all(splits.map(async (s) => {
+            let doctor = null;
+            if (s.doctorId) {
+                const { data: d } = await supabase.from('Doctor').select('*').eq('id', s.doctorId).single();
+                doctor = d;
+            }
+            return { ...s, doctor, amount: parseFloat(s.amount) || 0 };
+        }));
+
+        // Attempt Quipu invoice
+        let quipuResult = { success: false };
+        try {
+            const contactData = {
+                name: patient.name || 'Paciente',
+                email: patient.email,
+                tax_id: patient.dni,
+                address: patient.address,
+                city: patient.city,
+                zip_code: patient.zipCode || patient.zip_code
+            };
+            const contact = await quipuService.getOrCreateContact(contactData);
+            if (contact && contact.id) {
+                const today = new Date().toISOString().split('T')[0];
+                const histSuffix = patient.historyNumber ? ` — Nº Historia: ${patient.historyNumber}` : '';
+                const lineItems = resolvedSplits.map(s => ({
+                    name: `${s.treatmentName || 'Tratamiento'}${histSuffix}`,
+                    quantity: 1,
+                    price: s.amount
+                }));
+                quipuResult = await quipuService.createInvoice(
+                    contact.id, lineItems, today, today,
+                    method === 'card' ? 'credit_card' : method
+                );
+            }
+        } catch (qErr) {
+            console.error('⚠️ Quipu Error (split, continuing):', qErr.response?.data || qErr.message);
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            // Single payment for the total
+            const payment = await tx.payment.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    patientId,
+                    budgetId: budgetId || null,
+                    amount: numericTotal,
+                    method,
+                    type: 'DIRECT_CHARGE',
+                    notes: notes || null,
+                    doctorId: resolvedSplits[0]?.doctor?.id || null,
+                    createdAt: new Date().toISOString()
+                }
+            });
+
+            if (appointmentId) {
+                await tx.appointment.update({
+                    where: { id: appointmentId },
+                    data: { paid: true, status: 'Completed' }
+                });
+            }
+
+            // Sequential invoice number
+            const year = new Date().getFullYear();
+            const prefix = `F-${year}-`;
+            const existing = await tx.invoice.findMany({
+                where: { invoiceNumber: { startsWith: prefix } },
+                select: { invoiceNumber: true }
+            });
+            const maxNum = existing.reduce((max, inv) => {
+                const suffix = inv.invoiceNumber.slice(prefix.length);
+                const num = parseInt(suffix, 10);
+                return isNaN(num) ? max : Math.max(max, num);
+            }, 0);
+            const invoiceNumber = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+
+            const solvedConcept = concept || resolvedSplits.map(s => s.treatmentName).filter(Boolean).join(' + ') || 'Servicio';
+
+            const invoice = await tx.invoice.create({
+                data: {
+                    id: crypto.randomUUID(),
+                    invoiceNumber,
+                    externalId: quipuResult.success ? String(quipuResult.id) : null,
+                    url: quipuResult.success ? quipuResult.pdf_url : null,
+                    patientId,
+                    amount: numericTotal,
+                    date: new Date(),
+                    status: 'issued',
+                    paymentMethod: method,
+                    concept: solvedConcept,
+                    appointmentId: appointmentId || null,
+                    relatedPaymentId: payment.id
+                }
+            });
+
+            for (const s of resolvedSplits) {
+                await tx.invoiceItem.create({
+                    data: { id: crypto.randomUUID(), invoiceId: invoice.id, name: s.treatmentName || 'Tratamiento', price: s.amount }
+                });
+            }
+
+            await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
+
+            // One Liquidation per doctor split
+            const liquidations = [];
+            for (const s of resolvedSplits) {
+                if (!s.doctor) continue;
+                const rawRate = s.doctor.commissionPercentage || 30;
+                const labCost = s.labCost || 0;
+                const finalAmount = (s.amount - labCost) * (rawRate / 100);
+
+                const existingLiq = appointmentId
+                    ? await tx.liquidation.findFirst({ where: { appointmentId, doctorId: s.doctor.id } })
+                    : null;
+
+                let liq;
+                if (existingLiq) {
+                    liq = await tx.liquidation.update({
+                        where: { id: existingLiq.id },
+                        data: { grossAmount: s.amount, labCost, commissionRate: rawRate, finalAmount, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                    });
+                } else {
+                    liq = await tx.liquidation.create({
+                        data: { id: crypto.randomUUID(), doctorId: s.doctor.id, appointmentId: appointmentId || null, grossAmount: s.amount, labCost, commissionRate: rawRate, finalAmount, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                    });
+                }
+                liquidations.push(liq);
+            }
+
+            return {
+                payment, invoice, liquidations,
+                pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
+                previewUrl: quipuResult.success ? quipuResult.preview_url : null
+            };
+        });
+
+        res.status(200).json({ success: true, ...result });
+
+        try {
+            logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'payments_split', resourceId: result.payment?.id, newValues: { patientId, totalAmount: numericTotal, method, splits: splits.length }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
+        } catch (_) {}
+    } catch (e) {
+        console.error('Error creating split payment:', e);
+        res.status(500).json({ error: e.message || 'Unknown error' });
+    }
+});
+
+// ─── PAYMENTS: TRANSFER advance to treatment ─────────────────────────────────
+router.post('/payments/transfer', async (req, res) => {    try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 

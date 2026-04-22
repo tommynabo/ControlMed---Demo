@@ -2322,6 +2322,7 @@ const Patients: React.FC = () => {
                                                                     <div className="flex flex-col">
                                                                         <span>{item.name}</span>
                                                                         {item.tooth && <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Diente(s): {item.tooth}</span>}
+                                                                        {item.doctorId && <span className="text-[10px] text-blue-500 font-bold uppercase tracking-wide">{doctors.find((d: any) => d.id === item.doctorId)?.name || '—'}</span>}
                                                                     </div>
                                                                 </div>
                                                                 <span className="font-black text-slate-900">{item.price}€</span>
