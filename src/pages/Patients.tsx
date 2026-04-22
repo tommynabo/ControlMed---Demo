@@ -2314,7 +2314,10 @@ const Patients: React.FC = () => {
 
                                                     {/* Items List - Gray Container */}
                                                     <div className="bg-slate-50 rounded-xl p-4 space-y-3 mb-6">
-                                                        {budget.items?.map((item: any, idx: number) => (
+                                                        {budget.items?.map((item: any, idx: number) => {
+                                                            const commissionPct = Number(budget.commissionPercent) || 0;
+                                                            const displayPrice = ((Number(item.price) || 0) * (1 + commissionPct / 100)).toFixed(2);
+                                                            return (
                                                             <div key={idx} className="flex justify-between items-center text-sm font-bold text-slate-700">
                                                                 <div className="flex items-center gap-3">
                                                                     <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-xs font-black text-slate-400 border border-slate-100 shadow-sm">
@@ -2326,7 +2329,7 @@ const Patients: React.FC = () => {
                                                                         {item.doctorId && <span className="text-[10px] text-blue-500 font-bold uppercase tracking-wide">{doctors.find((d: any) => d.id === item.doctorId)?.name || '—'}</span>}
                                                                     </div>
                                                                 </div>
-                                                                <span className="font-black text-slate-900">{item.price}€</span>
+                                                                <span className="font-black text-slate-900">{displayPrice}€</span>
                                                                 {(!budget.status || budget.status === 'DRAFT') && (
                                                                     <button onClick={async (e) => {
                                                                         e.stopPropagation();
@@ -2339,7 +2342,7 @@ const Patients: React.FC = () => {
                                                                     }} className="ml-2 text-slate-400 hover:text-red-500 p-1"><Trash2 size={14} /></button>
                                                                 )}
                                                             </div>
-                                                        ))}
+                                                        ); })}
                                                         {(!budget.items || budget.items.length === 0) && (
                                                             <div className="text-center text-xs text-slate-400 italic py-2">Sin conceptos</div>
                                                         )}
