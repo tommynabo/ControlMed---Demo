@@ -486,11 +486,12 @@ const Patients: React.FC = () => {
         <!-- TOTALS -->
         <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
             <div style="border:1px solid #ccc;min-width:220px">
+                ${discountAmount > 0 ? `
                 <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
                     <span style="font-size:11px">Importe:</span>
                     <span style="font-size:11px;font-weight:700">${importe.toFixed(2)}&euro;</span>
                 </div>
-                ${discountAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
+                <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
                     <span style="font-size:11px">Descuento (-${discountPercent}%):</span>
                     <span style="font-size:11px;font-weight:700">-${discountAmount.toFixed(2)}&euro;</span>
                 </div>` : ''}
