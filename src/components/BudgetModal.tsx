@@ -130,34 +130,6 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         }
     };
 
-    const applyBulkDiscount = (type: 'percent' | 'fixed') => {
-        const val = prompt(type === 'percent' ? "Porcentaje de descuento (ej: 10):" : "Importe de descuento fijo (ej: 50):");
-        if (!val) return;
-        const num = parseFloat(val);
-        if (isNaN(num) || num < 0) return;
-
-        setItems(prev => prev.map((item, idx) => {
-            if (!selectedIndices.has(idx)) return item;
-            // Use originalPrice as base so repeated discounts don't compound
-            const base = Number(item.originalPrice ?? item.price);
-            let newPrice: number;
-            let discountPct: number;
-            if (type === 'percent') {
-                newPrice = base * (1 - num / 100);
-                discountPct = num;
-            } else {
-                newPrice = base - num;
-                discountPct = base > 0 ? parseFloat(((num / base) * 100).toFixed(2)) : 0;
-            }
-            return {
-                ...item,
-                originalPrice: base,
-                discount: discountPct,
-                price: Math.max(0, newPrice).toFixed(2)
-            };
-        }));
-    };
-
     const applyBulkDiscount = () => {
         const val = prompt("Porcentaje de descuento (ej: 10):");
         if (!val || isNaN(Number(val))) return;
