@@ -301,8 +301,27 @@ router.post('/payments/create', async (req, res) => {
         const result = await prisma.$transaction(async (tx) => {
             const isPartialPayment = isPartial === true;
 
+            // Resolve budget commission so doctor is paid on the original price,
+            // and the markup goes to the referral entity separately.
+            let budgetCommissionPct = 0;
+            let referralEntityName = null;
+            if (budgetId) {
+                try {
+                    const { data: bgt } = await getSupabase().from('Budget').select('commissionPercent, referralEntityName').eq('id', budgetId).single();
+                    if (bgt) {
+                        budgetCommissionPct = Number(bgt.commissionPercent) || 0;
+                        referralEntityName = bgt.referralEntityName || null;
+                    }
+                } catch (_) {}
+            }
+            // baseAmount = price without the referral markup
+            const baseAmount = budgetCommissionPct > 0
+                ? numericAmount / (1 + budgetCommissionPct / 100)
+                : numericAmount;
+            const referralCommission = numericAmount - baseAmount;
+
             const payment = await tx.payment.create({
-                data: { id: crypto.randomUUID(), patientId, budgetId: budgetId || null, amount: numericAmount, method, type, notes: notes || null, doctorId: doctor?.id || null, createdAt: new Date().toISOString() }
+                data: { id: crypto.randomUUID(), patientId, budgetId: budgetId || null, amount: numericAmount, method, type, notes: notes || null, doctorId: doctor?.id || null, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, createdAt: new Date().toISOString() }
             });
 
             if (appointmentId) {
@@ -347,7 +366,8 @@ router.post('/payments/create', async (req, res) => {
             if (doctor && type === 'DIRECT_CHARGE' && !isPartialPayment) {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
-                const finalAmount = (numericAmount - labCost) * (rawRate / 100);
+                // Doctor is paid based on baseAmount (original price, no markup)
+                const finalAmount = (baseAmount - labCost) * (rawRate / 100);
                 
                 // 🔧 FIX: Check if liquidation already exists for this appointment
                 // This handles edge cases where a liquidation exists (e.g., from failed invoice deletion)
@@ -363,9 +383,12 @@ router.post('/payments/create', async (req, res) => {
                             data: {
                                 doctorId: doctor.id,
                                 grossAmount: numericAmount,
+                                baseAmount,
                                 labCost,
                                 commissionRate: rawRate,
                                 finalAmount,
+                                referralCommission: referralCommission || 0,
+                                referralEntityName: referralEntityName || null,
                                 treatmentName: solvedTreatmentName,
                                 patientName: patient?.name || 'Paciente',
                                 paymentMethod: method,
@@ -375,13 +398,13 @@ router.post('/payments/create', async (req, res) => {
                     } else {
                         // No existing liquidation → CREATE new one
                         liquidation = await tx.liquidation.create({
-                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: numericAmount, baseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                         });
                     }
                 } else {
                     // No appointmentId → CREATE without unique constraint concern
                     liquidation = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: numericAmount, labCost, commissionRate: rawRate, finalAmount, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: numericAmount, baseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                     });
                 }
             }
@@ -490,6 +513,23 @@ router.post('/payments/create-split', async (req, res) => {
 
         // Attempt Quipu invoice
         let quipuResult = { success: false };
+
+        // Resolve referral commission from budget
+        let splitBudgetCommissionPct = 0;
+        let splitReferralEntity = null;
+        if (budgetId) {
+            try {
+                const { data: bgt } = await getSupabase().from('Budget').select('commissionPercent, referralEntityName').eq('id', budgetId).single();
+                if (bgt) {
+                    splitBudgetCommissionPct = Number(bgt.commissionPercent) || 0;
+                    splitReferralEntity = bgt.referralEntityName || null;
+                }
+            } catch (_) {}
+        }
+        // Total referral commission across all splits (proportional to each split amount)
+        const splitReferralTotal = splitBudgetCommissionPct > 0
+            ? numericTotal - (numericTotal / (1 + splitBudgetCommissionPct / 100))
+            : 0;
         try {
             const contactData = {
                 name: patient.name || 'Paciente',
@@ -529,6 +569,8 @@ router.post('/payments/create-split', async (req, res) => {
                     type: 'DIRECT_CHARGE',
                     notes: notes || null,
                     doctorId: resolvedSplits[0]?.doctor?.id || null,
+                    referralCommission: splitReferralTotal || 0,
+                    referralEntityName: splitReferralEntity || null,
                     createdAt: new Date().toISOString()
                 }
             });
@@ -587,7 +629,12 @@ router.post('/payments/create-split', async (req, res) => {
                 if (!s.doctor) continue;
                 const rawRate = s.doctor.commissionPercentage || 30;
                 const labCost = s.labCost || 0;
-                const finalAmount = (s.amount - labCost) * (rawRate / 100);
+                // Doctor is paid on base price (without referral markup)
+                const splitBase = splitBudgetCommissionPct > 0
+                    ? s.amount / (1 + splitBudgetCommissionPct / 100)
+                    : s.amount;
+                const splitRefComm = s.amount - splitBase;
+                const finalAmount = (splitBase - labCost) * (rawRate / 100);
 
                 const existingLiq = appointmentId
                     ? await tx.liquidation.findFirst({ where: { appointmentId, doctorId: s.doctor.id } })
@@ -597,11 +644,11 @@ router.post('/payments/create-split', async (req, res) => {
                 if (existingLiq) {
                     liq = await tx.liquidation.update({
                         where: { id: existingLiq.id },
-                        data: { grossAmount: s.amount, labCost, commissionRate: rawRate, finalAmount, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                        data: { grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
                     });
                 } else {
                     liq = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), doctorId: s.doctor.id, appointmentId: appointmentId || null, grossAmount: s.amount, labCost, commissionRate: rawRate, finalAmount, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), doctorId: s.doctor.id, appointmentId: appointmentId || null, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                     });
                 }
                 liquidations.push(liq);
@@ -952,6 +999,64 @@ router.post('/cash-register/close', async (req, res) => {
         res.status(201).json(Array.isArray(record) ? record[0] : record);
     } catch (e) {
         console.error('Error closing cash register:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── REFERRAL COMMISSIONS ─────────────────────────────────────────────────────
+// GET /referral-commissions?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
+// Returns commissions grouped by referral entity, so the clinic knows what to pay out.
+router.get('/referral-commissions', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { dateFrom, dateTo } = req.query;
+        let query = supabase
+            .from('Payment')
+            .select('id, createdAt, amount, referralCommission, referralEntityName, patientId, notes')
+            .gt('referralCommission', 0)
+            .order('createdAt', { ascending: false });
+
+        if (dateFrom) query = query.gte('createdAt', new Date(dateFrom).toISOString());
+        if (dateTo) {
+            const end = new Date(dateTo); end.setHours(23, 59, 59, 999);
+            query = query.lte('createdAt', end.toISOString());
+        }
+
+        const { data: payments, error } = await query;
+        if (error) return res.status(500).json({ error: error.message });
+
+        // Enrich with patient names
+        const patientIds = [...new Set((payments || []).map(p => p.patientId).filter(Boolean))];
+        let patientMap = {};
+        if (patientIds.length > 0) {
+            const { data: patients } = await supabase.from('Patient').select('id, name, historyNumber').in('id', patientIds);
+            (patients || []).forEach(pt => { patientMap[pt.id] = pt; });
+        }
+
+        // Group by referralEntityName
+        const grouped = {};
+        for (const p of (payments || [])) {
+            const entity = p.referralEntityName || 'Sin empresa';
+            if (!grouped[entity]) grouped[entity] = { entity, totalCommission: 0, payments: [] };
+            const patient = patientMap[p.patientId] || {};
+            grouped[entity].totalCommission += Number(p.referralCommission) || 0;
+            grouped[entity].payments.push({
+                id: p.id,
+                date: p.createdAt,
+                patientName: patient.name || 'Desconocido',
+                historyNumber: patient.historyNumber || '—',
+                totalPaid: p.amount,
+                commission: p.referralCommission,
+            });
+        }
+
+        const result = Object.values(grouped).sort((a, b) => b.totalCommission - a.totalCommission);
+        const grandTotal = result.reduce((s, g) => s + g.totalCommission, 0);
+        res.json({ groups: result, grandTotal });
+    } catch (e) {
+        console.error('Error fetching referral commissions:', e);
         res.status(500).json({ error: e.message });
     }
 });

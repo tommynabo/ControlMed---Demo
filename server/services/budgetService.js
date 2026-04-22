@@ -8,7 +8,7 @@ const calculateBudgetTotal = (items, discountPercent = 0, commissionPercent = 0)
     return withDiscount;
 };
 
-const createBudget = async (supabase, patientId, items = [], title = "", userId = null, discountPercent = 0, commissionPercent = 0) => {
+const createBudget = async (supabase, patientId, items = [], title = "", userId = null, discountPercent = 0, commissionPercent = 0, referralEntityName = null) => {
     const totalAmount = calculateBudgetTotal(items, discountPercent, commissionPercent);
 
     // 1. Create Budget
@@ -22,6 +22,7 @@ const createBudget = async (supabase, patientId, items = [], title = "", userId 
             totalAmount,
             discountPercent: discountPercent || 0,
             commissionPercent: commissionPercent || 0,
+            referralEntityName: referralEntityName || null,
             date: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             updated_by: userId,
@@ -234,13 +235,13 @@ const convertBudgetToInvoice = async (supabase, budgetId, userId = null) => {
     return invoice;
 };
 
-const updateBudget = async (supabase, budgetId, items = [], title = "", userId = null, discountPercent = 0, commissionPercent = 0) => {
+const updateBudget = async (supabase, budgetId, items = [], title = "", userId = null, discountPercent = 0, commissionPercent = 0, referralEntityName = null) => {
     const totalAmount = calculateBudgetTotal(items, discountPercent, commissionPercent);
 
     // Update budget title & total
     const { error: budgetError } = await supabase
         .from('Budget')
-        .update({ title: title || "Presupuesto General", totalAmount, discountPercent: discountPercent || 0, commissionPercent: commissionPercent || 0, updatedAt: new Date().toISOString(), updated_by: userId })
+        .update({ title: title || "Presupuesto General", totalAmount, discountPercent: discountPercent || 0, commissionPercent: commissionPercent || 0, referralEntityName: referralEntityName || null, updatedAt: new Date().toISOString(), updated_by: userId })
         .eq('id', budgetId);
 
     if (budgetError) throw new Error("Error updating budget: " + budgetError.message);

@@ -554,11 +554,11 @@ export const api = {
             if (!res.ok) throw new Error('Failed to load budgets');
             return res.json();
         },
-        create: async (patientId: string, items: any[], title?: string, discountPercent: number = 0, commissionPercent: number = 0) => {
+        create: async (patientId: string, items: any[], title?: string, discountPercent: number = 0, commissionPercent: number = 0, referralEntityName: string = '') => {
             const res = await fetch(`${API_URL}/patients/${patientId}/budgets`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ items, title, discountPercent, commissionPercent })
+                body: JSON.stringify({ items, title, discountPercent, commissionPercent, referralEntityName: referralEntityName || null })
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -566,11 +566,11 @@ export const api = {
             }
             return res.json();
         },
-        update: async (budgetId: string, items: any[], title?: string, discountPercent: number = 0, commissionPercent: number = 0) => {
+        update: async (budgetId: string, items: any[], title?: string, discountPercent: number = 0, commissionPercent: number = 0, referralEntityName: string = '') => {
             const res = await fetch(`${API_URL}/budgets/${budgetId}`, {
                 method: 'PUT',
                 headers,
-                body: JSON.stringify({ items, title, discountPercent, commissionPercent })
+                body: JSON.stringify({ items, title, discountPercent, commissionPercent, referralEntityName: referralEntityName || null })
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -617,6 +617,14 @@ export const api = {
                 body: JSON.stringify({ commissionPercent })
             });
             if (!res.ok) throw new Error('Failed to apply commission');
+            return res.json();
+        },
+        getReferralCommissions: async (dateFrom?: string, dateTo?: string) => {
+            const params = new URLSearchParams();
+            if (dateFrom) params.set('dateFrom', dateFrom);
+            if (dateTo) params.set('dateTo', dateTo);
+            const res = await fetch(`${API_URL}/referral-commissions?${params}`, { headers });
+            if (!res.ok) throw new Error('Failed to load referral commissions');
             return res.json();
         },
         convert: async (id: string) => {

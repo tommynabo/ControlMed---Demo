@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw } from 'lucide-react';
+import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw, Building2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Expense, Doctor, Specialization } from '../../types';
 
@@ -14,6 +14,10 @@ const Payroll: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [editingRow, setEditingRow] = useState<{ id: string; treatmentName: string; doctorId: string } | null>(null);
     const [savingRowId, setSavingRowId] = useState<string | null>(null);
+    const [referralData, setReferralData] = useState<any>(null);
+    const [referralDateFrom, setReferralDateFrom] = useState('');
+    const [referralDateTo, setReferralDateTo] = useState('');
+    const [isLoadingReferral, setIsLoadingReferral] = useState(false);
 
     // Fetch Liquidations when filters change
     useEffect(() => {
@@ -85,6 +89,18 @@ const Payroll: React.FC = () => {
             ...prev,
             [id]: { ...prev[id], [field]: val }
         }));
+    };
+
+    const fetchReferralCommissions = async () => {
+        setIsLoadingReferral(true);
+        try {
+            const data = await (api as any).budget.getReferralCommissions(referralDateFrom || undefined, referralDateTo || undefined);
+            setReferralData(data);
+        } catch (e) {
+            console.error('Error fetching referral commissions', e);
+        } finally {
+            setIsLoadingReferral(false);
+        }
     };
 
     const handleDownloadPDF = () => {
@@ -486,6 +502,112 @@ const Payroll: React.FC = () => {
                         <p className="mt-4 text-slate-500 font-bold">Cargando liquidaciones...</p>
                     </div>
                 )}
+
+                {/* ─── Referral Commissions Panel ─── */}
+                <div className="mt-10 pt-10 border-t border-slate-200">
+                    <div className="flex items-center gap-3 mb-6">
+                        <Building2 size={22} className="text-purple-600" />
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-900">Comisiones a Empresas Referidoras</h2>
+                            <p className="text-slate-500 font-medium text-sm">Total de comisiones pendientes de pago a cada empresa que refirió pacientes</p>
+                        </div>
+                    </div>
+
+                    {/* Filters */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-end mb-6">
+                        <div>
+                            <label className="text-[11px] font-bold uppercase text-slate-600 block mb-2">Desde</label>
+                            <input
+                                type="date"
+                                value={referralDateFrom}
+                                onChange={(e) => setReferralDateFrom(e.target.value)}
+                                className="bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-[11px] font-bold uppercase text-slate-600 block mb-2">Hasta</label>
+                            <input
+                                type="date"
+                                value={referralDateTo}
+                                onChange={(e) => setReferralDateTo(e.target.value)}
+                                className="bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                            />
+                        </div>
+                        <button
+                            onClick={fetchReferralCommissions}
+                            disabled={isLoadingReferral}
+                            className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded-lg font-bold text-sm uppercase transition disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isLoadingReferral ? <RefreshCw size={14} className="animate-spin" /> : <Building2 size={14} />}
+                            Ver comisiones
+                        </button>
+                    </div>
+
+                    {/* Results */}
+                    {isLoadingReferral && (
+                        <div className="text-center p-10">
+                            <div className="inline-block w-8 h-8 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                            <p className="mt-4 text-slate-500 font-bold">Calculando comisiones...</p>
+                        </div>
+                    )}
+
+                    {referralData && !isLoadingReferral && (
+                        <div className="space-y-4">
+                            {/* Grand Total */}
+                            <div className="bg-gradient-to-r from-purple-600 to-purple-700 text-white p-6 rounded-2xl shadow-lg flex items-center justify-between">
+                                <div>
+                                    <p className="text-purple-200 text-xs font-bold uppercase tracking-widest">Total Global a Pagar</p>
+                                    <p className="text-4xl font-black mt-1">{Number(referralData.grandTotal || 0).toFixed(2)} €</p>
+                                </div>
+                                <Building2 size={40} className="text-purple-300 opacity-50" />
+                            </div>
+
+                            {referralData.groups?.length === 0 && (
+                                <div className="text-center p-10 text-slate-400">
+                                    <Building2 size={32} className="mx-auto mb-2 opacity-30" />
+                                    <p className="font-bold">No hay comisiones para el período seleccionado</p>
+                                </div>
+                            )}
+
+                            {referralData.groups?.map((group: any) => (
+                                <div key={group.entity} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                                    <div className="bg-purple-50 border-b border-purple-100 px-6 py-4 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <Building2 size={18} className="text-purple-600" />
+                                            <span className="font-black text-slate-900 text-lg">{group.entity}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs font-bold uppercase text-purple-400">Total comisión</p>
+                                            <p className="text-2xl font-black text-purple-700">{Number(group.totalCommission || 0).toFixed(2)} €</p>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead className="bg-slate-50 text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-100">
+                                                <tr>
+                                                    <th className="px-6 py-3 text-left">Fecha</th>
+                                                    <th className="px-6 py-3 text-left">Paciente</th>
+                                                    <th className="px-6 py-3 text-right">Pago total</th>
+                                                    <th className="px-6 py-3 text-right">Comisión referido</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {group.payments?.map((p: any) => (
+                                                    <tr key={p.id} className="hover:bg-slate-50 transition">
+                                                        <td className="px-6 py-3 text-slate-500 font-medium">{p.date ? new Date(p.date).toLocaleDateString('es-ES') : '-'}</td>
+                                                        <td className="px-6 py-3 font-bold text-slate-800">{p.patientName || '-'}</td>
+                                                        <td className="px-6 py-3 text-right text-slate-700 font-medium">{Number(p.amount || 0).toFixed(2)} €</td>
+                                                        <td className="px-6 py-3 text-right font-black text-purple-600">{Number(p.referralCommission || 0).toFixed(2)} €</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

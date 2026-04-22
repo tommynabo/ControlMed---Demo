@@ -21,6 +21,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     const [patientTreatments, setPatientTreatments] = useState<any[]>([]);
     const [discountPercent, setDiscountPercent] = useState(0);
     const [commissionPercent, setCommissionPercent] = useState(0);
+    const [referralEntityName, setReferralEntityName] = useState('');
 
     // Loading state
     const [isLoadingServices, setIsLoadingServices] = useState(false);
@@ -37,11 +38,13 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 })) : []);
                 setDiscountPercent(initialBudget.discountPercent || 0);
                 setCommissionPercent(initialBudget.commissionPercent || 0);
+                setReferralEntityName(initialBudget.referralEntityName || '');
             } else {
                 setTitle('');
                 setItems([]);
                 setDiscountPercent(0);
                 setCommissionPercent(0);
+                setReferralEntityName('');
             }
 
             setIsLoadingServices(true);
@@ -176,10 +179,10 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         setIsSubmitting(true);
         try {
             if (initialBudget && initialBudget.id) {
-                await api.budget.update(initialBudget.id, sanitizedItems, title, discountPercent, commissionPercent);
+                await api.budget.update(initialBudget.id, sanitizedItems, title, discountPercent, commissionPercent, referralEntityName);
                 toast.success("✅ Presupuesto actualizado correctamente");
             } else {
-                await api.budget.create(patientId, sanitizedItems, title, discountPercent, commissionPercent);
+                await api.budget.create(patientId, sanitizedItems, title, discountPercent, commissionPercent, referralEntityName);
                 toast.success("✅ Presupuesto creado correctamente");
             }
             onSave();
@@ -445,7 +448,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                 </div>
                             </div>
                             <div className="flex-1">
-                                <label className="text-[10px] font-black uppercase text-purple-800 mb-2 block">Comisión (Oculta)</label>
+                                <label className="text-[10px] font-black uppercase text-purple-800 mb-2 block">Comisión (Oculta al paciente)</label>
                                 <div className="flex gap-2 items-center">
                                     <div className="flex-1 flex items-center gap-2">
                                         <input 
@@ -463,6 +466,18 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                         </span>
                                     )}
                                 </div>
+                                {commissionPercent > 0 && (
+                                    <div className="mt-2">
+                                        <label className="text-[10px] font-black uppercase text-purple-600 mb-1 block">Empresa Referidora</label>
+                                        <input
+                                            type="text"
+                                            value={referralEntityName}
+                                            onChange={(e) => setReferralEntityName(e.target.value)}
+                                            placeholder="Ej. Clínica ABC, Dr. Pérez..."
+                                            className="w-full bg-white border border-purple-300 rounded-lg p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-purple-400"
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -238,40 +238,45 @@ model Appointment {
 }
 
 model Liquidation {
-  id              String      @id @default(uuid())
-  doctorId        String
-  doctor          Doctor      @relation(fields: [doctorId], references: [id])
-  appointmentId   String?     @unique
-  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
-  grossAmount     Float
-  labCost         Float
-  commissionRate  Float
-  finalAmount     Float
-  treatmentName   String?
-  patientName     String?
-  paymentMethod   String?
-  status          String      @default("PENDING")
-  doctorInvoiceUrl String?
-  paidDate        DateTime?
-  createdAt       DateTime    @default(now())
+  id                  String      @id @default(uuid())
+  doctorId            String
+  doctor              Doctor      @relation(fields: [doctorId], references: [id])
+  appointmentId       String?     @unique
+  appointment         Appointment? @relation(fields: [appointmentId], references: [id])
+  grossAmount         Float
+  baseAmount          Float?
+  labCost             Float
+  commissionRate      Float
+  finalAmount         Float
+  referralCommission  Float?      @default(0)
+  referralEntityName  String?
+  treatmentName       String?
+  patientName         String?
+  paymentMethod       String?
+  status              String      @default("PENDING")
+  doctorInvoiceUrl    String?
+  paidDate            DateTime?
+  createdAt           DateTime    @default(now())
 }
 
 model Payment {
-  id               String   @id @default(uuid())
-  patientId        String
-  patient          Patient  @relation(fields: [patientId], references: [id])
-  budgetId         String?
-  amount           Float
-  method           String
-  type             String
-  paymentBreakdown String?
-  doctorId         String?
-  sourcePaymentId  String?
-  treatmentId      String?
-  createdAt        DateTime @default(now())
-  invoiceId        String?  @unique
-  invoice          Invoice? @relation(fields: [invoiceId], references: [id])
-  notes            String?
+  id                 String   @id @default(uuid())
+  patientId          String
+  patient            Patient  @relation(fields: [patientId], references: [id])
+  budgetId           String?
+  amount             Float
+  method             String
+  type               String
+  paymentBreakdown   String?
+  doctorId           String?
+  sourcePaymentId    String?
+  treatmentId        String?
+  createdAt          DateTime @default(now())
+  invoiceId          String?  @unique
+  invoice            Invoice? @relation(fields: [invoiceId], references: [id])
+  notes              String?
+  referralCommission Float?   @default(0)
+  referralEntityName String?
 
   @@index([patientId])
 }
@@ -332,17 +337,18 @@ model Installment {
 }
 
 model Budget {
-  id           String           @id @default(uuid())
-  patientId    String
-  title        String?
-  patient      Patient          @relation(fields: [patientId], references: [id])
-  date         DateTime         @default(now())
-  status       String           @default("DRAFT")
-  totalAmount  Float            @default(0.0)
-  items        BudgetLineItem[]
-  appointments Appointment[]
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id                 String           @id @default(uuid())
+  patientId          String
+  title              String?
+  patient            Patient          @relation(fields: [patientId], references: [id])
+  date               DateTime         @default(now())
+  status             String           @default("DRAFT")
+  totalAmount        Float            @default(0.0)
+  referralEntityName String?
+  items              BudgetLineItem[]
+  appointments       Appointment[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 }
 
 model BudgetLineItem {

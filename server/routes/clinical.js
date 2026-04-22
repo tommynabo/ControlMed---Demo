@@ -291,8 +291,8 @@ router.post('/patients/:patientId/budgets', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-        const { items, title, discountPercent = 0, commissionPercent = 0 } = req.body;
-        const data = await budgetService.createBudget(supabase, req.params.patientId, items, title, req.user?.id, discountPercent, commissionPercent);
+        const { items, title, discountPercent = 0, commissionPercent = 0, referralEntityName = null } = req.body;
+        const data = await budgetService.createBudget(supabase, req.params.patientId, items, title, req.user?.id, discountPercent, commissionPercent, referralEntityName);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -310,8 +310,8 @@ router.put('/budgets/:id', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-        const { items, title, discountPercent = 0, commissionPercent = 0 } = req.body;
-        const data = await budgetService.updateBudget(supabase, req.params.id, items, title, req.user?.id, discountPercent, commissionPercent);
+        const { items, title, discountPercent = 0, commissionPercent = 0, referralEntityName = null } = req.body;
+        const data = await budgetService.updateBudget(supabase, req.params.id, items, title, req.user?.id, discountPercent, commissionPercent, referralEntityName);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
