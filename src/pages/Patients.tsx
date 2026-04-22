@@ -391,14 +391,18 @@ const Patients: React.FC = () => {
                 console.warn('Could not load clinic info for print, using defaults');
             }
 
-            // Calculate totals with per-item discount
-            // Calculate totals: discount is visible, commission is hidden (already in total)
+            // Calculate totals: commission is hidden inside item prices, discount is visible
             const items = budget.items || [];
-            const subtotal = items.reduce((sum: number, item: any) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 1)), 0);
+            const commissionPercent = Number(budget.commissionPercent) || 0;
             const discountPercent = Number(budget.discountPercent) || 0;
-            const discountAmount = subtotal * discountPercent / 100;
-            const importe = subtotal;
-            const total = Number(budget.totalAmount) || subtotal; // Use backend total (already includes commission)
+            // Each item price is shown with commission already applied (patient cannot see the markup)
+            const importe = items.reduce((sum: number, item: any) => {
+                const qty = Number(item.quantity) || 1;
+                const price = Number(item.price) || 0;
+                return sum + (price * (1 + commissionPercent / 100)) * qty;
+            }, 0);
+            const discountAmount = importe * discountPercent / 100;
+            const total = importe - discountAmount;
 
             const budgetNum = budget.number || budget.id?.substring(0, 6).toUpperCase() || '—';
             const budgetDate = new Date(budget.createdAt || budget.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -406,13 +410,14 @@ const Patients: React.FC = () => {
 
             const itemsHtml = items.map((item: any, idx: number) => {
                 const qty = Number(item.quantity) || 1;
-                const price = Number(item.price) || 0;
-                const rowTotal = price * qty; // No per-item discount anymore
+                // Price shown to patient already includes commission
+                const displayPrice = (Number(item.price) || 0) * (1 + commissionPercent / 100);
+                const rowTotal = displayPrice * qty;
                 return `
                 <tr>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${qty}</td>
-                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${price.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${displayPrice.toFixed(2)}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${rowTotal.toFixed(2)}</td>
                 </tr>`;
             }).join('');
