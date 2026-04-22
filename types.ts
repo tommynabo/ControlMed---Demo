@@ -250,11 +250,12 @@ export interface TreatmentPlan {
 export interface DocumentTemplate {
   id: string;
   title: string;
+  name?: string;  // alias for title (legacy frontend usage)
   category: string;
-  date: string;
+  date?: string;
   size: string;
-  type: 'docx' | 'pdf';
-  content?: string; // filename stored on disk (backend: templateService.js)
+  type: 'docx' | 'pdf' | 'html';
+  content?: string; // HTML string (type='html') or filename on disk (type='pdf'/'docx')
   createdAt?: string;
 }
 

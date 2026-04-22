@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye, ShieldCheck, ChevronDown, Mail, Lock } from 'lucide-react';
+import { Search, UserPlus, Download, Plus, Minus, Package, AlertTriangle, CheckCircle2, FileText as FileTextIcon, MessageSquare, QrCode, History, Send, RefreshCw, Trash2, Smartphone, Stethoscope, Edit3, X, Filter, Check, Building2, Calendar, Users as UsersIcon, Eye, ShieldCheck, ChevronDown, Mail, Lock, Printer } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { DocumentTemplate } from '../../types';
 import { api } from '../services/api';
@@ -9,6 +9,7 @@ import ScheduleAvailability from '../components/ScheduleAvailability';
 import Vacations from '../components/Vacations';
 import Users from '../components/Users';
 import GmailSettings from '../components/GmailSettings';
+import TemplateEditorModal from '../components/TemplateEditorModal';
 
 interface Service {
     id: string;
@@ -132,6 +133,7 @@ const Settings: React.FC = () => {
     // TEMPLATES STATE — loaded from backend
     const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
     const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null | undefined>(undefined); // undefined=closed, null=new, obj=edit
 
     const loadTemplates = async () => {
         setIsLoadingTemplates(true);
@@ -299,6 +301,43 @@ const Settings: React.FC = () => {
         document.body.appendChild(a);
         a.click();
         a.remove();
+    };
+
+    const handlePrintHtmlTemplate = (doc: DocumentTemplate) => {
+        const win = window.open('', '_blank');
+        if (!win) return;
+        win.document.write(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>${doc.title}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.6; margin: 40px; color: #000; }
+    h1, h2, h3 { color: #1a1a1a; }
+    p { margin: 0.5em 0; }
+    @media print { body { margin: 20mm; } @page { size: A4; margin: 20mm; } }
+  </style>
+</head>
+<body>
+  <h2 style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:20px;">${doc.title}</h2>
+  ${doc.content || ''}
+  <div style="margin-top:60px; display:flex; justify-content:space-between;">
+    <div style="text-align:center;"><div style="border-top:1px solid #333; width:200px; padding-top:5px;">Firma del Paciente</div></div>
+    <div style="text-align:center;"><div style="border-top:1px solid #333; width:200px; padding-top:5px;">Firma del Profesional</div></div>
+  </div>
+</body>
+</html>`);
+        win.document.close();
+        setTimeout(() => { win.focus(); win.print(); }, 400);
+    };
+
+    const handleSaveTemplate = async (data: { id?: string; title: string; category: string; content: string }) => {
+        if (data.id) {
+            await api.templates.update(data.id, { title: data.title, category: data.category, content: data.content });
+        } else {
+            await api.templates.create({ title: data.title, category: data.category, content: data.content });
+        }
+        await loadTemplates();
     };
 
     const handleUpdateStock = (id: string, delta: number) => {
@@ -884,16 +923,24 @@ const Settings: React.FC = () => {
                                     />
                                 </div>
                             </div>
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                accept=".pdf,.docx,.txt"
-                                onChange={handleUploadTemplate}
-                            />
-                            <button onClick={() => fileInputRef.current?.click()} disabled={isLoadingTemplates} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:scale-105 transition-transform flex items-center gap-2 disabled:opacity-60">
-                                <UserPlus size={16} /> {isLoadingTemplates ? 'Subiendo...' : 'Subir Plantilla'}
-                            </button>
+                            <div className="flex gap-2">
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    accept=".pdf,.docx,.txt"
+                                    onChange={handleUploadTemplate}
+                                />
+                                <button
+                                    onClick={() => setEditingTemplate(null)}
+                                    className="bg-blue-600 text-white px-5 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:scale-105 transition-transform flex items-center gap-2"
+                                >
+                                    <Plus size={16} /> Nueva Plantilla
+                                </button>
+                                <button onClick={() => fileInputRef.current?.click()} disabled={isLoadingTemplates} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:scale-105 transition-transform flex items-center gap-2 disabled:opacity-60">
+                                    <UserPlus size={16} /> {isLoadingTemplates ? 'Subiendo...' : 'Subir Archivo'}
+                                </button>
+                            </div>
                         </div>
 
                         {isLoadingTemplates && templates.length === 0 ? (
@@ -927,7 +974,7 @@ const Settings: React.FC = () => {
                                             <Trash2 size={14} />
                                         </button>
                                         <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center mb-4 shadow-sm">
-                                            {doc.type === 'pdf' ? <FileTextIcon size={24} className="text-rose-500" /> : <FileTextIcon size={24} className="text-blue-600" />}
+                                            {doc.type === 'pdf' ? <FileTextIcon size={24} className="text-rose-500" /> : doc.type === 'html' ? <FileTextIcon size={24} className="text-emerald-600" /> : <FileTextIcon size={24} className="text-blue-600" />}
                                         </div>
                                         <h4 className="text-xs font-bold text-slate-900 uppercase leading-snug mb-2 line-clamp-2 min-h-[2.5em] pr-6">{doc.title}</h4>
                                         <div className="flex justify-between items-center opacity-60 mb-4">
@@ -935,7 +982,25 @@ const Settings: React.FC = () => {
                                             <span className="text-[9px] font-bold text-slate-400">{doc.size}</span>
                                         </div>
                                         {/* Action buttons */}
-                                        <div className="flex gap-2 mt-auto">
+                                        <div className="flex gap-2 mt-auto flex-wrap">
+                                            {/* HTML templates: edit + print */}
+                                            {doc.type === 'html' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => setEditingTemplate(doc)}
+                                                        className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-blue-600 bg-blue-50 hover:bg-blue-100 py-2 rounded-lg transition-colors"
+                                                    >
+                                                        <Edit3 size={12} /> Editar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handlePrintHtmlTemplate(doc)}
+                                                        className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-emerald-600 bg-emerald-50 hover:bg-emerald-100 py-2 rounded-lg transition-colors"
+                                                    >
+                                                        <Printer size={12} /> Imprimir
+                                                    </button>
+                                                </>
+                                            )}
+                                            {/* PDF templates: preview + download */}
                                             {doc.type === 'pdf' && (
                                                 <button
                                                     onClick={() => handlePreviewTemplate(doc)}
@@ -944,12 +1009,15 @@ const Settings: React.FC = () => {
                                                     <Eye size={12} /> Ver
                                                 </button>
                                             )}
-                                            <button
-                                                onClick={() => handleDownloadTemplate(doc)}
-                                                className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition-colors"
-                                            >
-                                                <Download size={12} /> Descargar
-                                            </button>
+                                            {/* DOCX/PDF: download */}
+                                            {doc.type !== 'html' && (
+                                                <button
+                                                    onClick={() => handleDownloadTemplate(doc)}
+                                                    className="flex-1 flex items-center justify-center gap-1 text-[10px] font-bold uppercase text-slate-600 bg-slate-100 hover:bg-slate-200 py-2 rounded-lg transition-colors"
+                                                >
+                                                    <Download size={12} /> Descargar
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 )
@@ -1271,6 +1339,15 @@ const Settings: React.FC = () => {
                 )}
             </div>
         </div >
+
+        {/* Template Editor Modal */}
+        {editingTemplate !== undefined && (
+            <TemplateEditorModal
+                template={editingTemplate}
+                onSave={handleSaveTemplate}
+                onClose={() => setEditingTemplate(undefined)}
+            />
+        )}
     );
 };
 

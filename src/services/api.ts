@@ -1434,6 +1434,24 @@ export const api = {
                 reader.readAsDataURL(file);
             });
         },
+        update: async (id: string, data: { title?: string; category?: string; content?: string }) => {
+            const res = await fetch(`${API_URL}/templates/${id}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(data),
+            });
+            if (!res.ok) throw new Error('Failed to update template');
+            return res.json();
+        },
+        create: async (data: { title: string; category: string; content: string }) => {
+            const res = await fetch(`${API_URL}/templates`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ ...data, type: 'html' }),
+            });
+            if (!res.ok) throw new Error('Failed to create template');
+            return res.json();
+        },
         delete: async (id: string) => {
             const res = await fetch(`${API_URL}/templates/${id}`, { method: 'DELETE', headers });
             if (!res.ok) throw new Error('Failed to delete template');

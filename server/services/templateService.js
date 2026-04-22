@@ -60,18 +60,36 @@ const deleteTemplate = async (prisma, id) => {
     const template = await prisma.documentTemplate.findUnique({ where: { id } });
     if (!template) throw new Error("Template not found");
 
-    // Remove file
-    const filePath = path.join(UPLOAD_DIR, template.content);
-    if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+    // Remove file (only for file-based templates, not html)
+    if (template.type !== 'html' && template.content) {
+        const filePath = path.join(UPLOAD_DIR, template.content);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
     }
 
     // Remove DB record
     return await prisma.documentTemplate.delete({ where: { id } });
 };
 
+const updateTemplate = async (prisma, id, { title, category, content }) => {
+    const existing = await prisma.documentTemplate.findUnique({ where: { id } });
+    if (!existing) throw new Error('Template not found');
+
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (category !== undefined) updateData.category = category;
+    if (content !== undefined && existing.type === 'html') {
+        updateData.content = content;
+        updateData.size = (Buffer.byteLength(content, 'utf8') / 1024).toFixed(2) + ' KB';
+    }
+
+    return await prisma.documentTemplate.update({ where: { id }, data: updateData });
+};
+
 module.exports = {
     uploadTemplate,
     getTemplates,
-    deleteTemplate
+    deleteTemplate,
+    updateTemplate,
 };

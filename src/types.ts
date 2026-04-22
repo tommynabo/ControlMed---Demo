@@ -124,8 +124,13 @@ export interface ToothState {
 
 export interface DocumentTemplate {
     id: string;
-    name: string;
+    name: string;   // alias for title (legacy)
+    title: string;
     content: string;
+    category?: string;
+    type?: string;
+    size?: string;
+    createdAt?: string;
 }
 
 export interface Expense {
