@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    DollarSign, BarChart3, CreditCard, CheckCircle2, AlertTriangle, X, ArrowRightLeft, Pencil
+    DollarSign, BarChart3, CreditCard, CheckCircle2, AlertTriangle, X, ArrowRightLeft, Pencil, ChevronLeft, ChevronRight, CalendarDays
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
@@ -33,12 +33,29 @@ const CashRegister: React.FC = () => {
         Object.fromEntries(DENOMINATIONS.map(d => [d.value.toString(), 0]))
     );
 
+    // Date navigation
+    const todayStr = new Date().toISOString().split('T')[0];
+    const [selectedDate, setSelectedDate] = useState(todayStr);
+    const isToday = selectedDate === todayStr;
+
+    const goToPrevDay = () => {
+        const d = new Date(selectedDate + 'T12:00:00');
+        d.setDate(d.getDate() - 1);
+        setSelectedDate(d.toISOString().split('T')[0]);
+    };
+    const goToNextDay = () => {
+        if (isToday) return;
+        const d = new Date(selectedDate + 'T12:00:00');
+        d.setDate(d.getDate() + 1);
+        setSelectedDate(d.toISOString().split('T')[0]);
+    };
+
     // Cash register closing state
     const [isClosed, setIsClosed] = useState(false);
     const [closingData, setClosingData] = useState<any>(null);
     const [isClosing, setIsClosing] = useState(false);
 
-    // Stats for TODAY
+    // Stats for SELECTED DATE
     const [todayInvoices, setTodayInvoices] = useState<any[]>([]);
     const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
 
@@ -67,12 +84,13 @@ const CashRegister: React.FC = () => {
             // Force re-filter by triggering context refresh
             const freshInvoices = await (api as any).invoices.getAll().catch(() => []);
             const freshExpenses = await (api as any).expenses.getAll().catch(() => []);
-            const today = new Date().toISOString().split('T')[0];
             setTodayInvoices(freshInvoices.filter((i: any) =>
-                i.date && i.date.startsWith(today) &&
+                i.date && i.date.split('T')[0] === selectedDate &&
                 !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
             ));
-            setTodayExpenses(freshExpenses.filter((e: any) => e.date === today));
+            setTodayExpenses(freshExpenses.filter((e: any) =>
+                e.date && e.date.split('T')[0] === selectedDate
+            ));
             setEditingItem(null);
         } catch (e: any) {
             alert('❌ Error al cambiar la fecha: ' + (e.message || e));
@@ -82,23 +100,30 @@ const CashRegister: React.FC = () => {
     };
 
     useEffect(() => {
-        const today = new Date().toISOString().split('T')[0];
         setTodayInvoices(invoices.filter(i =>
-            i.date && i.date.startsWith(today) &&
+            i.date && i.date.split('T')[0] === selectedDate &&
             !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
         ));
-        setTodayExpenses(expenses.filter(e => e.date === today));
-    }, [invoices, expenses]);
+        setTodayExpenses(expenses.filter(e =>
+            e.date && e.date.split('T')[0] === selectedDate
+        ));
+    }, [invoices, expenses, selectedDate]);
 
-    // Load today's closing status on mount
+    // Load closing status for selected date
     useEffect(() => {
-        (api as any).cashRegister.getToday().then((data: any) => {
+        setIsClosed(false);
+        setClosingData(null);
+        const method = isToday ? 'getToday' : 'getByDate';
+        const call = isToday
+            ? (api as any).cashRegister.getToday()
+            : (api as any).cashRegister.getByDate(selectedDate);
+        call.then((data: any) => {
             if (data) {
                 setIsClosed(true);
                 setClosingData(data);
             }
         }).catch(() => {});
-    }, []);
+    }, [selectedDate]);
 
     const stats = React.useMemo(() => {
         const totalIncome = todayInvoices.reduce((acc, curr) => acc + curr.amount, 0);
@@ -125,6 +150,10 @@ const CashRegister: React.FC = () => {
 
     const handleCloseCashRegister = async () => {
         if (isClosed) return;
+        if (!isToday) {
+            alert('⚠️ Solo se puede cerrar la caja del día actual desde la interfaz.\n\nPara cerrar días anteriores, usa el script SQL manual.');
+            return;
+        }
         if (!arqueoCompleted) {
             alert('⚠️ Debes realizar el Arqueo de Caja antes de cerrar.\n\nHaz clic en "Hacer Arqueo" para contabilizar el efectivo del cajón.');
             return;
@@ -161,7 +190,7 @@ const CashRegister: React.FC = () => {
                 : `📉 Faltante: ${cashDiff.toFixed(2)}€`;
 
         const summary =
-            `✅ CIERRE DE CAJA — ${new Date().toLocaleDateString('es-ES')}\n\n` +
+            `✅ CIERRE DE CAJA — ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES')}\n\n` +
             `📊 Balance del día:\n` +
             `  Ingresos totales:    ${stats.totalIncome.toFixed(2)}€\n` +
             `  Gastos:              ${stats.totalExpense.toFixed(2)}€\n` +
@@ -222,16 +251,62 @@ const CashRegister: React.FC = () => {
         <>
         <div className="p-10 h-full overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="max-w-6xl mx-auto space-y-12">
-                <div>
-                    <h3 className="text-3xl font-black text-slate-900 tracking-tight">Caja del Día</h3>
-                    <p className="text-xs text-slate-500 font-black uppercase tracking-widest mt-2">{new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h3 className="text-3xl font-black text-slate-900 tracking-tight">Caja del Día</h3>
+                        <p className="text-xs text-slate-500 font-black uppercase tracking-widest mt-2">
+                            {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                    </div>
+                    {/* Date navigator */}
+                    <div className="flex items-center gap-2">
+                        <button onClick={goToPrevDay} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors" title="Día anterior">
+                            <ChevronLeft size={18} />
+                        </button>
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                max={todayStr}
+                                onChange={e => e.target.value && setSelectedDate(e.target.value)}
+                                className="border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 cursor-pointer"
+                            />
+                        </div>
+                        <button
+                            onClick={goToNextDay}
+                            disabled={isToday}
+                            className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            title="Día siguiente"
+                        >
+                            <ChevronRight size={18} />
+                        </button>
+                        {!isToday && (
+                            <button
+                                onClick={() => setSelectedDate(todayStr)}
+                                className="px-3 py-2 bg-blue-50 text-blue-600 text-xs font-bold rounded-xl hover:bg-blue-100 transition-colors"
+                            >
+                                Hoy
+                            </button>
+                        )}
+                    </div>
                 </div>
+
+                {/* Past day banner */}
+                {!isToday && (
+                    <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                        <CalendarDays size={16} className="text-amber-500 flex-shrink-0" />
+                        <p className="text-xs font-bold text-amber-700">
+                            Estás viendo la caja del {new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}.
+                            Los botones de Arqueo y Cierre solo están disponibles para el día actual.
+                        </p>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Stats Card */}
                     <div className="col-span-2 bg-white p-10 rounded-2xl border border-slate-200 shadow-sm relative">
                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-900 flex items-center gap-3 mb-8">
-                            <BarChart3 className="text-blue-500" /> Movimientos de Hoy
+                            <BarChart3 className="text-blue-500" /> {isToday ? 'Movimientos de Hoy' : `Movimientos del ${new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`}
                         </h4>
 
                         <div className="grid grid-cols-2 gap-8">
@@ -315,15 +390,16 @@ const CashRegister: React.FC = () => {
                         <div className="space-y-3">
                             <button
                                 onClick={() => setShowArqueoModal(true)}
-                                className="w-full bg-white/10 hover:bg-white/20 text-white py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                                disabled={!isToday}
+                                className="w-full bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                             >
                                 🧮 {arqueoCompleted ? 'Repetir Arqueo' : 'Hacer Arqueo'}
                             </button>
                             <button
                                 onClick={handleCloseCashRegister}
-                                disabled={!arqueoCompleted || isClosed || isClosing}
+                                disabled={!isToday || !arqueoCompleted || isClosed || isClosing}
                                 className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-4 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 group"
-                                title={isClosed ? 'La caja ya fue cerrada hoy' : ''}
+                                title={!isToday ? 'Solo puedes cerrar la caja del día actual' : isClosed ? 'La caja ya fue cerrada hoy' : ''}
                             >
                                 <DollarSign size={16} className="group-hover:rotate-12 transition-transform" />
                                 {isClosing ? 'Guardando...' : isClosed ? 'Caja Cerrada' : 'Cerrar Caja del Día'}
