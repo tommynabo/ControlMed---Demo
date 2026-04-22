@@ -55,6 +55,9 @@ const CashRegister: React.FC = () => {
     const [closingData, setClosingData] = useState<any>(null);
     const [isClosing, setIsClosing] = useState(false);
 
+    // Opening cash (arrastre from previous day)
+    const [openingCash, setOpeningCash] = useState<number | null>(null);
+
     // Stats for SELECTED DATE
     const [todayInvoices, setTodayInvoices] = useState<any[]>([]);
     const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
@@ -109,18 +112,46 @@ const CashRegister: React.FC = () => {
         ));
     }, [invoices, expenses, selectedDate]);
 
-    // Load closing status for selected date
+    // Load closing status for selected date + openingCash (arrastre)
     useEffect(() => {
         setIsClosed(false);
         setClosingData(null);
-        const method = isToday ? 'getToday' : 'getByDate';
+        setOpeningCash(null);
+
         const call = isToday
             ? (api as any).cashRegister.getToday()
             : (api as any).cashRegister.getByDate(selectedDate);
+
         call.then((data: any) => {
             if (data) {
                 setIsClosed(true);
                 setClosingData(data);
+                // If this day is already closed, use saved openingCash
+                if (data.openingCash != null) {
+                    setOpeningCash(data.openingCash);
+                    return;
+                }
+            }
+            // Load previous day's physicalCash as openingCash (arrastre)
+            // For past dates we look at the closing of the day before selectedDate
+            if (isToday) {
+                (api as any).cashRegister.getLastClosing().then((prev: any) => {
+                    if (prev && prev.physicalCash != null) {
+                        setOpeningCash(prev.physicalCash);
+                    }
+                }).catch(() => {});
+            } else {
+                // For a past date, find the closing immediately before it
+                const prevDate = (() => {
+                    const d = new Date(selectedDate + 'T12:00:00');
+                    d.setDate(d.getDate() - 1);
+                    return d.toISOString().split('T')[0];
+                })();
+                (api as any).cashRegister.getByDate(prevDate).then((prev: any) => {
+                    if (prev && prev.physicalCash != null) {
+                        setOpeningCash(prev.physicalCash);
+                    }
+                }).catch(() => {});
             }
         }).catch(() => {});
     }, [selectedDate]);
@@ -133,9 +164,11 @@ const CashRegister: React.FC = () => {
         const transferIncome = todayInvoices.filter(i => i.paymentMethod === 'transfer').reduce((acc, curr) => acc + curr.amount, 0);
         const cashExpenses = todayExpenses.filter(e => e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
         const netCash = cashIncome - cashExpenses;
+        // expectedCash = arrastre + efectivo de hoy
+        const expectedCash = (openingCash ?? 0) + netCash;
 
-        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, netCash, balance: totalIncome - totalExpense };
-    }, [todayInvoices, todayExpenses]);
+        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, netCash, expectedCash, balance: totalIncome - totalExpense };
+    }, [todayInvoices, todayExpenses, openingCash]);
 
 
     const calculatedPhysicalCash = DENOMINATIONS.reduce(
@@ -424,6 +457,7 @@ const CashRegister: React.FC = () => {
                                     <tr>
                                         <th className="p-6 pl-8">Hora</th>
                                         <th className="p-6">Concepto / Paciente</th>
+                                        <th className="p-6">Tratamiento</th>
                                         <th className="p-6">Doctor</th>
                                         <th className="p-6 text-center">Tipo</th>
                                         <th className="p-6 text-right pr-8">Importe</th>
@@ -444,6 +478,19 @@ const CashRegister: React.FC = () => {
                                                 <span className="block text-xs font-normal text-slate-400">
                                                     {patients.find(p => p.id === inv.patientId)?.name || 'Paciente'}
                                                 </span>
+                                            </td>
+                                            <td className="p-6 max-w-[180px]">
+                                                {(() => {
+                                                    const itemNames = Array.isArray(inv.items) && inv.items.length > 0
+                                                        ? inv.items.map((it: any) => it.name).filter(Boolean)
+                                                        : [];
+                                                    const label = itemNames.length > 0
+                                                        ? itemNames.join(' · ')
+                                                        : inv.concept || appt?.treatmentName || null;
+                                                    return label
+                                                        ? <span className="text-xs font-medium text-slate-600 leading-relaxed line-clamp-2">{label}</span>
+                                                        : <span className="text-xs text-slate-300">—</span>;
+                                                })()}
                                             </td>
                                             <td className="p-6">
                                                 {doctor ? (
@@ -478,6 +525,9 @@ const CashRegister: React.FC = () => {
                                             <td className="p-6 font-bold text-slate-700">
                                                 {exp.description}
                                                 <span className="block text-xs font-normal text-slate-400">{exp.category}</span>
+                                            </td>
+                                            <td className="p-6">
+                                                <span className="text-xs text-slate-300">—</span>
                                             </td>
                                             <td className="p-6">
                                                 <span className="text-xs text-slate-300">—</span>
