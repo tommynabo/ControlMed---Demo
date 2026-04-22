@@ -369,6 +369,7 @@ const Settings: React.FC = () => {
     );
 
     return (
+        <>
         <div className="flex h-full overflow-hidden bg-slate-50 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* SETTINGS SIDEBAR */}
             <div className="w-64 bg-white border-r border-slate-200 p-6 flex flex-col gap-2 shrink-0">
@@ -1348,6 +1349,7 @@ const Settings: React.FC = () => {
                 onClose={() => setEditingTemplate(undefined)}
             />
         )}
+        </>
     );
 };
 
