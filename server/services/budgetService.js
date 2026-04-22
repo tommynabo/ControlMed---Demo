@@ -1,7 +1,15 @@
 // server/services/budgetService.js
 
-const createBudget = async (supabase, patientId, items = [], title = "", userId = null) => {
-    const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+// Helper: Calculate total with commission (applied first) and discount (applied after)
+const calculateBudgetTotal = (items, discountPercent = 0, commissionPercent = 0) => {
+    const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+    const withCommission = subtotal * (1 + commissionPercent / 100);
+    const withDiscount = withCommission * (1 - discountPercent / 100);
+    return withDiscount;
+};
+
+const createBudget = async (supabase, patientId, items = [], title = "", userId = null, discountPercent = 0, commissionPercent = 0) => {
+    const totalAmount = calculateBudgetTotal(items, discountPercent, commissionPercent);
 
     // 1. Create Budget
     const { data: budget, error: budgetError } = await supabase
@@ -12,6 +20,8 @@ const createBudget = async (supabase, patientId, items = [], title = "", userId 
             title: title || "Presupuesto General",
             status: 'DRAFT',
             totalAmount,
+            discountPercent: discountPercent || 0,
+            commissionPercent: commissionPercent || 0,
             date: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             updated_by: userId,
@@ -144,8 +154,10 @@ const addItemToDraftBudget = async (supabase, patientId, item) => {
 
     if (itemError) throw new Error("Error adding item: " + itemError.message);
 
-    // Update Total
-    const newTotal = Number(budget.totalAmount) + (Number(lineItem.price) * Number(lineItem.quantity));
+    // Update Total with discount and commission
+    const { data: budgetData } = await supabase.from('Budget').select('discountPercent, commissionPercent').eq('id', budget.id).single();
+    const { data: allItems } = await supabase.from('BudgetLineItem').select('price, quantity').eq('budgetId', budget.id);
+    const newTotal = calculateBudgetTotal(allItems || [], budgetData?.discountPercent || 0, budgetData?.commissionPercent || 0);
     await supabase.from('Budget').update({ totalAmount: newTotal, updatedAt: new Date().toISOString() }).eq('id', budget.id);
 
     return await supabase
@@ -161,9 +173,10 @@ const deleteItem = async (supabase, itemId) => {
 
     await supabase.from('BudgetLineItem').delete().eq('id', itemId);
 
-    // Recalculate total
+    // Recalculate total with discount and commission
+    const { data: budget } = await supabase.from('Budget').select('discountPercent, commissionPercent').eq('id', item.budgetId).single();
     const { data: items } = await supabase.from('BudgetLineItem').select('price, quantity').eq('budgetId', item.budgetId);
-    const newTotal = items.reduce((acc, i) => acc + (Number(i.price) * (Number(i.quantity) || 1)), 0);
+    const newTotal = calculateBudgetTotal(items || [], budget?.discountPercent || 0, budget?.commissionPercent || 0);
 
     await supabase.from('Budget').update({ totalAmount: newTotal, updatedAt: new Date().toISOString() }).eq('id', item.budgetId);
     return { success: true };
@@ -221,13 +234,13 @@ const convertBudgetToInvoice = async (supabase, budgetId, userId = null) => {
     return invoice;
 };
 
-const updateBudget = async (supabase, budgetId, items = [], title = "", userId = null) => {
-    const totalAmount = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+const updateBudget = async (supabase, budgetId, items = [], title = "", userId = null, discountPercent = 0, commissionPercent = 0) => {
+    const totalAmount = calculateBudgetTotal(items, discountPercent, commissionPercent);
 
     // Update budget title & total
     const { error: budgetError } = await supabase
         .from('Budget')
-        .update({ title: title || "Presupuesto General", totalAmount, updatedAt: new Date().toISOString(), updated_by: userId })
+        .update({ title: title || "Presupuesto General", totalAmount, discountPercent: discountPercent || 0, commissionPercent: commissionPercent || 0, updatedAt: new Date().toISOString(), updated_by: userId })
         .eq('id', budgetId);
 
     if (budgetError) throw new Error("Error updating budget: " + budgetError.message);

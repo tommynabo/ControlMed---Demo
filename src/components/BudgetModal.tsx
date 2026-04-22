@@ -19,6 +19,8 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
     const [patientTreatments, setPatientTreatments] = useState<any[]>([]);
+    const [discountPercent, setDiscountPercent] = useState(0);
+    const [commissionPercent, setCommissionPercent] = useState(0);
 
     // Loading state
     const [isLoadingServices, setIsLoadingServices] = useState(false);
@@ -33,9 +35,13 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                     quantity: i.quantity || 1,
                     tooth: i.tooth || ''
                 })) : []);
+                setDiscountPercent(initialBudget.discountPercent || 0);
+                setCommissionPercent(initialBudget.commissionPercent || 0);
             } else {
                 setTitle('');
                 setItems([]);
+                setDiscountPercent(0);
+                setCommissionPercent(0);
             }
 
             setIsLoadingServices(true);
@@ -152,19 +158,20 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         }));
     };
 
-    const applyBulkIVA = (ivaPercent: number) => {
-        setItems(prev => prev.map((item, idx) => {
-            if (!selectedIndices.has(idx)) return item;
-            let currentPrice = Number(item.price);
-            let basePrice = currentPrice;
-            
-            // If we are "applying" 21% to something that might have it, or removing it.
-            // Simple logic: we assume price is base price.
-            if (ivaPercent === 21) basePrice = currentPrice * 1.21;
-            else if (ivaPercent === 0) basePrice = currentPrice / 1.21; // Attempt to "una-apply" if it was 21%
-            
-            return { ...item, price: basePrice.toFixed(2) };
-        }));
+    const applyBulkDiscount = () => {
+        const val = prompt("Porcentaje de descuento (ej: 10):");
+        if (!val || isNaN(Number(val))) return;
+        const percent = Math.max(0, Math.min(100, Number(val))); // 0-100
+        setDiscountPercent(percent);
+        toast.success(`✅ Descuento aplicado: ${percent}%`);
+    };
+
+    const applyBulkCommission = () => {
+        const val = prompt("Porcentaje de comisión/aumento (ej: 5):");
+        if (!val || isNaN(Number(val))) return;
+        const percent = Math.max(0, Number(val));
+        setCommissionPercent(percent);
+        toast.success(`✅ Comisión aplicada: ${percent}% (no visible en presupuesto impreso)`);
     };
 
     const removeBulk = () => {
@@ -173,7 +180,8 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         setSelectedIndices(new Set());
     };
 
-    const totalAmount = items.reduce((acc, item) => acc + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+    const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+    const totalAmount = subtotal * (1 + commissionPercent / 100) * (1 - discountPercent / 100);
 
     const handleSafeSave = async () => {
         if (!title.trim()) return toast.error("Por favor indica un título para el presupuesto");
@@ -196,10 +204,10 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         setIsSubmitting(true);
         try {
             if (initialBudget && initialBudget.id) {
-                await api.budget.update(initialBudget.id, sanitizedItems, title);
+                await api.budget.update(initialBudget.id, sanitizedItems, title, discountPercent, commissionPercent);
                 toast.success("✅ Presupuesto actualizado correctamente");
             } else {
-                await api.budget.create(patientId, sanitizedItems, title);
+                await api.budget.create(patientId, sanitizedItems, title, discountPercent, commissionPercent);
                 toast.success("✅ Presupuesto creado correctamente");
             }
             onSave();
@@ -433,13 +441,6 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                     <button onClick={() => applyBulkDiscount('fixed')} className="flex items-center gap-1 px-3 py-2 hover:bg-blue-700 rounded-lg transition-colors text-xs font-bold">
                                         <DollarSign size={14} /> Dto €
                                     </button>
-                                    <div className="h-6 w-px bg-blue-500 mx-1" />
-                                    <button onClick={() => applyBulkIVA(21)} className="flex items-center gap-1 px-3 py-2 hover:bg-blue-700 rounded-lg transition-colors text-xs font-bold">
-                                        <Calculator size={14} /> IVA 21%
-                                    </button>
-                                    <button onClick={() => applyBulkIVA(0)} className="flex items-center gap-1 px-3 py-2 hover:bg-blue-700 rounded-lg transition-colors text-xs font-bold">
-                                        <Calculator size={14} /> IVA 0%
-                                    </button>
                                 </div>
                             </div>
                             <button onClick={removeBulk} className="p-2 hover:bg-blue-700 rounded-lg transition-colors text-white/80 hover:text-white">
@@ -447,6 +448,52 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                             </button>
                         </div>
                     )}
+
+                    {/* Discount & Commission Controls */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1">
+                                <label className="text-[10px] font-black uppercase text-amber-800 mb-2 block">Descuento Global</label>
+                                <div className="flex gap-2 items-center">
+                                    <div className="flex-1 flex items-center gap-2">
+                                        <input 
+                                            type="number" 
+                                            value={discountPercent} 
+                                            onChange={(e) => setDiscountPercent(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                                            placeholder="0"
+                                            className="w-20 bg-white border border-amber-300 rounded-lg p-2 text-sm font-bold text-center outline-none focus:ring-2 focus:ring-amber-400"
+                                        />
+                                        <span className="text-sm font-bold text-amber-800">%</span>
+                                    </div>
+                                    {discountPercent > 0 && (
+                                        <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded">
+                                            -{(subtotal * discountPercent / 100).toFixed(2)}€
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="flex-1">
+                                <label className="text-[10px] font-black uppercase text-purple-800 mb-2 block">Comisión (Oculta)</label>
+                                <div className="flex gap-2 items-center">
+                                    <div className="flex-1 flex items-center gap-2">
+                                        <input 
+                                            type="number" 
+                                            value={commissionPercent} 
+                                            onChange={(e) => setCommissionPercent(Math.max(0, Number(e.target.value) || 0))}
+                                            placeholder="0"
+                                            className="w-20 bg-white border border-purple-300 rounded-lg p-2 text-sm font-bold text-center outline-none focus:ring-2 focus:ring-purple-400"
+                                        />
+                                        <span className="text-sm font-bold text-purple-800">%</span>
+                                    </div>
+                                    {commissionPercent > 0 && (
+                                        <span className="text-xs font-bold text-purple-700 bg-purple-100 px-2 py-1 rounded">
+                                            +{(subtotal * commissionPercent / 100).toFixed(2)}€
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                 </div>
 

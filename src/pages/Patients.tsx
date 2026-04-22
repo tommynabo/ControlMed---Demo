@@ -392,15 +392,13 @@ const Patients: React.FC = () => {
             }
 
             // Calculate totals with per-item discount
-            const globalDiscount = Number(budget.discount) || 0; // global % discount if any
+            // Calculate totals: discount is visible, commission is hidden (already in total)
             const items = budget.items || [];
-            const importe = items.reduce((sum: number, item: any) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 1)), 0);
-            const descuento = items.reduce((sum: number, item: any) => {
-                const disc = Number(item.discount) || globalDiscount;
-                const subtotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
-                return sum + (subtotal * disc / 100);
-            }, 0);
-            const total = importe - descuento;
+            const subtotal = items.reduce((sum: number, item: any) => sum + ((Number(item.price) || 0) * (Number(item.quantity) || 1)), 0);
+            const discountPercent = Number(budget.discountPercent) || 0;
+            const discountAmount = subtotal * discountPercent / 100;
+            const importe = subtotal;
+            const total = Number(budget.totalAmount) || subtotal; // Use backend total (already includes commission)
 
             const budgetNum = budget.number || budget.id?.substring(0, 6).toUpperCase() || '—';
             const budgetDate = new Date(budget.createdAt || budget.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -409,14 +407,12 @@ const Patients: React.FC = () => {
             const itemsHtml = items.map((item: any, idx: number) => {
                 const qty = Number(item.quantity) || 1;
                 const price = Number(item.price) || 0;
-                const disc = Number(item.discount) || globalDiscount;
-                const rowTotal = price * qty * (1 - disc / 100);
+                const rowTotal = price * qty; // No per-item discount anymore
                 return `
                 <tr>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${qty}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${price.toFixed(2)}</td>
-                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${disc > 0 ? disc.toFixed(2) : ''}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${rowTotal.toFixed(2)}</td>
                 </tr>`;
             }).join('');
@@ -476,7 +472,6 @@ const Patients: React.FC = () => {
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:left;font-weight:700">Concepto</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:45px">Uni.</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px">Precio</th>
-                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:65px">% Des.</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px">Total</th>
                 </tr>
             </thead>
@@ -490,9 +485,9 @@ const Patients: React.FC = () => {
                     <span style="font-size:11px">Importe:</span>
                     <span style="font-size:11px;font-weight:700">${importe.toFixed(2)}&euro;</span>
                 </div>
-                ${descuento > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
-                    <span style="font-size:11px">Descuentos:</span>
-                    <span style="font-size:11px;font-weight:700">-${descuento.toFixed(2)}&euro;</span>
+                ${discountAmount > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
+                    <span style="font-size:11px">Descuento (-${discountPercent}%):</span>
+                    <span style="font-size:11px;font-weight:700">-${discountAmount.toFixed(2)}&euro;</span>
                 </div>` : ''}
                 <div style="display:flex;justify-content:space-between;padding:7px 12px;background:#f0f0f0">
                     <span style="font-size:12px;font-weight:700">TOTAL:</span>

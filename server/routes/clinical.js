@@ -291,8 +291,8 @@ router.post('/patients/:patientId/budgets', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-        const { items, title } = req.body;
-        const data = await budgetService.createBudget(supabase, req.params.patientId, items, title, req.user?.id);
+        const { items, title, discountPercent = 0, commissionPercent = 0 } = req.body;
+        const data = await budgetService.createBudget(supabase, req.params.patientId, items, title, req.user?.id, discountPercent, commissionPercent);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -310,8 +310,8 @@ router.put('/budgets/:id', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
-        const { items, title } = req.body;
-        const data = await budgetService.updateBudget(supabase, req.params.id, items, title, req.user?.id);
+        const { items, title, discountPercent = 0, commissionPercent = 0 } = req.body;
+        const data = await budgetService.updateBudget(supabase, req.params.id, items, title, req.user?.id, discountPercent, commissionPercent);
         res.json(data);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -323,6 +323,81 @@ router.put('/budgets/:id/status', async (req, res) => {
         const { status } = req.body;
         const data = await budgetService.updateBudgetStatus(supabase, req.params.id, status, req.user?.id);
         res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/budgets/:id/discount', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { discountPercent } = req.body;
+        
+        // Get current budget
+        const { data: budget, error: getError } = await supabase
+            .from('Budget')
+            .select('*, items:BudgetLineItem(*)')
+            .eq('id', req.params.id)
+            .single();
+        
+        if (getError || !budget) return res.status(404).json({ error: 'Budget not found' });
+        
+        // Recalculate total with new discount
+        const { calculateBudgetTotal } = require('../services/budgetService');
+        const calculateBudgetTotalFn = (items, discount, commission) => {
+            const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+            const withCommission = subtotal * (1 + commission / 100);
+            const withDiscount = withCommission * (1 - discount / 100);
+            return withDiscount;
+        };
+        const newTotal = calculateBudgetTotalFn(budget.items || [], discountPercent || 0, budget.commissionPercent || 0);
+        
+        // Update budget
+        const { data: updated, error: updateError } = await supabase
+            .from('Budget')
+            .update({ discountPercent: discountPercent || 0, totalAmount: newTotal, updatedAt: new Date().toISOString(), updated_by: req.user?.id })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+        
+        if (updateError) return res.status(500).json({ error: updateError.message });
+        res.json(updated);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/budgets/:id/commission', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { commissionPercent } = req.body;
+        
+        // Get current budget
+        const { data: budget, error: getError } = await supabase
+            .from('Budget')
+            .select('*, items:BudgetLineItem(*)')
+            .eq('id', req.params.id)
+            .single();
+        
+        if (getError || !budget) return res.status(404).json({ error: 'Budget not found' });
+        
+        // Recalculate total with new commission
+        const calculateBudgetTotalFn = (items, discount, commission) => {
+            const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * (Number(item.quantity) || 1)), 0);
+            const withCommission = subtotal * (1 + commission / 100);
+            const withDiscount = withCommission * (1 - discount / 100);
+            return withDiscount;
+        };
+        const newTotal = calculateBudgetTotalFn(budget.items || [], budget.discountPercent || 0, commissionPercent || 0);
+        
+        // Update budget
+        const { data: updated, error: updateError } = await supabase
+            .from('Budget')
+            .update({ commissionPercent: commissionPercent || 0, totalAmount: newTotal, updatedAt: new Date().toISOString(), updated_by: req.user?.id })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+        
+        if (updateError) return res.status(500).json({ error: updateError.message });
+        res.json(updated);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

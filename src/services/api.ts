@@ -554,11 +554,11 @@ export const api = {
             if (!res.ok) throw new Error('Failed to load budgets');
             return res.json();
         },
-        create: async (patientId: string, items: any[], title?: string) => {
+        create: async (patientId: string, items: any[], title?: string, discountPercent: number = 0, commissionPercent: number = 0) => {
             const res = await fetch(`${API_URL}/patients/${patientId}/budgets`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({ items, title })
+                body: JSON.stringify({ items, title, discountPercent, commissionPercent })
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -566,11 +566,11 @@ export const api = {
             }
             return res.json();
         },
-        update: async (budgetId: string, items: any[], title?: string) => {
+        update: async (budgetId: string, items: any[], title?: string, discountPercent: number = 0, commissionPercent: number = 0) => {
             const res = await fetch(`${API_URL}/budgets/${budgetId}`, {
                 method: 'PUT',
                 headers,
-                body: JSON.stringify({ items, title })
+                body: JSON.stringify({ items, title, discountPercent, commissionPercent })
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -599,6 +599,24 @@ export const api = {
                 body: JSON.stringify({ status })
             });
             if (!res.ok) throw new Error('Failed to update budget status');
+            return res.json();
+        },
+        applyDiscount: async (id: string, discountPercent: number) => {
+            const res = await fetch(`${API_URL}/budgets/${id}/discount`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ discountPercent })
+            });
+            if (!res.ok) throw new Error('Failed to apply discount');
+            return res.json();
+        },
+        applyCommission: async (id: string, commissionPercent: number) => {
+            const res = await fetch(`${API_URL}/budgets/${id}/commission`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ commissionPercent })
+            });
+            if (!res.ok) throw new Error('Failed to apply commission');
             return res.json();
         },
         convert: async (id: string) => {
