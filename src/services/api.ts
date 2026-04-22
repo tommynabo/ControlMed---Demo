@@ -127,6 +127,13 @@ export const api = {
             if (res.status === 404) return null;
             if (!res.ok) throw new Error('Failed to fetch invoice for appointment');
             return res.json();
+        },
+        update: async (id: string, data: { date: string }) => {
+            const res = await fetch(`${API_URL}/finance/invoices/${id}`, {
+                method: 'PUT', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Error al actualizar factura');
+            return res.json();
         }
     },
 

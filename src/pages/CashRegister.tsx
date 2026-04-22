@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    DollarSign, BarChart3, CreditCard, CheckCircle2, AlertTriangle, X, ArrowRightLeft
+    DollarSign, BarChart3, CreditCard, CheckCircle2, AlertTriangle, X, ArrowRightLeft, Pencil
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
@@ -41,6 +41,45 @@ const CashRegister: React.FC = () => {
     // Stats for TODAY
     const [todayInvoices, setTodayInvoices] = useState<any[]>([]);
     const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
+
+    // Date edit modal
+    const [editingItem, setEditingItem] = useState<{ type: 'invoice' | 'expense'; item: any } | null>(null);
+    const [editDate, setEditDate] = useState('');
+    const [isSavingDate, setIsSavingDate] = useState(false);
+
+    const handleOpenEditDate = (type: 'invoice' | 'expense', item: any) => {
+        const currentDate = item.date ? item.date.split('T')[0] : new Date().toISOString().split('T')[0];
+        setEditDate(currentDate);
+        setEditingItem({ type, item });
+    };
+
+    const handleSaveDate = async () => {
+        if (!editingItem || !editDate) return;
+        setIsSavingDate(true);
+        try {
+            if (editingItem.type === 'invoice') {
+                await (api as any).invoices.update(editingItem.item.id, { date: editDate });
+            } else {
+                await (api as any).expenses.update(editingItem.item.id, { ...editingItem.item, date: editDate });
+            }
+            // Refresh context data
+            await (api as any).invoices.getAll().catch(() => {});
+            // Force re-filter by triggering context refresh
+            const freshInvoices = await (api as any).invoices.getAll().catch(() => []);
+            const freshExpenses = await (api as any).expenses.getAll().catch(() => []);
+            const today = new Date().toISOString().split('T')[0];
+            setTodayInvoices(freshInvoices.filter((i: any) =>
+                i.date && i.date.startsWith(today) &&
+                !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
+            ));
+            setTodayExpenses(freshExpenses.filter((e: any) => e.date === today));
+            setEditingItem(null);
+        } catch (e: any) {
+            alert('❌ Error al cambiar la fecha: ' + (e.message || e));
+        } finally {
+            setIsSavingDate(false);
+        }
+    };
 
     useEffect(() => {
         const today = new Date().toISOString().split('T')[0];
@@ -312,6 +351,7 @@ const CashRegister: React.FC = () => {
                                         <th className="p-6">Doctor</th>
                                         <th className="p-6 text-center">Tipo</th>
                                         <th className="p-6 text-right pr-8">Importe</th>
+                                        <th className="p-6 w-10"></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -344,6 +384,15 @@ const CashRegister: React.FC = () => {
                                             <td className="p-6 text-right pr-8 font-bold text-emerald-600">
                                                 +{inv.amount.toFixed(2)}€
                                             </td>
+                                            <td className="p-2">
+                                                <button
+                                                    onClick={() => handleOpenEditDate('invoice', inv)}
+                                                    className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Cambiar fecha de esta factura"
+                                                >
+                                                    <Pencil size={13} />
+                                                </button>
+                                            </td>
                                         </tr>
                                         );
                                     })}
@@ -364,6 +413,15 @@ const CashRegister: React.FC = () => {
                                             </td>
                                             <td className="p-6 text-right pr-8 font-bold text-rose-600">
                                                 -{exp.amount.toFixed(2)}€
+                                            </td>
+                                            <td className="p-2">
+                                                <button
+                                                    onClick={() => handleOpenEditDate('expense', exp)}
+                                                    className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Cambiar fecha de este gasto"
+                                                >
+                                                    <Pencil size={13} />
+                                                </button>
                                             </td>
                                         </tr>
                                     ))}
@@ -470,6 +528,55 @@ const CashRegister: React.FC = () => {
                             </button>
                             <button onClick={handleConfirmArqueo} className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-sm uppercase shadow-lg hover:bg-slate-800 transition-colors">
                                 ✅ Confirmar Arqueo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* DATE EDIT MODAL */}
+            {editingItem && (
+                <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-in fade-in">
+                    <div className="bg-white max-w-sm w-full rounded-[2rem] shadow-2xl">
+                        <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900">Cambiar Fecha</h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                    {editingItem.type === 'invoice'
+                                        ? `Factura ${editingItem.item.invoiceNumber}`
+                                        : editingItem.item.description}
+                                </p>
+                            </div>
+                            <button onClick={() => setEditingItem(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Nueva Fecha</label>
+                                <input
+                                    type="date"
+                                    value={editDate}
+                                    onChange={e => setEditDate(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200"
+                                />
+                            </div>
+                            <p className="text-xs text-slate-400">
+                                Al cambiar la fecha, este movimiento pasará a contabilizarse en la caja del día seleccionado.
+                            </p>
+                        </div>
+                        <div className="px-8 pb-8 pt-0 flex gap-3">
+                            <button
+                                onClick={() => setEditingItem(null)}
+                                className="flex-1 py-3 text-slate-500 font-bold text-sm hover:bg-slate-50 rounded-xl transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSaveDate}
+                                disabled={isSavingDate || !editDate}
+                                className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-sm uppercase shadow-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                            >
+                                {isSavingDate ? 'Guardando...' : '✅ Guardar'}
                             </button>
                         </div>
                     </div>

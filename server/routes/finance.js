@@ -116,13 +116,24 @@ router.get('/liquidations/summary', async (req, res) => {
             const patientIds = [...new Set((payments || []).map(p => p.patientId).filter(Boolean))];
             const patientMap = {};
             if (patientIds.length > 0) {
-                const { data: patients } = await supabase.from('Patient').select('id, name, historyNumber').in('id', patientIds);
+            const { data: patients } = await supabase.from('Patient').select('id, name, historyNumber, isODA').in('id', patientIds);
                 (patients || []).forEach(pt => { patientMap[pt.id] = pt; });
             }
 
             const records = (payments || []).map(p => {
                 const patient = patientMap[p.patientId] || {};
-                return { id: p.id, fecha: p.createdAt, concepto: p.notes || 'Pago', importeCobrado: p.amount || 0, nombrePaciente: patient.name || 'Desconocido', numeroHistoria: patient.historyNumber || '-', doctorId: p.doctorId };
+                return {
+                    id: p.id,
+                    fecha: p.createdAt,
+                    concepto: p.notes || 'Pago',
+                    importeCobrado: p.amount || 0,
+                    nombrePaciente: patient.name || 'Desconocido',
+                    numeroHistoria: patient.historyNumber || '-',
+                    doctorId: p.doctorId,
+                    referralCommission: p.referralCommission || 0,
+                    referralEntityName: p.referralEntityName || null,
+                    isODA: patient.isODA || false
+                };
             });
             const total = records.reduce((s, r) => s + r.importeCobrado, 0);
             return res.json({ records, dateFrom, dateTo, doctorId, total });
@@ -161,6 +172,33 @@ router.get('/liquidations/summary', async (req, res) => {
 });
 
 // ─── INVOICES ─────────────────────────────────────────────────────────────────
+
+// PUT /finance/invoices/:id — actualiza la fecha de una factura (para reasignar a otra caja)
+router.put('/invoices/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { id } = req.params;
+        const { date } = req.body;
+
+        if (!id) return res.status(400).json({ error: 'Invoice ID is required' });
+        if (!date || !/^\d{4}-\d{2}-\d{2}/.test(date)) return res.status(400).json({ error: 'Valid date is required (YYYY-MM-DD)' });
+
+        const { data, error } = await supabase
+            .from('Invoice')
+            .update({ date })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json(data);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.get('/invoices', async (req, res) => {
     try {
         let supabase;

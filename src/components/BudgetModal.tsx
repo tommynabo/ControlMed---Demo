@@ -10,9 +10,10 @@ interface BudgetModalProps {
     onSave: () => void;
     initialBudget?: any;
     doctors?: { id: string; name: string }[];
+    isODA?: boolean;
 }
 
-export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patientId, onSave, initialBudget, doctors = [] }) => {
+export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patientId, onSave, initialBudget, doctors = [], isODA = false }) => {
     const [title, setTitle] = useState('');
     const [items, setItems] = useState<any[]>([]);
     const [availableServices, setAvailableServices] = useState<any[]>([]);
@@ -43,8 +44,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 setTitle('');
                 setItems([]);
                 setDiscountPercent(0);
-                setCommissionPercent(0);
-                setReferralEntityName('');
+                // Auto-apply 10% commission for ODA patients on new budgets
+                setCommissionPercent(isODA ? 10 : 0);
+                setReferralEntityName(isODA ? 'Clínica Externa' : '');
             }
 
             setIsLoadingServices(true);
@@ -448,6 +450,12 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                 </div>
                             </div>
                             <div className="flex-1">
+                                {isODA && !initialBudget && (
+                                    <div className="mb-3 flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg">
+                                        <span className="text-[9px] font-black uppercase tracking-widest bg-amber-400 text-slate-900 px-1.5 py-0.5 rounded-md">ODA</span>
+                                        <span className="text-[10px] font-bold text-amber-700">Comisión Clínica Externa 10% aplicada automáticamente</span>
+                                    </div>
+                                )}
                                 <label className="text-[10px] font-black uppercase text-purple-800 mb-2 block">Comisión (Oculta al paciente)</label>
                                 <div className="flex gap-2 items-center">
                                     <div className="flex-1 flex items-center gap-2">

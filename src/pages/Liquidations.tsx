@@ -17,6 +17,9 @@ interface LiquidationRecord {
     nombrePaciente: string;
     numeroHistoria: string;
     doctorId: string;
+    referralCommission?: number;
+    referralEntityName?: string;
+    isODA?: boolean;
 }
 
 export const Liquidations: React.FC = () => {
@@ -190,6 +193,16 @@ export const Liquidations: React.FC = () => {
             doc.text(`COMISIÓN DOCTOR (${commissionRate}%)`, colX[3], y);
             doc.text(`${commissionAmount.toFixed(2)} €`, colX[6], y);
 
+            // Referral commission row (only if applicable)
+            if (totalReferralCommission > 0) {
+                y += 9;
+                doc.setFillColor(254, 243, 199);
+                doc.rect(14, y - 4, 269, 8, 'F');
+                doc.setTextColor(180, 83, 9);
+                doc.text('COMISIÓN CLÍNICA EXTERNA (10%)', colX[3], y);
+                doc.text(`${totalReferralCommission.toFixed(2)} €`, colX[6], y);
+            }
+
             // Footer
             y += 14;
             doc.setFontSize(7);
@@ -219,6 +232,10 @@ export const Liquidations: React.FC = () => {
 
     const netAfterLab = totalImporte - totalLabCosts;
     const commissionAmount = netAfterLab * (commissionRate / 100);
+    const totalReferralCommission = useMemo(
+        () => records.reduce((sum, r) => sum + (r.referralCommission || 0), 0),
+        [records]
+    );
 
     const selectedDoctor = doctors.find(d => d.id === selectedDoctorId);
 
@@ -494,7 +511,14 @@ export const Liquidations: React.FC = () => {
                                                     <span className="text-xs font-semibold text-slate-700">{record.concepto}</span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 text-slate-700 font-semibold">{record.nombrePaciente}</td>
+                                            <td className="px-6 py-4 text-slate-700 font-semibold">
+                                                <div className="flex items-center gap-2">
+                                                    {record.isODA && (
+                                                        <span className="text-[9px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-md whitespace-nowrap">ODA</span>
+                                                    )}
+                                                    {record.nombrePaciente}
+                                                </div>
+                                            </td>
                                             <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
                                             {/* Doctor */}
                                             <td className="px-4 py-2">
@@ -558,6 +582,15 @@ export const Liquidations: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-3 text-right font-black text-blue-700 text-lg">{commissionAmount.toFixed(2)}€</td>
                                     </tr>
+                                    {/* Referral Commission Row — only shown when ODA patients exist */}
+                                    {totalReferralCommission > 0 && (
+                                        <tr className="bg-amber-50 border-t border-amber-200">
+                                            <td colSpan={8} className="px-6 py-3 text-right font-black uppercase text-amber-700 text-sm">
+                                                COMISIÓN CLÍNICA EXTERNA (10%)
+                                            </td>
+                                            <td className="px-6 py-3 text-right font-black text-amber-700 text-lg">{totalReferralCommission.toFixed(2)}€</td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>

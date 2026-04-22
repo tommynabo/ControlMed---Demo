@@ -1089,6 +1089,9 @@ const Patients: React.FC = () => {
                                     </div>
                                     <div>
                                         <h4 className={`text-sm font-black ${selectedPatient?.id === patient.id ? 'text-white' : 'text-slate-900'} flex items-center gap-2`}>
+                                            {patient.isODA && (
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${selectedPatient?.id === patient.id ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-700'}`}>ODA</span>
+                                            )}
                                             {patient.name}
                                             {(patient.allergies || patient.medications) && (
                                                 <AlertTriangle size={14} className={selectedPatient?.id === patient.id ? 'text-amber-300' : 'text-amber-500'} />
@@ -1338,6 +1341,17 @@ const Patients: React.FC = () => {
                                                     <span className="text-xs font-bold uppercase text-slate-600">Paciente Fumador</span>
                                                 </div>
 
+                                                {/* ODA TOGGLE */}
+                                                <div className="flex items-center gap-4 bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                                    <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${selectedPatient.isODA ? 'bg-amber-500' : 'bg-slate-200'}`} onClick={() => setSelectedPatient({ ...selectedPatient, isODA: !selectedPatient.isODA })}>
+                                                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${selectedPatient.isODA ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-xs font-bold uppercase text-amber-700">Paciente ODA — Referido por Clínica Externa</span>
+                                                        <p className="text-[10px] text-amber-600 mt-0.5">Se aplicará automáticamente un 10% de comisión en sus presupuestos</p>
+                                                    </div>
+                                                </div>
+
                                                 <div>
                                                     <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Condiciones Seleccionadas</label>
                                                     <div className="flex flex-wrap gap-2 min-h-[40px] p-2 bg-white rounded-xl border border-slate-200">
@@ -1377,6 +1391,12 @@ const Patients: React.FC = () => {
                                             </div>
                                         ) : (
                                             <div className="space-y-4">
+                                                {selectedPatient.isODA && (
+                                                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl">
+                                                        <span className="text-[10px] font-black uppercase tracking-widest bg-amber-400 text-slate-900 px-2 py-0.5 rounded-md">ODA</span>
+                                                        <span className="text-xs font-bold text-amber-700">Referido por Clínica Externa · Comisión 10%</span>
+                                                    </div>
+                                                )}
                                                 <div className="flex flex-wrap gap-2">
                                                     {(selectedPatient.medicalHistory || []).map((cond, idx) => (
                                                         <span key={idx} className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg text-xs font-bold border border-slate-200">
@@ -2895,6 +2915,7 @@ const Patients: React.FC = () => {
                 onClose={() => { setIsBudgetModalOpen(false); setEditingBudget(null); }}
                 patientId={selectedPatient?.id || ''}
                 initialBudget={editingBudget}
+                isODA={selectedPatient?.isODA}
                 doctors={doctors}
                 onSave={async () => {
                     setEditingBudget(null);

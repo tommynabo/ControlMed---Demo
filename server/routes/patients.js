@@ -12,7 +12,7 @@ const ALLOWED_PATIENT_COLUMNS = [
     'name', 'firstName', 'lastName1', 'lastName2', 'dni', 'birthDate',
     'email', 'phone', 'insurance', 'assignedDoctorId', 'balance', 'wallet',
     'allergies', 'smoker', 'diseases', 'medications', 'criticalAlerts',
-    'prescriptions', 'medicalHistory', 'historyNumber'
+    'prescriptions', 'medicalHistory', 'historyNumber', 'isODA'
 ];
 
 // ─── GET all patients ─────────────────────────────────────────────────────────
