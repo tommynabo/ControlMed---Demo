@@ -368,6 +368,16 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                                 />
                                                 <span className="absolute right-2 top-2 text-xs text-slate-400">€</span>
                                             </div>
+                                            {discountPercent > 0 && (
+                                                <div className="mt-1 text-center space-y-0.5">
+                                                    <div className="text-[9px] text-slate-400 line-through text-right">
+                                                        {(Number(item.price) || 0).toFixed(2)}€/ud
+                                                    </div>
+                                                    <div className="text-[9px] font-black text-green-600 text-right">
+                                                        → {((Number(item.price) || 0) * (1 - discountPercent / 100)).toFixed(2)}€/ud
+                                                    </div>
+                                                </div>
+                                            )}
                                             {item.discount > 0 && (
                                                 <div className="mt-1 text-center">
                                                     <span className="text-[9px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
@@ -496,7 +506,15 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 <div className="p-8 border-t border-slate-100 bg-slate-50/50 rounded-b-[2rem] flex justify-between items-center">
                     <div className="flex flex-col">
                         <span className="text-xs font-black uppercase text-slate-400">Total Presupuesto</span>
-                        <span className="text-3xl font-black text-slate-900">{totalAmount.toFixed(2)}€</span>
+                        {discountPercent > 0 ? (
+                            <>
+                                <span className="text-sm text-slate-400 line-through">{subtotal.toFixed(2)}€</span>
+                                <span className="text-[10px] font-bold text-green-600 mb-0.5">-{discountPercent}% descuento aplicado (-{(subtotal * discountPercent / 100).toFixed(2)}€)</span>
+                                <span className="text-3xl font-black text-green-700">{totalAmount.toFixed(2)}€</span>
+                            </>
+                        ) : (
+                            <span className="text-3xl font-black text-slate-900">{totalAmount.toFixed(2)}€</span>
+                        )}
                     </div>
                     <div className="flex gap-4">
                         <button onClick={onClose} className="px-6 py-3 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">

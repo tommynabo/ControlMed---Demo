@@ -421,6 +421,19 @@ const Patients: React.FC = () => {
                 // Price shown to patient already includes commission
                 const displayPrice = (Number(item.price) || 0) * (1 + commissionPercent / 100);
                 const rowTotal = displayPrice * qty;
+                const discountedPrice = displayPrice * (1 - discountPercent / 100);
+                const rowTotalWithDiscount = discountedPrice * qty;
+                if (discountPercent > 0) {
+                    return `
+                <tr>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${qty}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;text-decoration:line-through;color:#999">${displayPrice.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;color:#c00;font-weight:700">-${discountPercent}%</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;font-weight:700;color:#1a7f3c">${discountedPrice.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;font-weight:700;color:#1a7f3c">${rowTotalWithDiscount.toFixed(2)}</td>
+                </tr>`;
+                }
                 return `
                 <tr>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
@@ -484,8 +497,15 @@ const Patients: React.FC = () => {
                 <tr style="background:#f0f0f0">
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:left;font-weight:700">Concepto</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:45px">Uni.</th>
+                    ${discountPercent > 0 ? `
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px;color:#999">Precio</th>
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:55px;color:#c00">Dto.</th>
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:80px;color:#1a7f3c">P. c/Dto.</th>
+                    <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:80px;color:#1a7f3c">Total</th>
+                    ` : `
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px">Precio</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px">Total</th>
+                    `}
                 </tr>
             </thead>
             <tbody>${itemsHtml}</tbody>
@@ -493,19 +513,23 @@ const Patients: React.FC = () => {
 
         <!-- TOTALS -->
         <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
-            <div style="border:1px solid #ccc;min-width:220px">
+            <div style="border:1px solid #ccc;min-width:240px">
                 ${discountAmount > 0 ? `
                 <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
-                    <span style="font-size:11px">Importe:</span>
-                    <span style="font-size:11px;font-weight:700">${importe.toFixed(2)}&euro;</span>
+                    <span style="font-size:11px;color:#777">Subtotal:</span>
+                    <span style="font-size:11px;color:#777;text-decoration:line-through">${importe.toFixed(2)}&euro;</span>
                 </div>
-                <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
-                    <span style="font-size:11px">Descuento (-${discountPercent}%):</span>
-                    <span style="font-size:11px;font-weight:700">-${discountAmount.toFixed(2)}&euro;</span>
+                <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd;background:#fff8f0">
+                    <span style="font-size:11px;font-weight:700;color:#c00">Descuento aplicado (-${discountPercent}%):</span>
+                    <span style="font-size:11px;font-weight:700;color:#c00">-${discountAmount.toFixed(2)}&euro;</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;padding:5px 12px;border-bottom:1px solid #ddd;background:#eafaf1">
+                    <span style="font-size:10px;font-weight:700;color:#1a7f3c">&#10003; Ahorro total:</span>
+                    <span style="font-size:10px;font-weight:700;color:#1a7f3c">${discountAmount.toFixed(2)}&euro;</span>
                 </div>` : ''}
-                <div style="display:flex;justify-content:space-between;padding:7px 12px;background:#f0f0f0">
-                    <span style="font-size:12px;font-weight:700">TOTAL:</span>
-                    <span style="font-size:12px;font-weight:700">${total.toFixed(2)}&euro;</span>
+                <div style="display:flex;justify-content:space-between;padding:9px 12px;background:#222">
+                    <span style="font-size:13px;font-weight:700;color:#fff">TOTAL:</span>
+                    <span style="font-size:13px;font-weight:700;color:#fff">${total.toFixed(2)}&euro;</span>
                 </div>
             </div>
         </div>
