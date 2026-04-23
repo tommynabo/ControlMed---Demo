@@ -415,7 +415,9 @@ const Agenda: React.FC = () => {
         setApptSearch(patientName);
         setBookingPatientId(appt.patientId || ''); // Set Patient ID for budgets
         setBookingDoctorId(appt.doctorId || '');
-        setBookingTreatment(typeof appt.treatment === 'string' ? appt.treatment : (appt.treatment as any)?.id || (appt as any).treatmentName || '');
+        // Compute the new treatment value as a local variable to avoid reading stale React state below
+        const newTreatmentValue = typeof appt.treatment === 'string' ? appt.treatment : (appt.treatment as any)?.id || (appt as any).treatmentName || '';
+        setBookingTreatment(newTreatmentValue);
         setBookingBudgetId((appt as any).budgetId || ''); // Set Budget ID
         setBookingPrice((appt as any).amount || 0);
         setBookingDuration(appt.duration || 30);
@@ -455,10 +457,12 @@ const Agenda: React.FC = () => {
             });
         }
         
-        // If no services were found by ID but there is a treatment name, 
-        // populate as custom entries so the edit modal shows the treatments
-        if (initialServices.length === 0 && bookingTreatment) {
-            const names = bookingTreatment.split(',').map((n: string) => n.trim()).filter(Boolean);
+        // If no services were found by ID but there is a treatment name,
+        // populate as custom entries so the edit modal shows the treatments.
+        // IMPORTANT: use newTreatmentValue (local var) — NOT the bookingTreatment state,
+        // which is stale at this point and would bleed in the previous appointment's treatment.
+        if (initialServices.length === 0 && newTreatmentValue) {
+            const names = newTreatmentValue.split(',').map((n: string) => n.trim()).filter(Boolean);
             names.forEach((name: string, i: number) => {
                 initialServices.push({ id: `custom-existing-${i}`, name, price: 0 });
             });
