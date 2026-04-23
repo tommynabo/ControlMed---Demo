@@ -342,9 +342,10 @@ export const api = {
         return res.json();
     },
 
-    getPatientsPage: async (page: number, limit: number, search?: string): Promise<{ data: Patient[]; total: number }> => {
+    getPatientsPage: async (page: number, limit: number, search?: string, searchBy?: string): Promise<{ data: Patient[]; total: number }> => {
         const params = new URLSearchParams({ page: String(page), limit: String(limit) });
         if (search) params.set('search', search);
+        if (searchBy) params.set('searchBy', searchBy);
         const res = await fetch(`${API_URL}/patients?${params}`, { headers });
         if (!res.ok) throw new Error('Failed to fetch patients page');
         return res.json();

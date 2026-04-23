@@ -21,7 +21,7 @@ router.get('/', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { page, limit, search } = req.query;
+        const { page, limit, search, searchBy } = req.query;
         const isPaginated = page !== undefined && limit !== undefined;
 
         let query = supabase
@@ -31,7 +31,14 @@ router.get('/', async (req, res) => {
 
         if (search) {
             const safe = String(search).replace(/[%_]/g, '\\$&').slice(0, 100);
-            query = query.or(`name.ilike.%${safe}%,dni.ilike.%${safe}%`);
+            if (searchBy === 'historyNumber') {
+                query = query.ilike('historyNumber', `%${safe}%`);
+            } else if (searchBy === 'phone') {
+                query = query.ilike('phone', `%${safe}%`);
+            } else {
+                // default: name + dni
+                query = query.or(`name.ilike.%${safe}%,dni.ilike.%${safe}%`);
+            }
         }
 
         if (isPaginated) {
