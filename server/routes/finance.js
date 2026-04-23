@@ -107,32 +107,30 @@ router.get('/liquidations/summary', async (req, res) => {
             const endDate  = new Date(dateTo); endDate.setHours(23, 59, 59, 999);
             const endISO   = endDate.toISOString();
 
-            const { data: payments, error: pmtError } = await supabase
-                .from('Payment').select('*')
-                .eq('doctorId', doctorId).gte('createdAt', startISO).lte('createdAt', endISO)
+            // Query Liquidation table directly: correctly scoped per-doctor (including split payments),
+            // no contamination from ADVANCE_PAYMENT/TRANSFER types.
+            const { data: liquidations, error: liqError } = await supabase
+                .from('Liquidation')
+                .select('*, appointment:Appointment(patientId, patient:Patient(historyNumber, isODA))')
+                .eq('doctorId', doctorId)
+                .gte('createdAt', startISO)
+                .lte('createdAt', endISO)
                 .order('createdAt', { ascending: true });
-            if (pmtError) throw pmtError;
+            if (liqError) throw liqError;
 
-            const patientIds = [...new Set((payments || []).map(p => p.patientId).filter(Boolean))];
-            const patientMap = {};
-            if (patientIds.length > 0) {
-            const { data: patients } = await supabase.from('Patient').select('id, name, historyNumber, isODA').in('id', patientIds);
-                (patients || []).forEach(pt => { patientMap[pt.id] = pt; });
-            }
-
-            const records = (payments || []).map(p => {
-                const patient = patientMap[p.patientId] || {};
+            const records = (liquidations || []).map(liq => {
+                const apptPatient = liq.appointment?.patient || {};
                 return {
-                    id: p.id,
-                    fecha: p.createdAt,
-                    concepto: p.notes || 'Pago',
-                    importeCobrado: p.amount || 0,
-                    nombrePaciente: patient.name || 'Desconocido',
-                    numeroHistoria: patient.historyNumber || '-',
-                    doctorId: p.doctorId,
-                    referralCommission: p.referralCommission || 0,
-                    referralEntityName: p.referralEntityName || null,
-                    isODA: patient.isODA || false
+                    id: liq.id,
+                    fecha: liq.createdAt,
+                    concepto: liq.treatmentName || 'Tratamiento',
+                    importeCobrado: liq.grossAmount || 0,
+                    nombrePaciente: liq.patientName || 'Desconocido',
+                    numeroHistoria: apptPatient.historyNumber || '-',
+                    doctorId: liq.doctorId,
+                    referralCommission: liq.referralCommission || 0,
+                    referralEntityName: liq.referralEntityName || null,
+                    isODA: apptPatient.isODA || false
                 };
             });
             const total = records.reduce((s, r) => s + r.importeCobrado, 0);

@@ -449,10 +449,10 @@ export const Liquidations: React.FC = () => {
                                                                 setSavingId(record.id);
                                                                 try {
                                                                     const doctorChanged = editingRow.doctorId !== record.doctorId;
-                                                                    await api.payments.update(record.id, {
-                                                                        notes: editingRow.concepto,
+                                                                    await api.liquidations.update(record.id, {
+                                                                        treatmentName: editingRow.concepto,
                                                                         doctorId: editingRow.doctorId,
-                                                                        amount: editingRow.importe,
+                                                                        grossAmount: editingRow.importe,
                                                                     });
                                                                     if (doctorChanged) {
                                                                         setRecords(prev => prev.filter(r => r.id !== record.id));
