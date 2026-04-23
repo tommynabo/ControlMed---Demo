@@ -817,7 +817,7 @@ const Agenda: React.FC = () => {
         // Mantener datos pero permitir editar fecha/hora
         const patientName = patients.find(p => p.id === selectedAppt.patientId)?.name || '';
         const doctorId = selectedAppt.doctorId;
-        const treatment = typeof selectedAppt.treatment === 'string' ? selectedAppt.treatment : (selectedAppt.treatment as any)?.id || '';
+        const treatmentValue = (selectedAppt as any).treatmentName || (typeof selectedAppt.treatment === 'string' ? selectedAppt.treatment : '') || '';
         const price = (selectedAppt as any).amount || 0;
         const duration = selectedAppt.duration || 30;
         const observations = selectedAppt.observations || '';
@@ -829,10 +829,27 @@ const Agenda: React.FC = () => {
         setApptSearch(patientName);
         setBookingPatientId(selectedAppt.patientId);
         setBookingDoctorId(doctorId);
-        setBookingTreatment(treatment);
+        setBookingTreatment(treatmentValue);
         setBookingPrice(price);
         setBookingDuration(duration);
         setBookingObservation(observations);
+
+        // Rebuild selectedDbServices from the duplicated appointment's treatment name
+        // to avoid bleeding stale services from a previously clicked appointment
+        const dupServices: Array<{id: string, name: string, price: number}> = [];
+        const dupServiceIds = (selectedAppt as any).serviceIds || [];
+        if (dupServiceIds.length > 0) {
+            dupServiceIds.forEach((sid: string) => {
+                const svc = dbServices.find(s => s.id === sid);
+                if (svc) dupServices.push({ id: svc.id, name: svc.name, price: svc.final_price || 0 });
+            });
+        }
+        if (dupServices.length === 0 && treatmentValue) {
+            treatmentValue.split(',').map((n: string) => n.trim()).filter(Boolean).forEach((name: string, i: number) => {
+                dupServices.push({ id: `custom-existing-${i}`, name, price: 0 });
+            });
+        }
+        setSelectedDbServices(dupServices);
         
         setIsDuplicating(true);
         setSelectedAppt(null); // Switch to "New" mode visually
