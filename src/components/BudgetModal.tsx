@@ -135,12 +135,32 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
         }
     };
 
-    const applyBulkDiscount = () => {
-        const val = prompt("Porcentaje de descuento (ej: 10):");
-        if (!val || isNaN(Number(val))) return;
-        const percent = Math.max(0, Math.min(100, Number(val))); // 0-100
-        setDiscountPercent(percent);
-        toast.success(`✅ Descuento aplicado: ${percent}%`);
+    const applyBulkDiscount = (type: 'percent' | 'fixed') => {
+        const count = selectedIndices.size;
+        if (count === 0) return;
+        if (type === 'percent') {
+            const val = prompt("Porcentaje de descuento para los conceptos seleccionados (ej: 10):");
+            if (!val || isNaN(Number(val))) return;
+            const percent = Math.max(0, Math.min(100, Number(val)));
+            setItems(prev => prev.map((item, idx) =>
+                selectedIndices.has(idx) ? { ...item, discount: percent } : item
+            ));
+            setSelectedIndices(new Set());
+            toast.success(`✅ Descuento ${percent}% aplicado a ${count} concepto(s)`);
+        } else {
+            const val = prompt("Descuento en € por concepto (ej: 50):");
+            if (!val || isNaN(Number(val))) return;
+            const amount = Math.max(0, Number(val));
+            setItems(prev => prev.map((item, idx) => {
+                if (!selectedIndices.has(idx)) return item;
+                const price = Number(item.price) || 0;
+                if (price <= 0) return item;
+                const percent = Math.min(100, Math.round((amount / price) * 10000) / 100);
+                return { ...item, discount: percent };
+            }));
+            setSelectedIndices(new Set());
+            toast.success(`✅ Descuento de ${amount}€ aplicado a ${count} concepto(s)`);
+        }
     };
 
     const applyBulkCommission = () => {
@@ -158,7 +178,14 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
     };
 
     const subtotal = items.reduce((acc, item) => acc + (Number(item.price) * (Number(item.quantity) || 1)), 0);
-    const totalAmount = subtotal * (1 + commissionPercent / 100) * (1 - discountPercent / 100);
+    const discountedSubtotal = items.reduce((acc, item) => {
+        const price = Number(item.price) || 0;
+        const qty = Number(item.quantity) || 1;
+        const disc = Number(item.discount) || 0;
+        return acc + price * qty * (1 - disc / 100);
+    }, 0);
+    const itemDiscountSaving = subtotal - discountedSubtotal;
+    const totalAmount = discountedSubtotal * (1 + commissionPercent / 100) * (1 - discountPercent / 100);
 
     const handleSafeSave = async () => {
         if (!title.trim()) return toast.error("Por favor indica un título para el presupuesto");
@@ -368,21 +395,14 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                                                 />
                                                 <span className="absolute right-2 top-2 text-xs text-slate-400">€</span>
                                             </div>
-                                            {discountPercent > 0 && (
-                                                <div className="mt-1 text-center space-y-0.5">
+                                            {item.discount > 0 && (
+                                                <div className="mt-1 space-y-0.5">
                                                     <div className="text-[9px] text-slate-400 line-through text-right">
                                                         {(Number(item.price) || 0).toFixed(2)}€/ud
                                                     </div>
                                                     <div className="text-[9px] font-black text-green-600 text-right">
-                                                        → {((Number(item.price) || 0) * (1 - discountPercent / 100)).toFixed(2)}€/ud
+                                                        → {((Number(item.price) || 0) * (1 - item.discount / 100)).toFixed(2)}€/ud (-{item.discount}%)
                                                     </div>
-                                                </div>
-                                            )}
-                                            {item.discount > 0 && (
-                                                <div className="mt-1 text-center">
-                                                    <span className="text-[9px] font-black text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
-                                                        -{item.discount}% dto.
-                                                    </span>
                                                 </div>
                                             )}
                                         </div>
@@ -506,10 +526,15 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({ isOpen, onClose, patie
                 <div className="p-8 border-t border-slate-100 bg-slate-50/50 rounded-b-[2rem] flex justify-between items-center">
                     <div className="flex flex-col">
                         <span className="text-xs font-black uppercase text-slate-400">Total Presupuesto</span>
-                        {discountPercent > 0 ? (
+                        {(itemDiscountSaving > 0 || discountPercent > 0) ? (
                             <>
                                 <span className="text-sm text-slate-400 line-through">{subtotal.toFixed(2)}€</span>
-                                <span className="text-[10px] font-bold text-green-600 mb-0.5">-{discountPercent}% descuento aplicado (-{(subtotal * discountPercent / 100).toFixed(2)}€)</span>
+                                {itemDiscountSaving > 0 && (
+                                    <span className="text-[10px] font-bold text-green-600">Dto. conceptos: -{itemDiscountSaving.toFixed(2)}€</span>
+                                )}
+                                {discountPercent > 0 && (
+                                    <span className="text-[10px] font-bold text-green-600">Dto. global -{discountPercent}%: -{(discountedSubtotal * discountPercent / 100).toFixed(2)}€</span>
+                                )}
                                 <span className="text-3xl font-black text-green-700">{totalAmount.toFixed(2)}€</span>
                             </>
                         ) : (

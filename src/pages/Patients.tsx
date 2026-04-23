@@ -403,12 +403,21 @@ const Patients: React.FC = () => {
             const items = budget.items || [];
             const commissionPercent = Number(budget.commissionPercent) || 0;
             const discountPercent = Number(budget.discountPercent) || 0;
-            // Each item price is shown with commission already applied (patient cannot see the markup)
-            const importe = items.reduce((sum: number, item: any) => {
+            const hasAnyItemDiscount = items.some((i: any) => (Number(i.discount) || 0) > 0);
+            // Subtotal before any discount (with commission)
+            const subtotalBeforeDiscount = items.reduce((sum: number, item: any) => {
                 const qty = Number(item.quantity) || 1;
                 const price = Number(item.price) || 0;
                 return sum + (price * (1 + commissionPercent / 100)) * qty;
             }, 0);
+            // importe = after per-item discounts, with commission
+            const importe = items.reduce((sum: number, item: any) => {
+                const qty = Number(item.quantity) || 1;
+                const price = Number(item.price) || 0;
+                const itemDiscount = Number(item.discount) || 0;
+                return sum + (price * (1 + commissionPercent / 100)) * (1 - itemDiscount / 100) * qty;
+            }, 0);
+            const itemDiscountSaving = subtotalBeforeDiscount - importe;
             const discountAmount = importe * discountPercent / 100;
             const total = importe - discountAmount;
 
@@ -418,28 +427,39 @@ const Patients: React.FC = () => {
 
             const itemsHtml = items.map((item: any, idx: number) => {
                 const qty = Number(item.quantity) || 1;
-                // Price shown to patient already includes commission
                 const displayPrice = (Number(item.price) || 0) * (1 + commissionPercent / 100);
-                const rowTotal = displayPrice * qty;
-                const discountedPrice = displayPrice * (1 - discountPercent / 100);
-                const rowTotalWithDiscount = discountedPrice * qty;
-                if (discountPercent > 0) {
-                    return `
+                const itemDiscount = Number(item.discount) || 0;
+                const discountedPrice = displayPrice * (1 - itemDiscount / 100);
+                const rowTotal = discountedPrice * qty;
+                if (hasAnyItemDiscount) {
+                    if (itemDiscount > 0) {
+                        return `
                 <tr>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${qty}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;text-decoration:line-through;color:#999">${displayPrice.toFixed(2)}</td>
-                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;color:#c00;font-weight:700">-${discountPercent}%</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;color:#c00;font-weight:700">-${itemDiscount}%</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;font-weight:700;color:#1a7f3c">${discountedPrice.toFixed(2)}</td>
-                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;font-weight:700;color:#1a7f3c">${rowTotalWithDiscount.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;font-weight:700;color:#1a7f3c">${rowTotal.toFixed(2)}</td>
                 </tr>`;
+                    } else {
+                        return `
+                <tr>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${qty}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${displayPrice.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;color:#bbb">—</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${displayPrice.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;font-weight:700">${rowTotal.toFixed(2)}</td>
+                </tr>`;
+                    }
                 }
                 return `
                 <tr>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px">${item.name}${item.tooth ? `. Pieza/s: ${item.tooth}` : ''}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:center">${qty}</td>
                     <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${displayPrice.toFixed(2)}</td>
-                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right">${rowTotal.toFixed(2)}</td>
+                    <td style="padding:8px 10px;border:1px solid #ccc;font-size:12px;text-align:right;font-weight:700">${rowTotal.toFixed(2)}</td>
                 </tr>`;
             }).join('');
 
@@ -497,7 +517,7 @@ const Patients: React.FC = () => {
                 <tr style="background:#f0f0f0">
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:left;font-weight:700">Concepto</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:45px">Uni.</th>
-                    ${discountPercent > 0 ? `
+                    ${hasAnyItemDiscount ? `
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:75px;color:#999">Precio</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:center;font-weight:700;width:55px;color:#c00">Dto.</th>
                     <th style="padding:8px 10px;border:1px solid #ccc;font-size:11px;text-align:right;font-weight:700;width:80px;color:#1a7f3c">P. c/Dto.</th>
@@ -514,18 +534,25 @@ const Patients: React.FC = () => {
         <!-- TOTALS -->
         <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
             <div style="border:1px solid #ccc;min-width:240px">
-                ${discountAmount > 0 ? `
+                ${(itemDiscountSaving > 0 || discountAmount > 0) ? `
                 <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd">
                     <span style="font-size:11px;color:#777">Subtotal:</span>
-                    <span style="font-size:11px;color:#777;text-decoration:line-through">${importe.toFixed(2)}&euro;</span>
-                </div>
+                    <span style="font-size:11px;color:#777;text-decoration:line-through">${subtotalBeforeDiscount.toFixed(2)}&euro;</span>
+                </div>` : ''}
+                ${itemDiscountSaving > 0 ? `
                 <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd;background:#fff8f0">
-                    <span style="font-size:11px;font-weight:700;color:#c00">Descuento aplicado (-${discountPercent}%):</span>
+                    <span style="font-size:11px;font-weight:700;color:#c00">Descuento conceptos:</span>
+                    <span style="font-size:11px;font-weight:700;color:#c00">-${itemDiscountSaving.toFixed(2)}&euro;</span>
+                </div>` : ''}
+                ${discountAmount > 0 ? `
+                <div style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #ddd;background:#fff8f0">
+                    <span style="font-size:11px;font-weight:700;color:#c00">Descuento global (-${discountPercent}%):</span>
                     <span style="font-size:11px;font-weight:700;color:#c00">-${discountAmount.toFixed(2)}&euro;</span>
-                </div>
+                </div>` : ''}
+                ${(itemDiscountSaving > 0 || discountAmount > 0) ? `
                 <div style="display:flex;justify-content:space-between;padding:5px 12px;border-bottom:1px solid #ddd;background:#eafaf1">
                     <span style="font-size:10px;font-weight:700;color:#1a7f3c">&#10003; Ahorro total:</span>
-                    <span style="font-size:10px;font-weight:700;color:#1a7f3c">${discountAmount.toFixed(2)}&euro;</span>
+                    <span style="font-size:10px;font-weight:700;color:#1a7f3c">${(itemDiscountSaving + discountAmount).toFixed(2)}&euro;</span>
                 </div>` : ''}
                 <div style="display:flex;justify-content:space-between;padding:9px 12px;background:#222">
                     <span style="font-size:13px;font-weight:700;color:#fff">TOTAL:</span>
