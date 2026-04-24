@@ -511,11 +511,15 @@ const ScheduleAvailability: React.FC = () => {
             <div className="space-y-6">
               {(Object.entries(
                 displayedSchedules.reduce((acc, doc) => {
-                  if (!acc[doc.doctor_name]) acc[doc.doctor_name] = [];
-                  acc[doc.doctor_name].push(doc);
+                  const key = doc.doctorId || doc.doctor_id || doc.doctor_name;
+                  if (!acc[key]) acc[key] = [];
+                  acc[key].push(doc);
                   return acc;
                 }, {} as Record<string, DoctorSchedule[]>)
-              ) as [string, DoctorSchedule[]][]).map(([doctorName, schedules]) => (
+              ) as [string, DoctorSchedule[]][]).map(([, schedules]) => {
+                // Use the live doctor_name from the first schedule record (already synced from backend)
+                const doctorName = schedules[0].doctor_name || schedules[0].doctorName || '(Sin nombre)';
+                return (
                 <div key={doctorName} className="bg-white rounded-2xl border border-slate-200 p-6 hover:shadow-md transition-shadow">
                   <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
                     <h5 className="text-lg font-bold text-slate-900">{doctorName}</h5>
@@ -588,7 +592,7 @@ const ScheduleAvailability: React.FC = () => {
                     ))}
                   </div>
                 </div>
-              ))}
+              ); })}
             </div>
           )}
         </div>

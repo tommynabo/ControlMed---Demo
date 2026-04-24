@@ -24,6 +24,10 @@ const emptyPatient = {
     medications: '',
     criticalAlerts: '',
     historyNumber: '',
+    address: '',
+    city: '',
+    postalCode: '',
+    province: '',
 };
 
 const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onPatientCreated }) => {
@@ -186,6 +190,51 @@ const NewPatientModal: React.FC<NewPatientModalProps> = ({ isOpen, onClose, onPa
                                 value={newPatient.historyNumber || ''}
                                 onChange={e => setNewPatient({ ...newPatient, historyNumber: e.target.value })}
                             />
+                        </div>
+
+                        {/* Address Section */}
+                        <div className="col-span-2 border-t border-slate-100 pt-4">
+                            <p className="text-[10px] font-black uppercase text-slate-400 mb-3">Domicilio</p>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400">Dirección</label>
+                                    <input
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                        placeholder="Calle, número, piso..."
+                                        value={newPatient.address}
+                                        onChange={e => setNewPatient({ ...newPatient, address: e.target.value })}
+                                    />
+                                </div>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">C.P.</label>
+                                        <input
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            placeholder="28001"
+                                            value={newPatient.postalCode}
+                                            onChange={e => setNewPatient({ ...newPatient, postalCode: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Ciudad</label>
+                                        <input
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            placeholder="Madrid"
+                                            value={newPatient.city}
+                                            onChange={e => setNewPatient({ ...newPatient, city: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400">Provincia</label>
+                                        <input
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
+                                            placeholder="Madrid"
+                                            value={newPatient.province}
+                                            onChange={e => setNewPatient({ ...newPatient, province: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

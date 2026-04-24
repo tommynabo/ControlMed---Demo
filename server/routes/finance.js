@@ -96,7 +96,7 @@ router.put('/liquidations/:id', async (req, res) => {
 
 router.get('/liquidations/summary', async (req, res) => {
     try {
-        const { doctorId, month, year, dateFrom, dateTo } = req.query;
+        const { doctorId, month, year, dateFrom, dateTo, groupByDay } = req.query;
         if (!doctorId) return res.status(400).json({ error: 'doctorId is required' });
 
         if (dateFrom && dateTo) {
@@ -134,6 +134,25 @@ router.get('/liquidations/summary', async (req, res) => {
                 };
             });
             const total = records.reduce((s, r) => s + r.importeCobrado, 0);
+
+            // Optional daily grouping
+            if (groupByDay === 'true') {
+                const byDay = {};
+                for (const r of records) {
+                    const day = String(r.fecha).substring(0, 10);
+                    if (!byDay[day]) byDay[day] = [];
+                    byDay[day].push(r);
+                }
+                const dailyGroups = Object.entries(byDay)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([date, dayRecords]) => ({
+                        date,
+                        records: dayRecords,
+                        dayTotal: dayRecords.reduce((s, r) => s + r.importeCobrado, 0)
+                    }));
+                return res.json({ records, dailyGroups, dateFrom, dateTo, doctorId, total });
+            }
+
             return res.json({ records, dateFrom, dateTo, doctorId, total });
         }
 

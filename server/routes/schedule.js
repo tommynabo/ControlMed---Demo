@@ -11,9 +11,15 @@ router.get('/', async (req, res) => {
     try {
         const schedules = await prisma.doctorSchedule.findMany({
             where: { isActive: true },
-            include: { doctor: true }
+            include: { doctor: { select: { name: true } } }
         });
-        res.json(schedules.map(normalizeSchedule));
+        // Override doctorName with the live value from the Doctor table to prevent ghost names
+        const normalized = schedules.map(s => ({
+            ...normalizeSchedule(s),
+            doctor_name: s.doctor?.name ?? normalizeSchedule(s).doctor_name,
+            doctorName:  s.doctor?.name ?? normalizeSchedule(s).doctorName
+        }));
+        res.json(normalized);
     } catch (e) {
         console.error('Error fetching doctor schedules:', e);
         res.status(500).json({ error: e.message });
@@ -26,8 +32,16 @@ router.get('/doctor/:doctorId', async (req, res) => {
         const { doctorId } = req.params;
         if (!isUuid(doctorId)) return res.status(400).json({ error: 'doctorId debe ser un UUID válido' });
 
-        const schedules = await prisma.doctorSchedule.findMany({ where: { doctorId } });
-        res.json(schedules.map(normalizeSchedule));
+        const schedules = await prisma.doctorSchedule.findMany({
+            where: { doctorId },
+            include: { doctor: { select: { name: true } } }
+        });
+        const normalized = schedules.map(s => ({
+            ...normalizeSchedule(s),
+            doctor_name: s.doctor?.name ?? normalizeSchedule(s).doctor_name,
+            doctorName:  s.doctor?.name ?? normalizeSchedule(s).doctorName
+        }));
+        res.json(normalized);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -47,7 +61,7 @@ router.post('/', async (req, res) => {
         const schedule = await prisma.doctorSchedule.create({
             data: {
                 doctorId: safeDoctorId,
-                doctorName: doctor_name,
+                doctorName: doctorExists.name, // always use canonical Doctor.name
                 monday:    days.monday    !== undefined ? days.monday    : true,
                 tuesday:   days.tuesday   !== undefined ? days.tuesday   : true,
                 wednesday: days.wednesday !== undefined ? days.wednesday : true,
@@ -194,6 +208,36 @@ durationsRouter.delete('/:id', async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         console.error('Error deleting service duration:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /api/doctor-schedules/cleanup  →  remove orphaned schedules (admin only)
+router.post('/cleanup', async (req, res) => {
+    try {
+        // Delete schedules whose doctorId no longer exists in Doctor table
+        const deleted = await prisma.doctorSchedule.deleteMany({
+            where: {
+                doctor: null  // Prisma will translate this to: doctorId NOT in Doctor table
+            }
+        });
+        // Additionally, sync all remaining schedules to use current Doctor.name
+        const active = await prisma.doctorSchedule.findMany({
+            include: { doctor: { select: { id: true, name: true } } }
+        });
+        let synced = 0;
+        for (const s of active) {
+            if (s.doctor && s.doctorName !== s.doctor.name) {
+                await prisma.doctorSchedule.update({
+                    where: { id: s.id },
+                    data: { doctorName: s.doctor.name }
+                });
+                synced++;
+            }
+        }
+        res.json({ deletedOrphans: deleted.count, syncedNames: synced });
+    } catch (e) {
+        console.error('Error during schedule cleanup:', e);
         res.status(500).json({ error: e.message });
     }
 });

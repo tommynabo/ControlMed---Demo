@@ -33,6 +33,7 @@ export const Liquidations: React.FC = () => {
     const [dateFrom, setDateFrom] = useState<string>('');
     const [dateTo, setDateTo] = useState<string>('');
     const [records, setRecords] = useState<LiquidationRecord[]>([]);
+    const [dailyGroups, setDailyGroups] = useState<Array<{ date: string; records: LiquidationRecord[]; dayTotal: number }>>([]);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -40,6 +41,8 @@ export const Liquidations: React.FC = () => {
     const [labCosts, setLabCosts] = useState<Record<string, number>>({});
     const [editingRow, setEditingRow] = useState<{ id: string; concepto: string; doctorId: string; importe: number } | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
+    const [groupByDay, setGroupByDay] = useState<boolean>(false);
+    const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
     // Load doctors on mount
     useEffect(() => {
@@ -84,11 +87,12 @@ export const Liquidations: React.FC = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(
-                `/api/liquidations/summary?doctorId=${selectedDoctorId}&dateFrom=${dateFrom}&dateTo=${dateTo}`
-            );
+            const url = `/api/liquidations/summary?doctorId=${selectedDoctorId}&dateFrom=${dateFrom}&dateTo=${dateTo}${groupByDay ? '&groupByDay=true' : ''}`;
+            const response = await fetch(url);
             const data = await response.json();
             setRecords(data.records || []);
+            setDailyGroups(data.dailyGroups || []);
+            setExpandedDays(new Set((data.dailyGroups || []).map((g: any) => g.date)));
         } catch (err) {
             console.error('Error fetching liquidations:', err);
             setError('Error al cargar las liquidaciones');
@@ -391,7 +395,7 @@ export const Liquidations: React.FC = () => {
                     )}
 
                     {/* Search Buttons */}
-                    <div className="flex gap-3 pt-4">
+                    <div className="flex gap-3 pt-4 flex-wrap">
                         <button
                             onClick={handleSearch}
                             disabled={loading}
@@ -399,6 +403,13 @@ export const Liquidations: React.FC = () => {
                         >
                             {loading ? <RefreshCw size={16} className="animate-spin" /> : <Filter size={16} />}
                             {loading ? 'Buscando...' : 'Buscar'}
+                        </button>
+                        <button
+                            onClick={() => setGroupByDay(v => !v)}
+                            className={`px-4 py-3 rounded-lg font-black text-sm flex items-center justify-center gap-2 transition-colors border ${groupByDay ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400'}`}
+                            title="Agrupar resultados por día"
+                        >
+                            {groupByDay ? '▦ Por día: ON' : '▦ Por día: OFF'}
                         </button>
                         {records.length > 0 && (
                             <button
@@ -412,6 +423,74 @@ export const Liquidations: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Daily breakdown view */}
+                {groupByDay && dailyGroups.length > 0 && (
+                    <div className="space-y-4">
+                        <h3 className="text-lg font-black text-slate-900">Desglose por Día ({dailyGroups.length} días)</h3>
+                        {dailyGroups.map(group => {
+                            const isExpanded = expandedDays.has(group.date);
+                            const toggleDay = () => setExpandedDays(prev => {
+                                const next = new Set(prev);
+                                isExpanded ? next.delete(group.date) : next.add(group.date);
+                                return next;
+                            });
+                            const dayLab = group.records.reduce((s, r) => s + (labCosts[r.id] || 0), 0);
+                            const dayNet = group.dayTotal - dayLab;
+                            const dayCommission = dayNet * (commissionRate / 100);
+                            return (
+                                <div key={group.date} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                                    <button
+                                        onClick={toggleDay}
+                                        className="w-full flex items-center justify-between px-6 py-4 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className="font-black text-slate-900">{new Date(group.date + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                                            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">{group.records.length} registros</span>
+                                        </div>
+                                        <div className="flex items-center gap-6 text-sm">
+                                            <span className="text-slate-500">Total: <span className="font-black text-emerald-600">{group.dayTotal.toFixed(2)}€</span></span>
+                                            <span className="text-slate-500">Comisión: <span className="font-black text-blue-600">{dayCommission.toFixed(2)}€</span></span>
+                                            <span className="text-slate-400">{isExpanded ? '▲' : '▼'}</span>
+                                        </div>
+                                    </button>
+                                    {isExpanded && (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead className="bg-white border-b border-slate-100">
+                                                    <tr>
+                                                        <th className="px-6 py-3 text-left text-xs font-black uppercase text-slate-400 tracking-wider">Hora</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-black uppercase text-slate-400 tracking-wider">Concepto</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-black uppercase text-slate-400 tracking-wider">Paciente</th>
+                                                        <th className="px-6 py-3 text-left text-xs font-black uppercase text-slate-400 tracking-wider">NUM</th>
+                                                        <th className="px-6 py-3 text-right text-xs font-black uppercase text-slate-400 tracking-wider">Importe</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {group.records.map(r => (
+                                                        <tr key={r.id} className="hover:bg-slate-50">
+                                                            <td className="px-6 py-3 text-slate-500 text-xs">{String(r.fecha).length > 10 ? String(r.fecha).substring(11, 16) : '-'}</td>
+                                                            <td className="px-6 py-3 text-slate-700 text-xs font-semibold">{r.concepto}</td>
+                                                            <td className="px-6 py-3 text-slate-700 font-semibold">{r.nombrePaciente}</td>
+                                                            <td className="px-6 py-3 text-slate-500 text-xs">{r.numeroHistoria}</td>
+                                                            <td className="px-6 py-3 text-right font-black text-emerald-600">{r.importeCobrado.toFixed(2)}€</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                                <tfoot className="bg-emerald-50 border-t border-emerald-200">
+                                                    <tr>
+                                                        <td colSpan={4} className="px-6 py-3 text-xs font-black text-emerald-700 uppercase">Subtotal día</td>
+                                                        <td className="px-6 py-3 text-right font-black text-emerald-700">{group.dayTotal.toFixed(2)}€</td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 {/* Results Table */}
                 {records.length > 0 ? (

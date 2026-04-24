@@ -1379,6 +1379,20 @@ const Patients: React.FC = () => {
                                         <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Domicilio</label>
                                         <input disabled={!isEditingPatient} value={selectedPatient.address || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, address: e.target.value })} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" placeholder="Calle, número, piso..." />
                                     </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">C.P.</label>
+                                            <input disabled={!isEditingPatient} value={(selectedPatient as any).postalCode || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, postalCode: e.target.value } as any)} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" placeholder="28001" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Ciudad</label>
+                                            <input disabled={!isEditingPatient} value={(selectedPatient as any).city || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, city: e.target.value } as any)} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" placeholder="Madrid" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block">Provincia</label>
+                                            <input disabled={!isEditingPatient} value={(selectedPatient as any).province || ''} onChange={(e) => setSelectedPatient({ ...selectedPatient, province: e.target.value } as any)} className="w-full bg-slate-50 rounded-2xl p-4 text-sm font-bold" placeholder="Madrid" />
+                                        </div>
+                                    </div>
 
                                     {/* MEDICAL CONDITIONS EDITOR */}
                                     <div className="col-span-2 border-t border-slate-100 pt-6 mt-2">
@@ -3232,6 +3246,9 @@ const Patients: React.FC = () => {
                     onClose={() => setIsConsentmentModalOpen(false)}
                     patientName={selectedPatient.name}
                     patientId={selectedPatient.id}
+                    patientDni={selectedPatient.dni}
+                    patientDob={selectedPatient.birthDate}
+                    doctorName={selectedPatient.assignedDoctorId ? doctors?.find((d: any) => d.id === selectedPatient.assignedDoctorId)?.name : undefined}
                     onSaveConsent={async (patientId, templateId, isSigned) => {
                         try {
                             await api.consents.create(patientId, templateId, isSigned);

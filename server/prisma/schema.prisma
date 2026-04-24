@@ -102,6 +102,10 @@ model Patient {
   prescriptions   Prescription[]
   medicalHistory  String?
   isODA           Boolean          @default(false)
+  address         String?
+  city            String?
+  postalCode      String?
+  province        String?
   createdAt       DateTime         @default(now())
   payments        Payment[]
   whatsAppLogs    WhatsAppLog[]

@@ -23,6 +23,9 @@ interface ConsentmentModalProps {
     onClose: () => void;
     patientName: string;
     patientId: string;
+    patientDni?: string;
+    patientDob?: string;
+    doctorName?: string;
     currentConsents?: ConsentRecord[];
     onSaveConsent?: (consentId: string, templateId: string, signed: boolean) => Promise<void>;
 }
@@ -34,7 +37,7 @@ const CONSENT_TEMPLATES: ConsentTemplate[] = [
         category: 'Médico',
         content: `CONSENTIMIENTO INFORMADO - TRATAMIENTO DENTAL
 
-PACIENTE: {{PATIENT_NAME}} | DNI: {{PATIENT_DNI}} | FECHA: {{TODAY}}
+PACIENTE: {{PATIENT_NAME}} | DNI: {{PATIENT_DNI}} | F. NACIMIENTO: {{PATIENT_DOB}} | FECHA: {{TODAY}}
 
 He sido informado/a sobre:
 ✓ La naturaleza de mi condición dental
@@ -53,7 +56,7 @@ FIRMA DEL PACIENTE: ________________________  FIRMA DEL DOCTOR: ________________
         category: 'Médico',
         content: `CONSENTIMIENTO INFORMADO PARA ANESTESIA
 
-PACIENTE: {{PATIENT_NAME}} | DNI: {{PATIENT_DNI}} | FECHA: {{TODAY}}
+PACIENTE: {{PATIENT_NAME}} | DNI: {{PATIENT_DNI}} | F. NACIMIENTO: {{PATIENT_DOB}} | FECHA: {{TODAY}}
 
 He sido informado/a que la anestesia a utilizarse es:
 ☐ Anestesia Local  ☐ Sedación Ligera  ☐ Óxido Nitroso
@@ -101,7 +104,7 @@ FIRMA DEL PACIENTE: ________________________  FECHA: {{TODAY}}`
         category: 'Médico',
         content: `CONSENTIMIENTO PARA CIRUGÍA ORAL
 
-PACIENTE: {{PATIENT_NAME}} | PROCEDIMIENTO: {{PROCEDURE}} | FECHA: {{TODAY}}
+PACIENTE: {{PATIENT_NAME}} | DNI: {{PATIENT_DNI}} | F. NACIMIENTO: {{PATIENT_DOB}} | PROCEDIMIENTO: {{PROCEDURE}} | FECHA: {{TODAY}}
 
 He sido informado/a sobre:
 ✓ Naturaleza de la cirugía
@@ -155,6 +158,9 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     onClose,
     patientName,
     patientId,
+    patientDni,
+    patientDob,
+    doctorName,
     currentConsents = [],
     onSaveConsent
 }) => {
@@ -183,12 +189,19 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     };
 
     const handleDownloadPDF = (template: ConsentTemplate) => {
+        const resolvedDni = patientDni || 'DNI/Pasaporte';
+        const resolvedDob = patientDob
+            ? new Date(patientDob).toLocaleDateString('es-ES')
+            : 'Fecha de Nacimiento';
+        const resolvedDoctor = doctorName || 'Dr./Dra.';
+
         const formattedContent = template.content
             .replace(/{{PATIENT_NAME}}/g, patientName)
             .replace(/{{TODAY}}/g, new Date().toLocaleDateString('es-ES'))
-            .replace(/{{PATIENT_DNI}}/g, 'DNI/Pasaporte')
+            .replace(/{{PATIENT_DNI}}/g, resolvedDni)
+            .replace(/{{PATIENT_DOB}}/g, resolvedDob)
             .replace(/{{CLINIC_NAME}}/g, 'CHC Clínica Dental')
-            .replace(/{{DOCTOR_NAME}}/g, 'Dr. General');
+            .replace(/{{DOCTOR_NAME}}/g, resolvedDoctor);
 
         // Convertir formato de texto a HTML mejorado
         const htmlContent = `
@@ -231,7 +244,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             title: template.title,
             content: htmlContent,
             patientName,
-            doctorName: 'Dr. General',
+            doctorName: resolvedDoctor,
             logo: `${window.location.origin}/logo.jpeg`,
             fileName: `${template.title.replace(/\s+/g, '_')}_${patientName.replace(/\s+/g, '_')}.pdf`
         });

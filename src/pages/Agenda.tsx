@@ -91,6 +91,9 @@ const Agenda: React.FC = () => {
     // Feature 5: Doctor on-duty filter
     const [showOnDutyOnly, setShowOnDutyOnly] = useState(false);
 
+    // Current time indicator
+    const [currentTime, setCurrentTime] = useState(new Date());
+
     // Feature 6: Mini calendar
     const [showMiniCal, setShowMiniCal] = useState(false);
     const [miniCalMonth, setMiniCalMonth] = useState(new Date());
@@ -183,6 +186,12 @@ const Agenda: React.FC = () => {
             .then((data: any[]) => setDbServices(data || []))
             .catch((err: any) => console.warn('Could not load DB services catalog:', err));
     }, [api]);
+
+    // Update current time every minute for the live time indicator
+    useEffect(() => {
+        const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
 
     // Load Agenda Closures (Feature 4)
     useEffect(() => {
@@ -1169,20 +1178,31 @@ const Agenda: React.FC = () => {
                 >
                     <div className="flex">
                         {/* TIME COLUMN - Always visible */}
-                        <div className="w-16 flex-shrink-0 pr-4 sticky left-0 bg-white z-[5] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                            {TIME_SLOTS.map((time, idx) => {
-                                const hour = parseInt(time.split(':')[0], 10);
-                                // Render on the start of each hour (every 12 slots of 5 mins)
-                                if (idx % 12 === 0) {
+                        <div className="w-16 flex-shrink-0 pr-1 sticky left-0 bg-white z-[5] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                            {TIME_SLOTS.map((time) => {
+                                const [, minStr] = time.split(':');
+                                const min = parseInt(minStr, 10);
+                                const isHour    = min === 0;
+                                const isQuarter = min === 15 || min === 30 || min === 45;
+                                if (isHour) {
                                     return (
-                                        <div key={`time-label-${time}`} className="h-[192px] relative border-t-2 border-slate-300">
-                                            <span className="absolute -top-[10px] left-0 w-full text-center pr-2 text-[11px] font-black text-slate-500 bg-white">
-                                                {hour}:00
+                                        <div key={`tl-${time}`} className="h-4 relative border-t-2 border-slate-300">
+                                            <span className="absolute -top-[9px] left-0 w-full text-right pr-2 text-[11px] font-black text-slate-600 bg-white leading-none">
+                                                {time}
                                             </span>
                                         </div>
                                     );
                                 }
-                                return null;
+                                if (isQuarter) {
+                                    return (
+                                        <div key={`tl-${time}`} className="h-4 relative border-t border-slate-100">
+                                            <span className="absolute -top-[7px] left-0 w-full text-right pr-2 text-[9px] font-medium text-slate-400 bg-white leading-none">
+                                                {time}
+                                            </span>
+                                        </div>
+                                    );
+                                }
+                                return <div key={`tl-${time}`} className="h-4" />;
                             })}
                         </div>
 
@@ -1193,6 +1213,29 @@ const Agenda: React.FC = () => {
 
                                 {/* TIME GRID BACKGROUND & EVENTS LAYER */}
                                 <div className="relative">
+
+                                    {/* ══ CURRENT TIME INDICATOR ══ */}
+                                    {(() => {
+                                        const SLOT_H = 16;
+                                        const todayStr = formatDateLocal(new Date());
+                                        const selectedStr = formatDateLocal(currentDate);
+                                        if (viewMode !== 'daily' || todayStr !== selectedStr) return null;
+                                        const ctH = currentTime.getHours();
+                                        const ctM = currentTime.getMinutes();
+                                        const ctStr = `${String(ctH).padStart(2,'0')}:${String(ctM < 5 ? 0 : Math.floor(ctM/5)*5).padStart(2,'0')}`;
+                                        const idx = TIME_SLOTS.indexOf(ctStr);
+                                        if (idx < 0) return null;
+                                        const top = idx * SLOT_H + (ctM % 5) * (SLOT_H / 5);
+                                        return (
+                                            <div
+                                                style={{ top: `${top}px`, zIndex: 25 }}
+                                                className="absolute left-0 right-0 pointer-events-none flex items-center"
+                                            >
+                                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 -ml-1 shadow-sm" />
+                                                <div className="flex-1 border-t-2 border-red-500" />
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* ═══════ GRID RENDERING ═══════ */}
                                     {(() => {
@@ -1571,14 +1614,13 @@ const Agenda: React.FC = () => {
                                                                                         {(() => {
                                                                                             const patient = patients.find(p => p.id === appt.patientId) || (appt as any).patient;
                                                                                             if (!patient) return '⚠️ Paciente Eliminado';
-                                                                                            const historyNum = patient.historyNumber || `ID: ${patient.id?.slice(0, 6)}`;
-                                                                                            const patientName = patient.name || 'Sin nombre';
-                                                                                            return `${historyNum} — ${patientName}`;
+                                                                                            return patient.name || 'Sin nombre';
                                                                                         })()}
                                                                                     </span>
                                                                                 </div>
                                                                                 {appt.duration && appt.duration > 20 && <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">{appt.time}</span>}
                                                                             </div>
+                                                                            {/* Treatment — only the specific treatment name */}
                                                                             {(() => {
                                                                                 const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
                                                                                     ? (appt.treatment as any).name
@@ -1586,50 +1628,29 @@ const Agenda: React.FC = () => {
                                                                                 const budgetItems = (appt as any).budget?.items;
                                                                                 const displayTreatment = (budgetItems && budgetItems.length > 0)
                                                                                     ? budgetItems.map((item: any) => item.name).join(', ')
-                                                                                    : (treatmentText || 'Sin tratamiento');
-                                                                                
-                                                                                const docName = doctors.find(d => d.id === appt.doctorId)?.name || (appt as any).doctor?.name || 'Sin doctor';
-                                                                                const concatInfo = `${displayTreatment} | ${appt.time} | ${docName}`;
-
+                                                                                    : (treatmentText || null);
+                                                                                if (!displayTreatment) return null;
                                                                                 return (
-                                                                                    <div className="text-[10px] opacity-90 leading-tight mt-0.5 line-clamp-2" title={concatInfo}>
-                                                                                        {concatInfo}
+                                                                                    <div className="text-[10px] opacity-80 leading-tight mt-0.5 line-clamp-2 italic">
+                                                                                        {displayTreatment}
                                                                                     </div>
                                                                                 );
                                                                             })()}
-                                                                    {appt.duration && appt.duration >= 30 && appt.observations && (
-                                                                        <p className="text-[9px] opacity-60 mt-0.5 line-clamp-2 leading-tight">
-                                                                            {appt.observations}
-                                                                        </p>
-                                                                    )}
-                                                                            {/* Feature 7: Visit Details visible on card */}
-                                                                    {appt.duration && appt.duration >= 30 && (appt as any).visitDetails && (
-                                                                        <p className="text-[9px] text-purple-500 opacity-80 mt-0.5 line-clamp-1 italic">
-                                                                            📋 {(appt as any).visitDetails}
-                                                                        </p>
-                                                                    )}
 
-                                                                    {/* 🆕 Feature: Revisión Badge */}
-                                                                    {(appt.isRevision || (appt as any).is_revision) && (
-                                                                        <div className="mt-0.5 inline-flex items-center gap-0.5 bg-cyan-500/20 border border-cyan-400/50 text-cyan-700 rounded-full px-1.5 py-0" style={{fontSize: '8px', fontWeight: 900}}>
-                                                                            ↩ REVISIÓN
-                                                                        </div>
-                                                                    )}
+                                                                            {/* 🆕 Feature: Revisión Badge */}
+                                                                            {(appt.isRevision || (appt as any).is_revision) && (
+                                                                                <div className="mt-0.5 inline-flex items-center gap-0.5 bg-cyan-500/20 border border-cyan-400/50 text-cyan-700 rounded-full px-1.5 py-0" style={{fontSize: '8px', fontWeight: 900}}>
+                                                                                    ↩ REVISIÓN
+                                                                                </div>
+                                                                            )}
 
-                                                                    {/* Última modificación */}
-                                                                    {(appt as any).updated_by_name && (
-                                                                        <div className="mt-0.5 text-[8px] opacity-50 leading-tight truncate" title={`Última mod.: ${(appt as any).updated_by_name}`}>
-                                                                            ✎ {(appt as any).updated_by_name}
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* RESIZE HANDLE */}
-                                                                    {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
-                                                                        <div 
-                                                                            onMouseDown={(e) => handleResizeStart(e, appt)}
-                                                                            className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-black/10 transition-colors z-30"
-                                                                        />
-                                                                    )}
+                                                                            {/* RESIZE HANDLE */}
+                                                                            {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
+                                                                                <div 
+                                                                                    onMouseDown={(e) => handleResizeStart(e, appt)}
+                                                                                    className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize hover:bg-black/10 transition-colors z-30"
+                                                                                />
+                                                                            )}
                                                                 </div>
                                                             );
                                                         })}
