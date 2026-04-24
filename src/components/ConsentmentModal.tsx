@@ -168,19 +168,28 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     const [selectedTemplate, setSelectedTemplate] = useState<ConsentTemplate | null>(null);
     const [filter, setFilter] = useState<'Todos' | 'Médico' | 'Privacidad' | 'Financiero'>('Todos');
 
-    // Patient search state
+    // Patient search state (header bar)
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [overridePatient, setOverridePatient] = useState<{ id: string; name: string; dni?: string; birthDate?: string; assignedDoctorId?: string } | null>(null);
+
+    // Patient picker popup (shown before PDF/Print when no patient selected)
+    const [pickerTemplate, setPickerTemplate] = useState<{ template: ConsentTemplate; mode: 'pdf' | 'print' } | null>(null);
+    const [pickerSearch, setPickerSearch] = useState('');
+    const [pickerResults, setPickerResults] = useState<any[]>([]);
+    const [pickerLoading, setPickerLoading] = useState(false);
+    const [pickerPatient, setPickerPatient] = useState<{ id: string; name: string; dni?: string; birthDate?: string } | null>(null);
+    const pickerRef = useRef<HTMLDivElement>(null);
     const [showDropdown, setShowDropdown] = useState(false);
     const searchRef = useRef<HTMLDivElement>(null);
 
-    // Resolved patient data: override (from search) takes priority over props
-    const resolvedName = overridePatient?.name || patientName;
-    const resolvedDni = overridePatient?.dni || patientDni || 'DNI/Pasaporte';
-    const resolvedDob = overridePatient?.birthDate
-        ? new Date(overridePatient.birthDate).toLocaleDateString('es-ES')
+    // Resolved patient data: picker > override (header search) > props
+    const activePatient = pickerPatient || overridePatient;
+    const resolvedName = activePatient?.name || patientName;
+    const resolvedDni = activePatient?.dni || patientDni || 'DNI/Pasaporte';
+    const resolvedDob = activePatient?.birthDate
+        ? new Date(activePatient.birthDate).toLocaleDateString('es-ES')
         : patientDob ? new Date(patientDob).toLocaleDateString('es-ES') : 'Fecha de Nacimiento';
     const resolvedDoctor = doctorName || 'Dr./Dra.';
 
@@ -211,6 +220,23 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
         return () => document.removeEventListener('mousedown', handler);
     }, []);
 
+    // Picker popup search debounce
+    useEffect(() => {
+        if (!pickerSearch.trim() || pickerSearch.length < 2) { setPickerResults([]); return; }
+        const timer = setTimeout(async () => {
+            setPickerLoading(true);
+            try {
+                const result = await api.patients.getPatientsPage(1, 8, pickerSearch);
+                setPickerResults(result.data || []);
+            } catch (_) {
+                setPickerResults([]);
+            } finally {
+                setPickerLoading(false);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [pickerSearch]);
+
     if (!isOpen) return null;
 
     const filteredTemplates = filter === 'Todos' 
@@ -232,65 +258,82 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
         }
     };
 
-    const handleDownloadPDF = (template: ConsentTemplate) => {
+    // Open picker popup before PDF/Print if we need to confirm the patient
+    const requestAction = (template: ConsentTemplate, mode: 'pdf' | 'print') => {
+        // Pre-fill picker with current resolved patient if available
+        setPickerPatient(activePatient ? { id: activePatient.id, name: activePatient.name, dni: activePatient.dni, birthDate: activePatient.birthDate } : null);
+        setPickerSearch(activePatient?.name || patientName || '');
+        setPickerResults([]);
+        setPickerTemplate({ template, mode });
+    };
+
+    const confirmAndGenerate = () => {
+        if (!pickerTemplate) return;
+        const { template, mode } = pickerTemplate;
+        setPickerTemplate(null);
+
+        const pName = pickerPatient?.name || resolvedName;
+        const pDni = pickerPatient?.dni || resolvedDni;
+        const pDob = pickerPatient?.birthDate
+            ? new Date(pickerPatient.birthDate).toLocaleDateString('es-ES')
+            : resolvedDob;
+
         const formattedContent = template.content
-            .replace(/{{PATIENT_NAME}}/g, resolvedName)
+            .replace(/{{PATIENT_NAME}}/g, pName)
             .replace(/{{TODAY}}/g, new Date().toLocaleDateString('es-ES'))
-            .replace(/{{PATIENT_DNI}}/g, resolvedDni)
-            .replace(/{{PATIENT_DOB}}/g, resolvedDob)
+            .replace(/{{PATIENT_DNI}}/g, pDni)
+            .replace(/{{PATIENT_DOB}}/g, pDob)
             .replace(/{{CLINIC_NAME}}/g, 'CHC Clínica Dental')
             .replace(/{{DOCTOR_NAME}}/g, resolvedDoctor);
 
-        // Convertir formato de texto a HTML mejorado
-        const htmlContent = `
-            <h2>${template.title}</h2>
-            <div style="white-space: pre-wrap; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.8;">
-                ${formattedContent
-                    .split('\n')
-                    .filter((line: string) => line.trim())
-                    .map((line: string) => {
-                        // Detectar títulos (líneas en mayúsculas)
-                        if (line.match(/^[A-Z][A-Z\s\-:]+$/)) {
-                            return `<h3 style="color: #1e293b; margin-top: 15px; margin-bottom: 8px; font-weight: 600;">${line}</h3>`;
-                        }
-                        // Detectar líneas de firma
+        if (mode === 'print') {
+            // Open formatted document in new window and trigger browser print dialog
+            const printWin = window.open('', '_blank', 'width=900,height=700');
+            if (!printWin) { alert('Activa los popups para usar la impresión.'); return; }
+            printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${template.title}</title>
+            <style>
+                body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; margin: 40px 60px; line-height: 1.7; }
+                h1 { font-size: 16pt; font-weight: 800; text-transform: uppercase; border-bottom: 3px solid #111; padding-bottom: 8px; margin-bottom: 16px; }
+                .meta { background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 10px 14px; margin-bottom: 20px; font-size: 10pt; }
+                pre { white-space: pre-wrap; font-family: Arial, sans-serif; font-size: 11pt; }
+                @media print { body { margin: 20px 30px; } }
+            </style></head><body>
+            <h1>${template.title}</h1>
+            <div class="meta"><strong>Paciente:</strong> ${pName} &nbsp;|&nbsp; <strong>DNI:</strong> ${pDni} &nbsp;|&nbsp; <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</div>
+            <pre>${formattedContent}</pre>
+            <script>window.onload = function() { window.print(); };<\/script>
+            </body></html>`);
+            printWin.document.close();
+        } else {
+            // Generate PDF
+            const htmlContent = `
+                <h2>${template.title}</h2>
+                <div style="white-space: pre-wrap; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.8;">
+                    ${formattedContent.split('\n').filter((line: string) => line.trim()).map((line: string) => {
+                        if (line.match(/^[A-Z][A-Z\s\-:]+$/)) return `<h3 style="color:#1e293b;margin-top:15px;margin-bottom:8px;font-weight:600;">${line}</h3>`;
                         if (line.includes('_____') || line.includes('FIRMA')) {
-                            return `<div style="margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
-                                ${line.split('FIRMA DEL').length > 1 ? 
-                                    `<div style="text-align: center;">
-                                        <div style="border-top: 1px solid #000; margin-bottom: 8px; width: 100%; height: 50px;"></div>
-                                        <span style="font-size: 10pt; color: #666;">FIRMA DEL PACIENTE</span>
-                                    </div>
-                                    <div style="text-align: center;">
-                                        <div style="border-top: 1px solid #000; margin-bottom: 8px; width: 100%; height: 50px;"></div>
-                                        <span style="font-size: 10pt; color: #666;">FIRMA DOCTOR</span>
-                                    </div>`
-                                    : `<div style="text-align: center;">
-                                        <div style="border-top: 1px solid #000; margin-bottom: 8px; width: 100%;"></div>
-                                    </div>`
-                                }
+                            return `<div style="margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:30px;">
+                                <div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DEL PACIENTE</span></div>
+                                <div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DOCTOR</span></div>
                             </div>`;
                         }
-                        // Líneas normales
-                        return `<p style="margin: 6px 0; text-align: justify;">${line}</p>`;
-                    })
-                    .join('')}
-            </div>
-        `;
-
-        pdfService.generatePDFFromHTML({
-            title: template.title,
-            content: htmlContent,
-            patientName,
-            doctorName: resolvedDoctor,
-            logo: `${window.location.origin}/logo.jpeg`,
-            fileName: `${template.title.replace(/\s+/g, '_')}_${resolvedName.replace(/\s+/g, '_')}.pdf`
-        });
+                        return `<p style="margin:6px 0;text-align:justify;">${line}</p>`;
+                    }).join('')}
+                </div>`;
+            pdfService.generatePDFFromHTML({
+                title: template.title,
+                content: htmlContent,
+                patientName: pName,
+                doctorName: resolvedDoctor,
+                logo: `${window.location.origin}/logo.jpeg`,
+                fileName: `${template.title.replace(/\s+/g, '_')}_${pName.replace(/\s+/g, '_')}.pdf`
+            });
+        }
     };
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-6 animate-in fade-in">
-            <div className="bg-white max-w-4xl w-full rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+            <div className="bg-white max-w-4xl w-full rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden relative">
 
                 {/* Header */}
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 flex justify-between items-start">
@@ -417,7 +460,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                                     <FileText size={14} /> Ver
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDownloadPDF(template)}
+                                                    onClick={() => requestAction(template, 'pdf')}
                                                     className="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-600 font-bold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1"
                                                     title="Descargar como PDF"
                                                 >
@@ -451,25 +494,24 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                 <p className="text-xs text-slate-500 uppercase font-bold">{selectedTemplate.category}</p>
                                 <div className="bg-white p-6 rounded-lg border border-slate-200 max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed">
                                     {selectedTemplate.content
-                                        .replace(/{{PATIENT_NAME}}/g, patientName)
+                                        .replace(/{{PATIENT_NAME}}/g, resolvedName)
                                         .replace(/{{TODAY}}/g, new Date().toLocaleDateString('es-ES'))
-                                        .replace(/{{PATIENT_DNI}}/g, 'DNI/Pasaporte')
+                                        .replace(/{{PATIENT_DNI}}/g, resolvedDni)
+                                        .replace(/{{PATIENT_DOB}}/g, resolvedDob)
                                         .replace(/{{CLINIC_NAME}}/g, 'CHC Clínica Dental')
-                                        .replace(/{{DOCTOR_NAME}}/g, 'Dr. General')}
+                                        .replace(/{{DOCTOR_NAME}}/g, resolvedDoctor)}
                                 </div>
 
                                 <div className="flex gap-3 pt-4">
                                     <button
-                                        onClick={() => handleDownloadPDF(selectedTemplate)}
+                                        onClick={() => requestAction(selectedTemplate, 'pdf')}
                                         className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:shadow-lg hover:scale-[1.02] transition-all"
-                                        title="Descargar como PDF formateado profesionalmente"
                                     >
                                         <Download size={18} /> Descargar PDF
                                     </button>
                                     <button
-                                        onClick={() => window.print()}
+                                        onClick={() => requestAction(selectedTemplate, 'print')}
                                         className="flex-1 bg-gradient-to-r from-slate-400 to-slate-500 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:shadow-lg hover:scale-[1.02] transition-all"
-                                        title="Imprimir documento"
                                     >
                                         <Printer size={18} /> Imprimir
                                     </button>
@@ -490,6 +532,94 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                     )}
                 </div>
             </div>
+
+            {/* ── Patient picker popup (appears over the modal when PDF/Print clicked) ── */}
+            {pickerTemplate && (
+                <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm z-[200] flex items-center justify-center p-6 rounded-2xl">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 space-y-5">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900">¿Para qué paciente?</h3>
+                                <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[280px]">{pickerTemplate.template.title}</p>
+                            </div>
+                            <button onClick={() => setPickerTemplate(null)} className="text-slate-400 hover:text-slate-700 p-1">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Search input */}
+                        <div ref={pickerRef} className="relative">
+                            <div className="flex items-center gap-2 bg-slate-50 border-2 border-slate-200 focus-within:border-blue-400 rounded-xl px-4 py-3 transition-colors">
+                                <Search size={16} className="text-slate-400 shrink-0" />
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={pickerSearch}
+                                    onChange={e => { setPickerSearch(e.target.value); if (!e.target.value) setPickerPatient(null); }}
+                                    placeholder="Escribe nombre, DNI o nº historia…"
+                                    className="bg-transparent text-sm text-slate-800 outline-none w-full placeholder-slate-400"
+                                />
+                                {pickerLoading && <div className="w-3 h-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin shrink-0" />}
+                            </div>
+                            {pickerResults.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden max-h-52 overflow-y-auto">
+                                    {pickerResults.map((p: any) => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => { setPickerPatient({ id: p.id, name: p.name, dni: p.dni, birthDate: p.birthDate }); setPickerSearch(p.name); setPickerResults([]); }}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-slate-100 last:border-0"
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                                <User size={14} className="text-blue-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-semibold text-slate-800 truncate">{p.name}</div>
+                                                <div className="text-xs text-slate-500">{p.dni || 'Sin DNI'}{p.historyNumber ? ` · Nº ${p.historyNumber}` : ''}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Selected patient summary */}
+                        {pickerPatient && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 space-y-1">
+                                <div className="flex items-center gap-2 text-blue-700 font-bold text-sm">
+                                    <Check size={14} /> {pickerPatient.name}
+                                </div>
+                                <div className="text-xs text-slate-500 flex gap-4">
+                                    <span>DNI: <strong>{pickerPatient.dni || '—'}</strong></span>
+                                    <span>F. Nac.: <strong>{pickerPatient.birthDate ? new Date(pickerPatient.birthDate).toLocaleDateString('es-ES') : '—'}</strong></span>
+                                </div>
+                            </div>
+                        )}
+
+                        {!pickerPatient && patientName && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-600">
+                                Se usará el paciente actual: <strong>{patientName}</strong>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3 pt-1">
+                            <button
+                                onClick={() => setPickerTemplate(null)}
+                                className="flex-1 py-3 text-sm font-bold text-slate-500 hover:text-slate-700"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={confirmAndGenerate}
+                                disabled={!pickerPatient && !patientName}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                            >
+                                {pickerTemplate.mode === 'print' ? <><Printer size={16} /> Imprimir</> : <><Download size={16} /> Descargar PDF</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
         </div>
     );
 };
