@@ -339,6 +339,18 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
         }
     };
 
+    // Pre-compute preview content without regex literals inside JSX (esbuild TSX parser
+    // misreads /{{X}}/g patterns inside JSX {} expressions as unterminated regex)
+    const previewContent = selectedTemplate
+        ? selectedTemplate.content
+            .split('{{PATIENT_NAME}}').join(resolvedName)
+            .split('{{TODAY}}').join(new Date().toLocaleDateString('es-ES'))
+            .split('{{PATIENT_DNI}}').join(resolvedDni)
+            .split('{{PATIENT_DOB}}').join(resolvedDob)
+            .split('{{CLINIC_NAME}}').join('CHC Clínica Dental')
+            .split('{{DOCTOR_NAME}}').join(resolvedDoctor)
+        : '';
+
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-6 animate-in fade-in">
             <div className="bg-white max-w-4xl w-full rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden relative">
@@ -501,13 +513,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                 <h3 className="text-xl font-black text-slate-900">{selectedTemplate.title}</h3>
                                 <p className="text-xs text-slate-500 uppercase font-bold">{selectedTemplate.category}</p>
                                 <div className="bg-white p-6 rounded-lg border border-slate-200 max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm text-slate-700 font-mono leading-relaxed">
-                                    {selectedTemplate.content
-                                        .replace(/{{PATIENT_NAME}}/g, resolvedName)
-                                        .replace(/{{TODAY}}/g, new Date().toLocaleDateString('es-ES'))
-                                        .replace(/{{PATIENT_DNI}}/g, resolvedDni)
-                                        .replace(/{{PATIENT_DOB}}/g, resolvedDob)
-                                        .replace(/{{CLINIC_NAME}}/g, 'CHC Clínica Dental')
-                                        .replace(/{{DOCTOR_NAME}}/g, resolvedDoctor)}
+                                    {previewContent}
                                 </div>
 
                                 <div className="flex gap-3 pt-4">
