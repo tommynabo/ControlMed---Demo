@@ -659,6 +659,5 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                 </div>
             )}
         </div>
-        </div>
     );
 };
