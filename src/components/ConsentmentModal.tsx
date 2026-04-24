@@ -290,36 +290,44 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             // Open formatted document in new window and trigger browser print dialog
             const printWin = window.open('', '_blank', 'width=900,height=700');
             if (!printWin) { alert('Activa los popups para usar la impresión.'); return; }
-            printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${template.title}</title>
-            <style>
-                body { font-family: Arial, sans-serif; font-size: 11pt; color: #111; margin: 40px 60px; line-height: 1.7; }
-                h1 { font-size: 16pt; font-weight: 800; text-transform: uppercase; border-bottom: 3px solid #111; padding-bottom: 8px; margin-bottom: 16px; }
-                .meta { background: #f0f9ff; border-left: 4px solid #3b82f6; padding: 10px 14px; margin-bottom: 20px; font-size: 10pt; }
-                pre { white-space: pre-wrap; font-family: Arial, sans-serif; font-size: 11pt; }
-                @media print { body { margin: 20px 30px; } }
-            </style></head><body>
-            <h1>${template.title}</h1>
-            <div class="meta"><strong>Paciente:</strong> ${pName} &nbsp;|&nbsp; <strong>DNI:</strong> ${pDni} &nbsp;|&nbsp; <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</div>
-            <pre>${formattedContent}</pre>
-            </body></html>`);
+            const printHtml = [
+                '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>', template.title, '</title>',
+                '<style>',
+                'body{font-family:Arial,sans-serif;font-size:11pt;color:#111;margin:40px 60px;line-height:1.7;}',
+                'h1{font-size:16pt;font-weight:800;text-transform:uppercase;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:16px;}',
+                '.meta{background:#f0f9ff;border-left:4px solid #3b82f6;padding:10px 14px;margin-bottom:20px;font-size:10pt;}',
+                'pre{white-space:pre-wrap;font-family:Arial,sans-serif;font-size:11pt;}',
+                '@media print{body{margin:20px 30px;}}',
+                '</style></head><body>',
+                '<h1>', template.title, '</h1>',
+                '<div class="meta"><strong>Paciente:</strong> ', pName,
+                ' &nbsp;|&nbsp; <strong>DNI:</strong> ', pDni,
+                ' &nbsp;|&nbsp; <strong>Fecha:</strong> ', new Date().toLocaleDateString('es-ES'), '</div>',
+                '<pre>', formattedContent, '</pre>',
+                '</body></html>'
+            ].join('');
+            printWin.document.write(printHtml);
             printWin.document.close();
             printWin.onload = () => printWin.print();
         } else {
-            // Generate PDF
-            const htmlContent = `
-                <h2>${template.title}</h2>
-                <div style="white-space: pre-wrap; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.8;">
-                    ${formattedContent.split('\n').filter((line: string) => line.trim()).map((line: string) => {
-                        if (line.match(/^[A-Z][A-Z\s\-:]+$/)) return `<h3 style="color:#1e293b;margin-top:15px;margin-bottom:8px;font-weight:600;">${line}</h3>`;
-                        if (line.includes('_____') || line.includes('FIRMA')) {
-                            return `<div style="margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:30px;">
-                                <div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DEL PACIENTE</span></div>
-                                <div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DOCTOR</span></div>
-                            </div>`;
-                        }
-                        return `<p style="margin:6px 0;text-align:justify;">${line}</p>`;
-                    }).join('')}
-                </div>`;
+            // Generate PDF — build HTML outside template literal to avoid esbuild regex parsing issues
+            const isAllCaps = (s: string) => /^[A-Z][A-Z\s:()-]+$/.test(s);
+            const htmlLines = formattedContent.split('\n').filter((line: string) => line.trim()).map((line: string) => {
+                if (isAllCaps(line)) {
+                    return '<h3 style="color:#1e293b;margin-top:15px;margin-bottom:8px;font-weight:600;">' + line + '</h3>';
+                }
+                if (line.includes('_____') || line.includes('FIRMA')) {
+                    return '<div style="margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:30px;">'
+                        + '<div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DEL PACIENTE</span></div>'
+                        + '<div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DOCTOR</span></div>'
+                        + '</div>';
+                }
+                return '<p style="margin:6px 0;text-align:justify;">' + line + '</p>';
+            });
+            const htmlContent = '<h2>' + template.title + '</h2>'
+                + '<div style="white-space:pre-wrap;font-family:\'Segoe UI\',Arial,sans-serif;line-height:1.8;">'
+                + htmlLines.join('')
+                + '</div>';
             pdfService.generatePDFFromHTML({
                 title: template.title,
                 content: htmlContent,
