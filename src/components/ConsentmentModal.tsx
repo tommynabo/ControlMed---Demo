@@ -279,12 +279,12 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             : resolvedDob;
 
         const formattedContent = template.content
-            .replace(/{{PATIENT_NAME}}/g, pName)
-            .replace(/{{TODAY}}/g, new Date().toLocaleDateString('es-ES'))
-            .replace(/{{PATIENT_DNI}}/g, pDni)
-            .replace(/{{PATIENT_DOB}}/g, pDob)
-            .replace(/{{CLINIC_NAME}}/g, 'CHC Clínica Dental')
-            .replace(/{{DOCTOR_NAME}}/g, resolvedDoctor);
+            .split('{{PATIENT_NAME}}').join(pName)
+            .split('{{TODAY}}').join(new Date().toLocaleDateString('es-ES'))
+            .split('{{PATIENT_DNI}}').join(pDni)
+            .split('{{PATIENT_DOB}}').join(pDob)
+            .split('{{CLINIC_NAME}}').join('CHC Cl\u00ednica Dental')
+            .split('{{DOCTOR_NAME}}').join(resolvedDoctor);
 
         if (mode === 'print') {
             // Open formatted document in new window and trigger browser print dialog
@@ -310,8 +310,9 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             printWin.document.close();
             printWin.onload = () => printWin.print();
         } else {
-            // Generate PDF — build HTML outside template literal to avoid esbuild regex parsing issues
-            const isAllCaps = (s: string) => /^[A-Z][A-Z\s:()-]+$/.test(s);
+            // Generate PDF — build HTML using no regex literals to avoid esbuild TSX parse issues
+            const reAllCaps = new RegExp('^[A-Z][A-Z\\s:()-]+$');
+            const isAllCaps = (s: string) => reAllCaps.test(s);
             const htmlLines = formattedContent.split('\n').filter((line: string) => line.trim()).map((line: string) => {
                 if (isAllCaps(line)) {
                     return '<h3 style="color:#1e293b;margin-top:15px;margin-bottom:8px;font-weight:600;">' + line + '</h3>';
@@ -333,8 +334,8 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                 content: htmlContent,
                 patientName: pName,
                 doctorName: resolvedDoctor,
-                logo: `${window.location.origin}/logo.jpeg`,
-                fileName: `${template.title.replace(/\s+/g, '_')}_${pName.replace(/\s+/g, '_')}.pdf`
+                logo: window.location.origin + '/logo.jpeg',
+                fileName: template.title.split(' ').join('_') + '_' + pName.split(' ').join('_') + '.pdf'
             });
         }
     };
