@@ -31,6 +31,89 @@ interface ConsentmentModalProps {
     onSaveConsent?: (consentId: string, templateId: string, signed: boolean) => Promise<void>;
 }
 
+// Pure function to generate and output PDF/Print (outside React component to avoid esbuild TSX parse issues)
+function generatePDFOrPrint(
+    template: ConsentTemplate,
+    mode: 'pdf' | 'print',
+    patientName: string,
+    patientDni: string,
+    patientDob: string,
+    doctorName: string
+) {
+    // Substitute template variables
+    let formattedContent = template.content;
+    formattedContent = formattedContent.split('{{PATIENT_NAME}}').join(patientName);
+    formattedContent = formattedContent.split('{{TODAY}}').join(new Date().toLocaleDateString('es-ES'));
+    formattedContent = formattedContent.split('{{PATIENT_DNI}}').join(patientDni);
+    formattedContent = formattedContent.split('{{PATIENT_DOB}}').join(patientDob);
+    formattedContent = formattedContent.split('{{CLINIC_NAME}}').join('CHC Clínica Dental');
+    formattedContent = formattedContent.split('{{DOCTOR_NAME}}').join(doctorName);
+
+    if (mode === 'print') {
+        const printWin = window.open('', '_blank', 'width=900,height=700');
+        if (!printWin) {
+            alert('Activa los popups para usar la impresión.');
+            return;
+        }
+        const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'
+            + template.title + '</title><style>'
+            + 'body{font-family:Arial,sans-serif;font-size:11pt;color:#111;margin:40px 60px;line-height:1.7;}'
+            + 'h1{font-size:16pt;font-weight:800;text-transform:uppercase;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:16px;}'
+            + '.meta{background:#f0f9ff;border-left:4px solid #3b82f6;padding:10px 14px;margin-bottom:20px;font-size:10pt;}'
+            + 'pre{white-space:pre-wrap;font-family:Arial,sans-serif;font-size:11pt;}'
+            + '@media print{body{margin:20px 30px;}}'
+            + '</style></head><body>'
+            + '<h1>' + template.title + '</h1>'
+            + '<div class="meta"><strong>Paciente:</strong> ' + patientName
+            + ' &nbsp;|&nbsp; <strong>DNI:</strong> ' + patientDni
+            + ' &nbsp;|&nbsp; <strong>Fecha:</strong> ' + new Date().toLocaleDateString('es-ES') + '</div>'
+            + '<pre>' + formattedContent + '</pre>'
+            + '</body></html>';
+        printWin.document.write(html);
+        printWin.document.close();
+        printWin.onload = function() { printWin.print(); };
+    } else {
+        // Generate PDF
+        const isHeaderLine = function(line: string) {
+            if (!line || line.length === 0) return false;
+            for (let i = 0; i < line.length; i++) {
+                const c = line[i];
+                if (c >= 'a' && c <= 'z') return false;
+            }
+            return true;
+        };
+
+        const lines = formattedContent.split('\n');
+        let htmlLines = '';
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line.trim()) continue;
+            if (isHeaderLine(line)) {
+                htmlLines += '<h3 style="color:#1e293b;margin-top:15px;margin-bottom:8px;font-weight:600;">' + line + '</h3>';
+            } else if (line.indexOf('_____') >= 0 || line.indexOf('FIRMA') >= 0) {
+                htmlLines += '<div style="margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:30px;">'
+                    + '<div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DEL PACIENTE</span></div>'
+                    + '<div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DOCTOR</span></div>'
+                    + '</div>';
+            } else {
+                htmlLines += '<p style="margin:6px 0;text-align:justify;">' + line + '</p>';
+            }
+        }
+        const htmlContent = '<h2>' + template.title + '</h2>'
+            + '<div style="white-space:pre-wrap;font-family:\'Segoe UI\',Arial,sans-serif;line-height:1.8;">'
+            + htmlLines
+            + '</div>';
+        pdfService.generatePDFFromHTML({
+            title: template.title,
+            content: htmlContent,
+            patientName: patientName,
+            doctorName: doctorName,
+            logo: window.location.origin + '/logo.jpeg',
+            fileName: template.title.split(' ').join('_') + '_' + patientName.split(' ').join('_') + '.pdf'
+        });
+    }
+}
+
 const CONSENT_TEMPLATES: ConsentTemplate[] = [
     {
         id: 'template-1',
@@ -278,66 +361,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             ? new Date(pickerPatient.birthDate).toLocaleDateString('es-ES')
             : resolvedDob;
 
-        const formattedContent = template.content
-            .split('{{PATIENT_NAME}}').join(pName)
-            .split('{{TODAY}}').join(new Date().toLocaleDateString('es-ES'))
-            .split('{{PATIENT_DNI}}').join(pDni)
-            .split('{{PATIENT_DOB}}').join(pDob)
-            .split('{{CLINIC_NAME}}').join('CHC Cl\u00ednica Dental')
-            .split('{{DOCTOR_NAME}}').join(resolvedDoctor);
-
-        if (mode === 'print') {
-            // Open formatted document in new window and trigger browser print dialog
-            const printWin = window.open('', '_blank', 'width=900,height=700');
-            if (!printWin) { alert('Activa los popups para usar la impresión.'); return; }
-            const printHtml = [
-                '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>', template.title, '</title>',
-                '<style>',
-                'body{font-family:Arial,sans-serif;font-size:11pt;color:#111;margin:40px 60px;line-height:1.7;}',
-                'h1{font-size:16pt;font-weight:800;text-transform:uppercase;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:16px;}',
-                '.meta{background:#f0f9ff;border-left:4px solid #3b82f6;padding:10px 14px;margin-bottom:20px;font-size:10pt;}',
-                'pre{white-space:pre-wrap;font-family:Arial,sans-serif;font-size:11pt;}',
-                '@media print{body{margin:20px 30px;}}',
-                '</style></head><body>',
-                '<h1>', template.title, '</h1>',
-                '<div class="meta"><strong>Paciente:</strong> ', pName,
-                ' &nbsp;|&nbsp; <strong>DNI:</strong> ', pDni,
-                ' &nbsp;|&nbsp; <strong>Fecha:</strong> ', new Date().toLocaleDateString('es-ES'), '</div>',
-                '<pre>', formattedContent, '</pre>',
-                '</body></html>'
-            ].join('');
-            printWin.document.write(printHtml);
-            printWin.document.close();
-            printWin.onload = () => printWin.print();
-        } else {
-            // Generate PDF — build HTML using no regex literals to avoid esbuild TSX parse issues
-            const reAllCaps = new RegExp('^[A-Z][A-Z\\s:()-]+$');
-            const isAllCaps = (s: string) => reAllCaps.test(s);
-            const htmlLines = formattedContent.split('\n').filter((line: string) => line.trim()).map((line: string) => {
-                if (isAllCaps(line)) {
-                    return '<h3 style="color:#1e293b;margin-top:15px;margin-bottom:8px;font-weight:600;">' + line + '</h3>';
-                }
-                if (line.includes('_____') || line.includes('FIRMA')) {
-                    return '<div style="margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:30px;">'
-                        + '<div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DEL PACIENTE</span></div>'
-                        + '<div style="text-align:center;"><div style="border-top:1px solid #000;margin-bottom:8px;width:100%;height:50px;"></div><span style="font-size:10pt;color:#666;">FIRMA DOCTOR</span></div>'
-                        + '</div>';
-                }
-                return '<p style="margin:6px 0;text-align:justify;">' + line + '</p>';
-            });
-            const htmlContent = '<h2>' + template.title + '</h2>'
-                + '<div style="white-space:pre-wrap;font-family:\'Segoe UI\',Arial,sans-serif;line-height:1.8;">'
-                + htmlLines.join('')
-                + '</div>';
-            pdfService.generatePDFFromHTML({
-                title: template.title,
-                content: htmlContent,
-                patientName: pName,
-                doctorName: resolvedDoctor,
-                logo: window.location.origin + '/logo.jpeg',
-                fileName: template.title.split(' ').join('_') + '_' + pName.split(' ').join('_') + '.pdf'
-            });
-        }
+        generatePDFOrPrint(template, mode, pName, pDni, pDob, resolvedDoctor);
     };
 
     // Pre-compute preview content without regex literals inside JSX (esbuild TSX parser
