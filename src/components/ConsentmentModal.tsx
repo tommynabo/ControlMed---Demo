@@ -301,9 +301,9 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             <h1>${template.title}</h1>
             <div class="meta"><strong>Paciente:</strong> ${pName} &nbsp;|&nbsp; <strong>DNI:</strong> ${pDni} &nbsp;|&nbsp; <strong>Fecha:</strong> ${new Date().toLocaleDateString('es-ES')}</div>
             <pre>${formattedContent}</pre>
-            <script>window.onload = function() { window.print(); };<\/script>
             </body></html>`);
             printWin.document.close();
+            printWin.onload = () => printWin.print();
         } else {
             // Generate PDF
             const htmlContent = `
