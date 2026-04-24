@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, FileText, Download, Check, Printer } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, FileText, Download, Check, Printer, Search, User } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
+import { api } from '../services/api';
 
 interface ConsentTemplate {
     id: string;
@@ -167,6 +168,49 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     const [selectedTemplate, setSelectedTemplate] = useState<ConsentTemplate | null>(null);
     const [filter, setFilter] = useState<'Todos' | 'Médico' | 'Privacidad' | 'Financiero'>('Todos');
 
+    // Patient search state
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [overridePatient, setOverridePatient] = useState<{ id: string; name: string; dni?: string; birthDate?: string; assignedDoctorId?: string } | null>(null);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const searchRef = useRef<HTMLDivElement>(null);
+
+    // Resolved patient data: override (from search) takes priority over props
+    const resolvedName = overridePatient?.name || patientName;
+    const resolvedDni = overridePatient?.dni || patientDni || 'DNI/Pasaporte';
+    const resolvedDob = overridePatient?.birthDate
+        ? new Date(overridePatient.birthDate).toLocaleDateString('es-ES')
+        : patientDob ? new Date(patientDob).toLocaleDateString('es-ES') : 'Fecha de Nacimiento';
+    const resolvedDoctor = doctorName || 'Dr./Dra.';
+
+    // Debounced patient search
+    useEffect(() => {
+        if (!searchTerm.trim() || searchTerm.length < 2) { setSearchResults([]); setShowDropdown(false); return; }
+        const timer = setTimeout(async () => {
+            setSearchLoading(true);
+            try {
+                const result = await api.patients.getPatientsPage(1, 8, searchTerm);
+                setSearchResults(result.data || []);
+                setShowDropdown(true);
+            } catch (_) {
+                setSearchResults([]);
+            } finally {
+                setSearchLoading(false);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowDropdown(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, []);
+
     if (!isOpen) return null;
 
     const filteredTemplates = filter === 'Todos' 
@@ -180,7 +224,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     const handleSignConsent = async (template: ConsentTemplate) => {
         if (onSaveConsent) {
             try {
-                await onSaveConsent(patientId, template.id, true);
+                await onSaveConsent(overridePatient?.id || patientId, template.id, true);
                 alert('✅ Consentimiento registrado como firmado');
             } catch (e) {
                 alert('Error: ' + (e as any).message);
@@ -189,14 +233,8 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     };
 
     const handleDownloadPDF = (template: ConsentTemplate) => {
-        const resolvedDni = patientDni || 'DNI/Pasaporte';
-        const resolvedDob = patientDob
-            ? new Date(patientDob).toLocaleDateString('es-ES')
-            : 'Fecha de Nacimiento';
-        const resolvedDoctor = doctorName || 'Dr./Dra.';
-
         const formattedContent = template.content
-            .replace(/{{PATIENT_NAME}}/g, patientName)
+            .replace(/{{PATIENT_NAME}}/g, resolvedName)
             .replace(/{{TODAY}}/g, new Date().toLocaleDateString('es-ES'))
             .replace(/{{PATIENT_DNI}}/g, resolvedDni)
             .replace(/{{PATIENT_DOB}}/g, resolvedDob)
@@ -246,7 +284,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
             patientName,
             doctorName: resolvedDoctor,
             logo: `${window.location.origin}/logo.jpeg`,
-            fileName: `${template.title.replace(/\s+/g, '_')}_${patientName.replace(/\s+/g, '_')}.pdf`
+            fileName: `${template.title.replace(/\s+/g, '_')}_${resolvedName.replace(/\s+/g, '_')}.pdf`
         });
     };
 
@@ -256,9 +294,60 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
 
                 {/* Header */}
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 flex justify-between items-start">
-                    <div>
+                    <div className="flex-1 min-w-0 mr-4">
                         <h2 className="text-2xl font-black text-white tracking-tight">Gestión de Consentimientos</h2>
-                        <p className="text-sm text-blue-100 mt-1">{patientName}</p>
+                        {/* Patient search bar */}
+                        <div ref={searchRef} className="relative mt-3">
+                            <div className="flex items-center gap-2 bg-white/20 backdrop-blur rounded-xl px-3 py-2">
+                                <Search size={16} className="text-white/70 shrink-0" />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={e => { setSearchTerm(e.target.value); if (!e.target.value) { setOverridePatient(null); } }}
+                                    placeholder={resolvedName || 'Buscar paciente…'}
+                                    className="bg-transparent text-white placeholder-white/60 text-sm outline-none w-full"
+                                />
+                                {overridePatient && (
+                                    <button onClick={() => { setOverridePatient(null); setSearchTerm(''); }} className="text-white/70 hover:text-white ml-1">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                                {searchLoading && <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin shrink-0" />}
+                            </div>
+                            {/* Results dropdown */}
+                            {showDropdown && searchResults.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl z-50 overflow-hidden max-h-56 overflow-y-auto">
+                                    {searchResults.map((p: any) => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => { setOverridePatient({ id: p.id, name: p.name, dni: p.dni, birthDate: p.birthDate, assignedDoctorId: p.assignedDoctorId }); setSearchTerm(p.name); setShowDropdown(false); }}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0"
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                                                <User size={14} className="text-blue-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-semibold text-slate-800 truncate">{p.name}</div>
+                                                <div className="text-xs text-slate-500">{p.dni || 'Sin DNI'}{p.historyNumber ? ` · Nº ${p.historyNumber}` : ''}</div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {showDropdown && !searchLoading && searchResults.length === 0 && searchTerm.length >= 2 && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl z-50 px-4 py-3 text-sm text-slate-500">
+                                    Sin resultados para "{searchTerm}"
+                                </div>
+                            )}
+                        </div>
+                        {overridePatient && (
+                            <p className="text-xs text-blue-100 mt-2 flex items-center gap-1">
+                                <Check size={12} /> Paciente seleccionado: <strong className="text-white">{overridePatient.name}</strong>
+                            </p>
+                        )}
+                        {!overridePatient && resolvedName && (
+                            <p className="text-sm text-blue-100 mt-1">{resolvedName}</p>
+                        )}
                     </div>
                     <button
                         onClick={onClose}

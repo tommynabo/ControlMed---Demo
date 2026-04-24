@@ -418,7 +418,9 @@ router.post('/payments/create', async (req, res) => {
             await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
 
             let liquidation = null;
-            if (doctor && type === 'DIRECT_CHARGE' && !isPartialPayment) {
+            // Create liquidation for any real payment (DIRECT_CHARGE, ordinary, rectificative)
+            // but NOT for wallet top-ups (ADVANCE_PAYMENT) or partial payments
+            if (doctor && type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
                 // Doctor is paid based on baseAmount (original price, no markup)
@@ -464,7 +466,7 @@ router.post('/payments/create', async (req, res) => {
                 }
             }
 
-            if (type === 'ADVANCE_PAYMENT' || (type === 'DIRECT_CHARGE' && method === 'wallet')) {
+            if (type === 'ADVANCE_PAYMENT' || method === 'wallet') {
                 const balanceAdjustment = method === 'wallet' ? -numericAmount : numericAmount;
                 await tx.patient.update({ where: { id: patientId }, data: { wallet: { increment: balanceAdjustment } } });
             }

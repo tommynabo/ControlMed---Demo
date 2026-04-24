@@ -130,6 +130,14 @@ router.post('/agenda-closures', async (req, res) => {
         const { date, doctorId, reason, createdBy } = req.body;
         if (!date) return res.status(400).json({ error: 'date is required' });
 
+        // Validate doctorId exists in Doctor table before creating (prevents FK constraint error)
+        if (doctorId) {
+            const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, select: { id: true } });
+            if (!doctor) {
+                return res.status(400).json({ error: `Doctor con ID "${doctorId}" no encontrado. Puede que haya sido eliminado.` });
+            }
+        }
+
         const checkWhere = { date: new Date(date), doctorId: doctorId || null };
         const existing = await prisma.agendaClosure.findMany({ where: checkWhere });
         if (existing && existing.length > 0) {

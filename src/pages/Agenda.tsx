@@ -1622,13 +1622,20 @@ const Agenda: React.FC = () => {
                                                                             </div>
                                                                             {/* Treatment — only the specific treatment name */}
                                                                             {(() => {
-                                                                                const treatmentText = typeof appt.treatment === 'object' && appt.treatment !== null
-                                                                                    ? (appt.treatment as any).name
-                                                                                    : appt.treatment || (appt as any).treatmentName;
-                                                                                const budgetItems = (appt as any).budget?.items;
-                                                                                const displayTreatment = (budgetItems && budgetItems.length > 0)
-                                                                                    ? budgetItems.map((item: any) => item.name).join(', ')
-                                                                                    : (treatmentText || null);
+                                                                                // Priority: treatmentName (set at booking) > specific budgetItemId > nothing
+                                                                                const treatmentText = (appt as any).treatmentName
+                                                                                    || (typeof appt.treatment === 'object' && appt.treatment !== null ? (appt.treatment as any).name : appt.treatment as any)
+                                                                                    || null;
+                                                                                let displayTreatment: string | null = treatmentText;
+                                                                                // If no treatmentName, try to resolve via budgetItemId (specific selected item only)
+                                                                                if (!displayTreatment) {
+                                                                                    const budgetItems = (appt as any).budget?.items;
+                                                                                    const itemId = (appt as any).budgetItemId;
+                                                                                    if (budgetItems && itemId) {
+                                                                                        const matched = budgetItems.filter((item: any) => item.id === itemId);
+                                                                                        if (matched.length > 0) displayTreatment = matched.map((item: any) => item.name).join(', ');
+                                                                                    }
+                                                                                }
                                                                                 if (!displayTreatment) return null;
                                                                                 return (
                                                                                     <div className="text-[10px] opacity-80 leading-tight mt-0.5 line-clamp-2 italic">
