@@ -1,8 +1,8 @@
--- Migration: Add address fields to Patient table
--- Run this once against your Supabase production database
+-- VERIFICAR antes de eliminar:
+SELECT id, "invoiceNumber", amount, date, concept, status
+FROM "Invoice"
+WHERE "invoiceNumber" = 'F-2026-1776766509143';
 
-ALTER TABLE "Patient"
-  ADD COLUMN IF NOT EXISTS address    TEXT,
-  ADD COLUMN IF NOT EXISTS city       TEXT,
-  ADD COLUMN IF NOT EXISTS "postalCode" TEXT,
-  ADD COLUMN IF NOT EXISTS province   TEXT;
+-- ELIMINAR la factura duplicada (las 18:00):
+DELETE FROM "Invoice"
+WHERE "invoiceNumber" = 'F-2026-1776766509143';
