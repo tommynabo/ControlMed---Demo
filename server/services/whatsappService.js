@@ -1,147 +1,31 @@
-const axios = require('axios');
-
-const getInstanceName = () => process.env.EVOLUTION_INSTANCE_NAME || "chc-clinica";
-const getSafeInstanceName = () => encodeURIComponent(getInstanceName());
-
-let status = 'DISCONNECTED';
-let qrCodeData = null;
-
-/**
- * Helper to get headers for request
- */
-const getHeaders = () => {
-    if (!process.env.EVOLUTION_API_KEY) {
-        console.warn('⚠️ [WA] EVOLUTION_API_KEY is missing in getHeaders');
-    }
-    return {
-        'Content-Type': 'application/json',
-        'apikey': process.env.EVOLUTION_API_KEY
-    };
-};
+// ─── WhatsApp Service ─────────────────────────────────────────────────────────
+// TODO: Migración a Twilio WhatsApp API pendiente.
+// La lógica de negocio (cron.js, reminders.js) llama a estas funciones;
+// la implementación real se añadirá en la siguiente fase.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const initialize = async () => {
-    console.log('🔄 Checking Evolution API Connection...');
-
-    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) {
-        console.error('❌ Missing Evolution API Configuration. Service disabled.');
-        status = 'DISABLED';
-        return;
-    }
-
-    try {
-        // Check connection state
-        const response = await axios.get(
-            `${process.env.EVOLUTION_API_URL}/instance/connectionState/${getSafeInstanceName()}`,
-            { headers: getHeaders() }
-        );
-
-        const connectionState = response.data?.instance?.state || response.data?.state;
-        console.log(`📡 Evolution API State for ${getInstanceName()}:`, connectionState);
-
-        if (connectionState === 'open') {
-            status = 'READY';
-            qrCodeData = null;
-        } else {
-            status = 'DISCONNECTED';
-            // We don't automatically fetch QR on init to avoid resource waste
-        }
-
-    } catch (error) {
-        if (error.response?.status === 404) {
-            console.log(`⚠️ Instance ${getInstanceName()} does not exist. Creating...`);
-            await createInstance();
-        } else {
-            console.warn('⚠️ Could not connect to Evolution API instance:', error.message);
-            status = 'ERROR';
-        }
-    }
-};
-
-const createInstance = async () => {
-    try {
-        await axios.post(`${process.env.EVOLUTION_API_URL}/instance/create`, {
-            instanceName: getInstanceName(),
-            token: process.env.EVOLUTION_API_KEY, // Optional: Evolution API allows custom token
-            qrcode: true
-        }, { headers: getHeaders() });
-        console.log(`✅ Instance ${getInstanceName()} created.`);
-        status = 'DISCONNECTED';
-    } catch (e) {
-        console.error('❌ Failed to create instance:', e.message);
-    }
+    console.log('[WhatsApp] Servicio pendiente de migración a Twilio. initialize() no operativo.');
 };
 
 const getStatus = async () => {
-    try {
-        const response = await axios.get(
-            `${process.env.EVOLUTION_API_URL}/instance/connectionState/${getSafeInstanceName()}`,
-            { headers: getHeaders() }
-        );
-        const connectionState = response.data?.instance?.state || response.data?.state;
-        
-        if (connectionState === 'open') {
-            return { status: 'READY', qrCode: null, provider: 'Evolution API' };
-        }
-        
-        return { status: 'DISCONNECTED', qrCode: qrCodeData, provider: 'Evolution API' };
-    } catch (e) {
-        return { status: 'DISCONNECTED', qrCode: qrCodeData, provider: 'Evolution API' };
-    }
+    return { status: 'PENDING_MIGRATION', qrCode: null, provider: 'Twilio (pendiente)' };
 };
 
 const getQrCode = async () => {
-    try {
-        const response = await axios.get(
-            `${process.env.EVOLUTION_API_URL}/instance/connect/${getSafeInstanceName()}`,
-            { headers: getHeaders() }
-        );
-        
-        if (response.data && response.data.base64) {
-            qrCodeData = response.data.base64;
-            // Ensure data URI prefix
-            if (!qrCodeData.startsWith('data:image')) {
-                qrCodeData = `data:image/png;base64,${qrCodeData}`;
-            }
-            return qrCodeData;
-        }
-        return null;
-    } catch (e) {
-        console.error('❌ Error fetching QR:', e.message);
-        return null;
-    }
+    console.log('[WhatsApp] getQrCode() no disponible — migración a Twilio pendiente.');
+    return null;
 };
 
 const sendMessage = async (to, message) => {
-    if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY) throw new Error('WA_DISABLED');
-
-    try {
-        let number = to.replace(/[^0-9]/g, '');
-        if (number.length === 9) number = '34' + number;
-
-        const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${getSafeInstanceName()}`;
-        const payload = {
-            number: number,
-            text: message,
-            options: { delay: 1200, presence: "composing" }
-        };
-
-        const response = await axios.post(url, payload, { headers: getHeaders() });
-        return { success: true, data: response.data };
-    } catch (error) {
-        console.error('❌ Error sending message:', error.response?.data || error.message);
-        throw error;
-    }
+    console.log(`[WhatsApp] sendMessage() pendiente de migración. Destinatario: ${to}. Mensaje: ${message}`);
+    // TODO: implementar envío real con Twilio WhatsApp API
+    return { success: false, error: 'PENDING_MIGRATION' };
 };
 
 const logout = async () => {
-    try {
-        await axios.delete(`${process.env.EVOLUTION_API_URL}/instance/logout/${getSafeInstanceName()}`, { headers: getHeaders() });
-        status = 'DISCONNECTED';
-        qrCodeData = null;
-        return { success: true };
-    } catch (e) {
-        return { success: false, error: e.message };
-    }
+    console.log('[WhatsApp] logout() no disponible — migración a Twilio pendiente.');
+    return { success: false, error: 'PENDING_MIGRATION' };
 };
 
 module.exports = {
