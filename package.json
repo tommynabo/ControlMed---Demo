@@ -10,6 +10,9 @@
     "preview": "vite preview",
     "postinstall": "npx prisma generate --schema=./server/prisma/schema.prisma"
   },
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@google/genai": "^1.35.0",
     "@prisma/client": "^5.22.0",
