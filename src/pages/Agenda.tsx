@@ -1938,21 +1938,29 @@ const Agenda: React.FC = () => {
                                                                 newSelected = [...selectedBudgetItems, { ...item, _idx: idx }];
                                                             }
                                                             setSelectedBudgetItems(newSelected);
-                                                            // Auto-fill treatment names and total price
+                                                            // Auto-fill treatment names and total price (with per-item discount applied)
                                                             setBookingTreatment(newSelected.map((i: any) => i.name).join(', '));
-                                                            setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + (i.price || 0), 0));
+                                                            setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0));
                                                             setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
                                                         }}
                                                     />
                                                     <span className="text-xs font-bold text-slate-600 flex-1">{item.name}</span>
-                                                    <span className="text-xs font-bold text-slate-400">{item.price}€</span>
+                                                    {(Number(item.discount) || 0) > 0 ? (
+                                                        <span className="text-xs font-bold flex items-center gap-1">
+                                                            <span className="line-through text-slate-300">{Number(item.price).toFixed(2)}€</span>
+                                                            <span className="text-green-600">{(Number(item.price) * (1 - Number(item.discount) / 100)).toFixed(2)}€</span>
+                                                            <span className="text-red-500">(-{item.discount}%)</span>
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-xs font-bold text-slate-400">{item.price}€</span>
+                                                    )}
                                                 </label>
                                             );
                                         })}
                                     </div>
                                     {selectedBudgetItems.length > 0 && (
                                         <div className="mt-2 text-right text-xs font-black text-blue-600">
-                                            Total: {selectedBudgetItems.reduce((sum: number, i: any) => sum + (i.price || 0), 0).toFixed(2)}€
+                                            Total: {selectedBudgetItems.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0).toFixed(2)}€
                                         </div>
                                     )}
                                 </div>
