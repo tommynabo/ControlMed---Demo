@@ -266,6 +266,9 @@ router.put('/:id', async (req, res) => {
             } catch (_) {}
         }
 
+        // Preserve treatment name if frontend sent legacy 'treatment' key instead of 'treatmentName'
+        if (updates.treatment && !updates.treatmentName) updates.treatmentName = String(updates.treatment);
+
         delete updates.serviceIds; delete updates.budgetItemIds; delete updates.treatment;
         delete updates.doctor; delete updates.patient; delete updates.budget;
         delete updates.liquidation; delete updates.id; delete updates.created_at; delete updates.deleted_at;

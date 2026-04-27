@@ -521,7 +521,10 @@ const Agenda: React.FC = () => {
         
         const newList = [...selectedDbServices, svc];
         setSelectedDbServices(newList);
-        setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+        // If existing chips are custom placeholders (price 0 loaded from treatmentName),
+        // add incrementally to preserve the manually-set total instead of overwriting it.
+        const hasUnpricedCustom = selectedDbServices.some(s => s.id.startsWith('custom-') && s.price === 0);
+        setBookingPrice(hasUnpricedCustom ? bookingPrice + svc.price : newList.reduce((sum, t) => sum + t.price, 0));
         setBookingTreatment(newList.map(t => t.name).join(', '));
         setBookingServiceSearch('');
         setShowServiceDropdown(false);
@@ -544,7 +547,8 @@ const Agenda: React.FC = () => {
             // Concepto libre: añadir con precio 0 y activar edición de precio inmediatamente
             const newList = [...selectedDbServices, { id: `custom-${Date.now()}`, name: query, price: 0 }];
             setSelectedDbServices(newList);
-            setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+            // New chip has price 0; preserve existing total — user will set price via chip editor.
+            // bookingPrice is updated incrementally in handleUpdateServicePrice.
             setBookingTreatment(newList.map(t => t.name).join(', '));
             setBookingServiceSearch('');
             setShowServiceDropdown(false);
@@ -555,17 +559,27 @@ const Agenda: React.FC = () => {
     };
 
     const handleUpdateServicePrice = (idx: number, newPrice: number) => {
+        const oldPrice = selectedDbServices[idx]?.price || 0;
         const updated = selectedDbServices.map((s, i) => i === idx ? { ...s, price: newPrice } : s);
         setSelectedDbServices(updated);
-        setBookingPrice(updated.reduce((sum, t) => sum + t.price, 0));
+        // Incremental delta so the manually-set total is respected when chips are unpriced placeholders.
+        setBookingPrice(Math.max(0, bookingPrice + (newPrice - oldPrice)));
         setEditingPriceIdx(null);
         setEditingPriceValue('');
     };
 
     const handleRemoveTreatmentFromList = (idx: number) => {
+        const removed = selectedDbServices[idx];
         const newList = selectedDbServices.filter((_, i) => i !== idx);
         setSelectedDbServices(newList);
-        setBookingPrice(newList.reduce((sum, t) => sum + t.price, 0));
+        // If removing a priced chip: subtract it. If removing a placeholder (price 0): preserve total.
+        // If list is now empty: reset to 0.
+        const newPrice = newList.length === 0
+            ? 0
+            : removed.price > 0
+                ? Math.max(0, bookingPrice - removed.price)
+                : bookingPrice;
+        setBookingPrice(newPrice);
         setBookingTreatment(newList.map(t => t.name).join(', '));
     };
 
@@ -599,11 +613,7 @@ const Agenda: React.FC = () => {
     // Handle Booking
     const handleBooking = async () => {
         if (isBooking) return;
-        if (selectedAppt) {
-            // Update logic here if requested...
-            alert("Modo edición no implementado completamente.");
-            return;
-        }
+        if (selectedAppt?.id) return; // Edit mode: handled by "Guardar Cambios" button
         
         // Validate patient selected from dropdown
         if (!bookingPatientId) {
@@ -2219,7 +2229,8 @@ const Agenda: React.FC = () => {
                                                 treatmentName: !bookingBudgetId && selectedDbServices.length > 0 
                                                     ? selectedDbServices.map(t => t.name).join(', ')
                                                     : (bookingTreatment || null),
-                                                amount: bookingPrice || null,
+                                                // Send 0 explicitly only for free revisions; otherwise null if no price set.
+                                                amount: bookingIsRevision ? bookingPrice : (bookingPrice > 0 ? bookingPrice : null),
                                                 duration: bookingDuration,
                                                 observations: bookingObservation || null,
                                                 visitDetails: bookingVisitDetails || null,
