@@ -74,7 +74,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         const byDoctor: Record<string, { doctorId: string; amount: number; names: string[] }> = {};
         for (const item of itemsWithDoctor) {
             if (!byDoctor[item.doctorId]) byDoctor[item.doctorId] = { doctorId: item.doctorId, amount: 0, names: [] };
-            byDoctor[item.doctorId].amount += Number(item.price) || 0;
+            const discountedPrice = Number(item.price) * (1 - (Number(item.discount) || 0) / 100) * (Number(item.quantity) || 1);
+            byDoctor[item.doctorId].amount += discountedPrice;
             if (item.name) byDoctor[item.doctorId].names.push(item.name);
         }
         return Object.values(byDoctor).map(s => ({ doctorId: s.doctorId, amount: s.amount, treatmentName: s.names.join(', ') }));
@@ -440,14 +441,23 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                         <div key={item.id || idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
                                             <div>
                                                 <p className="text-xs font-bold text-slate-800">{item.name}</p>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase">{item.price.toFixed(2)}€</p>
+                                                {(Number(item.discount) || 0) > 0 ? (
+                                                    <p className="text-[10px] font-black uppercase flex items-center gap-1">
+                                                        <span className="line-through text-slate-300">{Number(item.price).toFixed(2)}€</span>
+                                                        <span className="text-green-600">{(Number(item.price) * (1 - Number(item.discount) / 100)).toFixed(2)}€</span>
+                                                        <span className="text-red-500">(-{item.discount}%)</span>
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase">{Number(item.price).toFixed(2)}€</p>
+                                                )}
                                             </div>
                                             <button
                                                 onClick={() => {
                                                     const curAmt = parseFloat(totalAmount) || 0;
-                                                    setTotalAmount((curAmt + item.price).toFixed(2));
+                                                    const discountedLineTotal = Number(item.price) * (1 - (Number(item.discount) || 0) / 100) * (Number(item.quantity) || 1);
+                                                    setTotalAmount((curAmt + discountedLineTotal).toFixed(2));
                                                     setConcept(prev => prev ? `${prev}, ${item.name}` : item.name);
-                                                    setOriginalAmount(prev => prev + item.price);
+                                                    setOriginalAmount(prev => prev + discountedLineTotal);
                                                 }}
                                                 className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-xs font-black uppercase hover:bg-blue-600 hover:text-white transition-all"
                                             >
