@@ -219,9 +219,11 @@ const Patients: React.FC = () => {
     // Fetch clinical records when history tab is active
     React.useEffect(() => {
         if (selectedPatient && patientTab === 'history') {
+            setIsLoadingRecords(true);
             api.clinicalRecords.getByPatient(selectedPatient.id)
                 .then((records: any[]) => setClinicalRecords(records || []))
-                .catch((err: any) => console.error("Failed to load clinical records", err));
+                .catch((err: any) => console.error("Failed to load clinical records", err))
+                .finally(() => setIsLoadingRecords(false));
         }
     }, [selectedPatient, patientTab]);
 
@@ -244,6 +246,7 @@ const Patients: React.FC = () => {
     const [isEditEntryModalOpen, setIsEditEntryModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<ClinicalRecord | null>(null);
     const [newEntryForm, setNewEntryForm] = useState({ treatment: '', price: '', observation: '', specialization: 'General', doctorId: '' });
+    const [isLoadingRecords, setIsLoadingRecords] = useState(false);
     
     // Reassign Doctor Modal
     const [isReassignDoctorModalOpen, setIsReassignDoctorModalOpen] = useState(false);
@@ -878,6 +881,7 @@ const Patients: React.FC = () => {
     // Submit guards (Block 3)
     const [isSubmittingPatient, setIsSubmittingPatient] = useState(false);
     const [isSubmittingRecord, setIsSubmittingRecord] = useState(false);
+    const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
     const [isSubmittingTreatment, setIsSubmittingTreatment] = useState(false);
     const [isSubmittingWhatsapp, setIsSubmittingWhatsapp] = useState(false);
 
@@ -938,8 +942,22 @@ const Patients: React.FC = () => {
         }
     };
 
+    // Timezone helpers for the Edit modal — convert UTC ISO strings to local date/time parts
+    const getLocalDateStr = (iso: string) => {
+        const d = new Date(iso);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const getLocalTimeStr = (iso: string) => {
+        const d = new Date(iso);
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+    const localToISO = (localDate: string, localTime: string) =>
+        new Date(`${localDate}T${localTime}:00`).toISOString();
+
     const handleUpdateRecord = async () => {
         if (!editingRecord) return;
+        if (isSubmittingEdit) return;
+        setIsSubmittingEdit(true);
         try {
             const updated = await api.clinicalRecords.update(editingRecord.id, {
                 treatment: editingRecord.clinicalData?.treatment || '',
@@ -950,12 +968,14 @@ const Patients: React.FC = () => {
             });
             setClinicalRecords(prev => prev.map(r => r.id === editingRecord.id ? updated : r));
             toast.success('Registro actualizado correctamente');
+            setIsEditEntryModalOpen(false);
+            setEditingRecord(null);
         } catch (e: any) {
             console.error('Error updating clinical record:', e);
             toast.error('Error al actualizar: ' + (e.message || 'Error desconocido'));
+        } finally {
+            setIsSubmittingEdit(false);
         }
-        setIsEditEntryModalOpen(false);
-        setEditingRecord(null);
     };
 
     const handleGenerateReceta = async (medication: string) => {
@@ -1991,7 +2011,9 @@ const Patients: React.FC = () => {
                                         <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider">Texto</div>
                                         <div className="px-4 py-3 text-[10px] font-black uppercase text-slate-500 tracking-wider text-right">Acciones</div>
                                     </div>
-                                    {clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system').length === 0 ? (
+                                    {isLoadingRecords ? (
+                                        <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase animate-pulse">Cargando historial...</p></div>
+                                    ) : clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system').length === 0 ? (
                                         <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase">No hay historial clínico registrado</p></div>
                                     ) : (
                                         clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system')
@@ -2708,7 +2730,7 @@ const Patients: React.FC = () => {
                                         </button>
                                     </label>
                                     <textarea
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium h-32 resize-none"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium min-h-[8rem] resize-y"
                                         placeholder="Detalles de la sesión..."
                                         value={newEntryForm.observation}
                                         onChange={e => setNewEntryForm({ ...newEntryForm, observation: e.target.value })}
@@ -2737,10 +2759,10 @@ const Patients: React.FC = () => {
                                         <input
                                             type="date"
                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                            value={editingRecord.date ? editingRecord.date.slice(0, 10) : ''}
+                                            value={editingRecord.date ? getLocalDateStr(editingRecord.date) : ''}
                                             onChange={e => {
-                                                const timePart = editingRecord.date ? editingRecord.date.slice(11, 16) : '00:00';
-                                                setEditingRecord({ ...editingRecord, date: `${e.target.value}T${timePart}:00.000Z` });
+                                                const timePart = editingRecord.date ? getLocalTimeStr(editingRecord.date) : '00:00';
+                                                setEditingRecord({ ...editingRecord, date: localToISO(e.target.value, timePart) });
                                             }}
                                         />
                                     </div>
@@ -2749,10 +2771,10 @@ const Patients: React.FC = () => {
                                         <input
                                             type="time"
                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold"
-                                            value={editingRecord.date ? editingRecord.date.slice(11, 16) : ''}
+                                            value={editingRecord.date ? getLocalTimeStr(editingRecord.date) : ''}
                                             onChange={e => {
-                                                const datePart = editingRecord.date ? editingRecord.date.slice(0, 10) : new Date().toISOString().slice(0, 10);
-                                                setEditingRecord({ ...editingRecord, date: `${datePart}T${e.target.value}:00.000Z` });
+                                                const datePart = editingRecord.date ? getLocalDateStr(editingRecord.date) : getLocalDateStr(new Date().toISOString());
+                                                setEditingRecord({ ...editingRecord, date: localToISO(datePart, e.target.value) });
                                             }}
                                         />
                                     </div>
@@ -2801,7 +2823,7 @@ const Patients: React.FC = () => {
                                         </button>
                                     </label>
                                     <textarea
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium h-32 resize-none"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium min-h-[8rem] resize-y"
                                         value={editingRecord.clinicalData?.observation || ''}
                                         onChange={e => setEditingRecord({ ...editingRecord, clinicalData: { ...editingRecord.clinicalData, observation: e.target.value } })}
                                     />
@@ -2809,7 +2831,7 @@ const Patients: React.FC = () => {
                             </div>
                             <div className="flex gap-4 mt-6">
                                 <button onClick={() => { setIsEditEntryModalOpen(false); setEditingRecord(null); }} className="flex-1 py-3 font-bold text-slate-500">Cancelar</button>
-                                <button onClick={handleUpdateRecord} className="flex-1 bg-amber-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg hover:bg-amber-700 transition-colors">Guardar Cambios</button>
+                                <button onClick={handleUpdateRecord} disabled={isSubmittingEdit} className="flex-1 bg-amber-600 text-white py-3 rounded-xl font-bold uppercase shadow-lg hover:bg-amber-700 transition-colors disabled:opacity-50">{isSubmittingEdit ? 'Guardando...' : 'Guardar Cambios'}</button>
                             </div>
                         </div>
                     </div>
