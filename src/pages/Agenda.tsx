@@ -134,6 +134,14 @@ const Agenda: React.FC = () => {
     const [isDuplicating, setIsDuplicating] = useState(false);
     const [dragOverSlot, setDragOverSlot] = useState<{ time: string, drId: string, dayIdx: number } | null>(null);
 
+    // Responsive slot height (px per 5-min interval): scales with viewport width
+    const [slotH, setSlotH] = useState(() => window.innerWidth >= 1536 ? 24 : window.innerWidth >= 1280 ? 20 : 16);
+    useEffect(() => {
+        const handleResize = () => setSlotH(window.innerWidth >= 1536 ? 24 : window.innerWidth >= 1280 ? 20 : 16);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     // Load Doctor Schedules from Supabase
     useEffect(() => {
         const loadSchedules = async () => {
@@ -790,8 +798,7 @@ const Agenda: React.FC = () => {
             window.removeEventListener('mouseup', onMouseUp);
 
             const deltaY = upEv.pageY - e.pageY;
-            const SLOT_H = 16; // 5-minute slot height
-            const deltaMins = Math.round(deltaY / SLOT_H) * 5;
+            const deltaMins = Math.round(deltaY / slotH) * 5;
             const newDuration = Math.max(5, (appt.duration || 30) + deltaMins);
 
             if (newDuration !== appt.duration) {
@@ -1196,7 +1203,7 @@ const Agenda: React.FC = () => {
                                 const isQuarter = min === 15 || min === 30 || min === 45;
                                 if (isHour) {
                                     return (
-                                        <div key={`tl-${time}`} className="h-4 relative border-t-2 border-slate-300">
+                                        <div key={`tl-${time}`} className="relative border-t-2 border-slate-300" style={{ height: `${slotH}px` }}>
                                             <span className="absolute -top-[9px] left-0 w-full text-right pr-2 text-[11px] font-black text-slate-600 bg-white leading-none">
                                                 {time}
                                             </span>
@@ -1205,14 +1212,14 @@ const Agenda: React.FC = () => {
                                 }
                                 if (isQuarter) {
                                     return (
-                                        <div key={`tl-${time}`} className="h-4 relative border-t border-slate-100">
+                                        <div key={`tl-${time}`} className="relative border-t border-slate-100" style={{ height: `${slotH}px` }}>
                                             <span className="absolute -top-[7px] left-0 w-full text-right pr-2 text-[9px] font-medium text-slate-400 bg-white leading-none">
                                                 {time}
                                             </span>
                                         </div>
                                     );
                                 }
-                                return <div key={`tl-${time}`} className="h-4" />;
+                                return <div key={`tl-${time}`} style={{ height: `${slotH}px` }} />;
                             })}
                         </div>
 
@@ -1226,7 +1233,6 @@ const Agenda: React.FC = () => {
 
                                     {/* ══ CURRENT TIME INDICATOR ══ */}
                                     {(() => {
-                                        const SLOT_H = 16;
                                         const todayStr = formatDateLocal(new Date());
                                         const selectedStr = formatDateLocal(currentDate);
                                         if (viewMode !== 'daily' || todayStr !== selectedStr) return null;
@@ -1235,7 +1241,7 @@ const Agenda: React.FC = () => {
                                         const ctStr = `${String(ctH).padStart(2,'0')}:${String(ctM < 5 ? 0 : Math.floor(ctM/5)*5).padStart(2,'0')}`;
                                         const idx = TIME_SLOTS.indexOf(ctStr);
                                         if (idx < 0) return null;
-                                        const top = idx * SLOT_H + (ctM % 5) * (SLOT_H / 5);
+                                        const top = idx * slotH + (ctM % 5) * (slotH / 5);
                                         return (
                                             <div
                                                 style={{ top: `${top}px`, zIndex: 25 }}
@@ -1249,8 +1255,6 @@ const Agenda: React.FC = () => {
 
                                     {/* ═══════ GRID RENDERING ═══════ */}
                                     {(() => {
-                                        const SLOT_H = 16; // h-4 = 16px
-
                                         // ── CASE A: Daily + specific doctor → merged blocks ──
                                         if (viewMode === 'daily' && selectedDoctorId && selectedDoctorId !== 'all') {
                                             const availableSlots = getAvailableTimeSlots(currentDate, selectedDoctorId);
@@ -1258,7 +1262,7 @@ const Agenda: React.FC = () => {
                                             // If entire day is off
                                             if (availableSlots.length === 0) {
                                                 return (
-                                                    <div style={{ height: `${TIME_SLOTS.length * SLOT_H}px` }}
+                                                    <div style={{ height: `${TIME_SLOTS.length * slotH}px` }}
                                                         className="flex items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
                                                         <div className="text-center">
                                                             <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-2" />
@@ -1291,7 +1295,7 @@ const Agenda: React.FC = () => {
                                                 if (item.kind === 'block') {
                                                     return (
                                                         <div key={`blk-${idx}`}
-                                                            style={{ height: `${item.count * SLOT_H}px` }}
+                                                            style={{ height: `${item.count * slotH}px` }}
                                                             className="flex relative border-t border-slate-100">
                                                             <div className="flex-1 bg-slate-50/80 flex items-center justify-center">
                                                                 <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest select-none">
@@ -1309,11 +1313,12 @@ const Agenda: React.FC = () => {
                                                         onDragOver={(e) => handleDragOver(e, t, selectedDoctorId, 0)}
                                                         onDragLeave={() => setDragOverSlot(null)}
                                                         onDrop={(e) => handleDrop(e, t, selectedDoctorId, 0)}
-                                                        className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
+                                                        className={`flex relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}
+                                                        style={{ height: `${slotH}px` }}>
                                                         
                                                         {dragOverSlot?.time === t && draggingAppt && (
                                                             <div 
-                                                                style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                style={{ height: `${(draggingAppt.duration / 5) * slotH}px` }}
                                                                 className="absolute top-0 left-0 right-0 bg-purple-500/20 border-2 border-purple-500 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center"
                                                             >
                                                                 <span className="text-[10px] font-bold text-purple-700 uppercase">Mover aquí</span>
@@ -1350,7 +1355,7 @@ const Agenda: React.FC = () => {
                                                 const isQuarter = time.endsWith(':00') || time.endsWith(':15') || time.endsWith(':30') || time.endsWith(':45');
                                                 const hourStart = time.endsWith(':00');
                                                 return (
-                                                    <div key={time} className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
+                                                    <div key={time} className={`flex relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`} style={{ height: `${slotH}px` }}>
                                                         {activeDoctors.map(doc => {
                                                             const ok = getAvailableTimeSlots(currentDate, doc.id).includes(time);
                                                             const closed = isDateClosedForDoctor(currentDate, doc.id);
@@ -1377,7 +1382,7 @@ const Agenda: React.FC = () => {
                                                                 >
                                                                     {dragOverSlot?.time === time && dragOverSlot?.drId === doc.id && draggingAppt && (
                                                                         <div 
-                                                                            style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                            style={{ height: `${(draggingAppt.duration / 5) * slotH}px` }}
                                                                             className="absolute top-0 left-0 right-0 bg-blue-500/20 border-2 border-blue-500 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center"
                                                                         >
                                                                             <span className="text-[10px] font-black text-blue-700 uppercase">Soltar</span>
@@ -1397,7 +1402,7 @@ const Agenda: React.FC = () => {
                                                 const isQuarter = time.endsWith(':00') || time.endsWith(':15') || time.endsWith(':30') || time.endsWith(':45');
                                                 const hourStart = time.endsWith(':00');
                                                 return (
-                                                    <div key={time} className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
+                                                    <div key={time} className={`flex relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`} style={{ height: `${slotH}px` }}>
                                                         <div 
                                                             onDragOver={(e) => handleDragOver(e, time, selectedDoctorId === 'all' ? '' : selectedDoctorId, 0)}
                                                             onDragLeave={() => setDragOverSlot(null)}
@@ -1419,7 +1424,7 @@ const Agenda: React.FC = () => {
                                                         >
                                                             {dragOverSlot?.time === time && draggingAppt && (
                                                                 <div 
-                                                                    style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                    style={{ height: `${(draggingAppt.duration / 5) * slotH}px` }}
                                                                     className="absolute top-0 left-0 right-0 bg-slate-500/10 border-2 border-slate-400 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center"
                                                                 >
                                                                     <div className="bg-white/80 px-2 py-0.5 rounded shadow-sm">
@@ -1438,7 +1443,7 @@ const Agenda: React.FC = () => {
                                             const isQuarter = time.endsWith(':00') || time.endsWith(':15') || time.endsWith(':30') || time.endsWith(':45');
                                             const hourStart = time.endsWith(':00');
                                             return (
-                                                <div key={time} className={`flex h-4 relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`}>
+                                                <div key={time} className={`flex relative group ${hourStart ? 'border-t-2 border-slate-300' : isQuarter ? 'border-t border-slate-200' : 'border-t border-slate-100/50'}`} style={{ height: `${slotH}px` }}>
                                                     {Array.from({ length: 7 }).map((_, dayIdx) => {
                                                         const d = new Date(currentDate);
                                                         const dow = d.getDay();
@@ -1474,7 +1479,7 @@ const Agenda: React.FC = () => {
                                                             >
                                                                 {dragOverSlot?.time === time && dragOverSlot?.dayIdx === dayIdx && draggingAppt && (
                                                                     <div 
-                                                                        style={{ height: `${(draggingAppt.duration / 5) * SLOT_H}px` }}
+                                                                        style={{ height: `${(draggingAppt.duration / 5) * slotH}px` }}
                                                                         className="absolute top-0 left-0 right-0 bg-emerald-500/20 border-2 border-emerald-500 border-dashed rounded-lg z-10 pointer-events-none flex items-center justify-center shadow-lg"
                                                                     >
                                                                         <span className="text-[10px] font-black text-emerald-700 uppercase">Reprogramar</span>
@@ -1491,13 +1496,12 @@ const Agenda: React.FC = () => {
                                     {/* ═══════ APPOINTMENTS OVERLAY ═══════ */}
                                     <div className="absolute inset-0 z-10 pointer-events-none flex ml-0">
                                         {(() => {
-                                            const SLOT_H = 16; // h-4 = 16px
-                                            const PX_PER_MIN = SLOT_H / 5; // 3.2
+                                            const PX_PER_MIN = slotH / 5;
 
                                             // Convert time → pixel top using slot index (handles the 13:45→16:00 gap correctly)
                                             const timeToTop = (t: string): number => {
                                                 const idx = TIME_SLOTS.indexOf(t);
-                                                if (idx >= 0) return idx * SLOT_H;
+                                                if (idx >= 0) return idx * slotH;
                                                 // Interpolate if time is between slots
                                                 const [h, m] = t.split(':').map(Number);
                                                 const mins = h * 60 + m;
@@ -1505,10 +1509,10 @@ const Agenda: React.FC = () => {
                                                     const [sh, sm] = TIME_SLOTS[i].split(':').map(Number);
                                                     const [nh, nm] = TIME_SLOTS[i + 1].split(':').map(Number);
                                                     if (mins >= sh * 60 + sm && mins < nh * 60 + nm) {
-                                                        return (i + (mins - (sh * 60 + sm)) / 5) * SLOT_H;
+                                                        return (i + (mins - (sh * 60 + sm)) / 5) * slotH;
                                                     }
                                                 }
-                                                return (TIME_SLOTS.length - 1) * SLOT_H;
+                                                return (TIME_SLOTS.length - 1) * slotH;
                                             };
 
                                             // Helper: extract date string safely from ISO without timezone shift

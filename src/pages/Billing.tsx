@@ -18,11 +18,22 @@ const Billing: React.FC = () => {
     // All payments (caja movements)
     const [allPayments, setAllPayments] = useState<any[]>([]);
     const [paymentsFilterDate, setPaymentsFilterDate] = useState('');
+    const [paymentsRefresh, setPaymentsRefresh] = useState(0);
     useEffect(() => {
         if (billingTab === 'payments') {
-            api.payments.getAll().then(setAllPayments).catch(() => setAllPayments([]));
+            setAllPayments([]);
+            api.payments.getAll().then(data => {
+                // Deduplicar por ID antes de guardar en estado
+                const seen = new Set<string>();
+                const unique = (data || []).filter((p: any) => {
+                    if (seen.has(p.id)) return false;
+                    seen.add(p.id);
+                    return true;
+                });
+                setAllPayments(unique);
+            }).catch(() => setAllPayments([]));
         }
-    }, [billingTab]);
+    }, [billingTab, paymentsRefresh]);
     const [exportDateFrom, setExportDateFrom] = useState('');
     const [exportDateTo, setExportDateTo] = useState('');
     const [filterDate, setFilterDate] = useState(''); // Filtro para la tabla de facturas
@@ -445,15 +456,22 @@ const Billing: React.FC = () => {
                                     <button onClick={() => setPaymentsFilterDate('')} className="text-xs font-bold text-slate-400 hover:text-slate-900 uppercase">Limpiar</button>
                                 )}
                             </div>
-                            <div className="ml-auto text-right">
-                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total cobros filtrados</p>
-                                <p className="text-2xl font-black text-emerald-600">
-                                    {allPayments
-                                        .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
-                                        .filter(p => p.amount > 0)
-                                        .reduce((s, p) => s + (p.amount || 0), 0)
-                                        .toFixed(2)}€
-                                </p>
+                            <div className="ml-auto flex items-center gap-6">
+                                <button
+                                    onClick={() => setPaymentsRefresh(r => r + 1)}
+                                    className="text-xs font-black uppercase text-slate-400 hover:text-slate-700 tracking-widest border border-slate-200 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+                                    title="Recargar cobros"
+                                >↺ Actualizar</button>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total cobros filtrados</p>
+                                    <p className="text-2xl font-black text-emerald-600">
+                                        {allPayments
+                                            .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
+                                            .filter(p => p.amount > 0)
+                                            .reduce((s, p) => s + (p.amount || 0), 0)
+                                            .toFixed(2)}€
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -479,6 +497,7 @@ const Billing: React.FC = () => {
                                             </td></tr>
                                         ) : (
                                             allPayments
+                                                .filter((p, idx, arr) => arr.findIndex(x => x.id === p.id) === idx) // deduplicar por id
                                                 .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
                                                 .map(pmt => (
                                                     <tr key={pmt.id} className="group hover:bg-blue-50/30 transition-colors duration-300">
