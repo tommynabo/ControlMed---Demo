@@ -31,7 +31,7 @@ router.get('/', async (req, res) => {
         const filtered = allDoctors
             .filter(d => {
                 if (GHOST_DOCTOR_IDS.has(d.id) || GHOST_DOCTOR_NAMES.has(d.name)) return false;
-                if (d.users.length === 0) return true;
+                if (d.users.length === 0) return false; // orphaned Doctor — no linked User account
                 return d.users.some(u => u.isActive === true && (u.isDoctor === true || u.role === 'DOCTOR'));
             })
             .map(({ users, ...rest }) => rest);
