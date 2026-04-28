@@ -1665,6 +1665,19 @@ const Agenda: React.FC = () => {
                                                                                 </div>
                                                                             )}
 
+                                                                            {/* Observations & Visit Details */}
+                                                                            {appt.duration && appt.duration >= 30 && (() => {
+                                                                                const obs = appt.observations || (appt as any).observations;
+                                                                                const visit = (appt as any).visitDetails;
+                                                                                const text = [obs, visit].filter(Boolean).join(' · ');
+                                                                                if (!text) return null;
+                                                                                return (
+                                                                                    <div className="text-[9px] opacity-70 leading-tight mt-0.5 line-clamp-2 break-words">
+                                                                                        {text}
+                                                                                    </div>
+                                                                                );
+                                                                            })()}
+
                                                                             {/* RESIZE HANDLE */}
                                                                             {currentUserRole !== 'DOCTOR' && currentUserRole !== 'AUXILIAR' && (
                                                                                 <div 
