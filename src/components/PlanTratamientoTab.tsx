@@ -204,30 +204,33 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                     <p className="text-sm font-bold text-slate-400">No hay planes de tratamiento</p>
                     <p className="text-xs text-slate-300 mt-1">Crea un plan para organizar los tratamientos del paciente</p>
                 </div>
-            ) : (() => {
-                const activePlans = plans.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED');
-                const completedPlans = plans.filter(p => p.status === 'COMPLETED' || p.status === 'CANCELLED');
-                const visiblePlans = [...activePlans, ...(showCompleted ? completedPlans : [])];
-                return (<>
-                {completedPlans.length > 0 && (
-                    <div className="flex justify-end">
-                        <button
-                            onClick={() => setShowCompleted(v => !v)}
-                            className="text-xs font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-                        >
-                            {showCompleted ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                            {showCompleted ? 'Ocultar completados' : `Mostrar completados (${completedPlans.length})`}
-                        </button>
-                    </div>
-                )}
-                {visiblePlans.map(plan => {
-                    const isExpanded = expandedPlan === plan.id;
-                    const completedSteps = plan.steps.filter(s => s.status === 'COMPLETADO').length;
-                    const totalSteps = plan.steps.length;
-                    const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
-
+            ) : (
+                <>
+                {(() => {
+                    const activePlans = plans.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED');
+                    const completedPlans = plans.filter(p => p.status === 'COMPLETED' || p.status === 'CANCELLED');
+                    const visiblePlans = [...activePlans, ...(showCompleted ? completedPlans : [])];
                     return (
-                        <div key={plan.id} className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+                        <>
+                        {completedPlans.length > 0 && (
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => setShowCompleted(v => !v)}
+                                    className="text-xs font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                                >
+                                    {showCompleted ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    {showCompleted ? 'Ocultar completados' : `Mostrar completados (${completedPlans.length})`}
+                                </button>
+                            </div>
+                        )}
+                        {visiblePlans.map(plan => {
+                            const isExpanded = expandedPlan === plan.id;
+                            const completedSteps = plan.steps.filter(s => s.status === 'COMPLETADO').length;
+                            const totalSteps = plan.steps.length;
+                            const progress = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+
+                            return (
+                                <div key={plan.id} className="bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
                             {/* Plan Header */}
                             <div
                                 className="p-6 flex items-center gap-4 cursor-pointer hover:bg-slate-50/50 transition-colors"
@@ -282,61 +285,57 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                                         <div className="p-6 text-center text-xs text-slate-400">
                                             No hay pasos aún. Añade el primer paso.
                                         </div>
-                                    ) : (() => {
-                                        const activeSteps = plan.steps.filter(s => s.status !== 'COMPLETADO');
-                                        const doneSteps = plan.steps.filter(s => s.status === 'COMPLETADO');
-                                        const showDoneSteps = showDoneStepsPerPlan.has(plan.id);
-                                        const stepsToShow = showDoneSteps ? plan.steps : activeSteps;
-                                        return (<>
-                                        <div className="divide-y divide-slate-50">
-                                            {stepsToShow.map((step, idx) => {
-                                                const cfg = STATUS_CONFIG[step.status] || STATUS_CONFIG['PENDIENTE'];
-                                                return (
-                                                    <div key={step.id} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors group">
-                                                        <span className="text-xs font-black text-slate-300 w-6 text-center">{idx + 1}</span>
-                                                        <button
-                                                            onClick={() => handleToggleStepStatus(step)}
-                                                            className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${cfg.bg} ${cfg.color}`}
-                                                            title={`Click para cambiar a: ${STATUS_CONFIG[nextStatus(step.status)].label}`}
-                                                        >
-                                                            {cfg.icon}
-                                                        </button>
-                                                        <div className="flex-1">
-                                                            <p className={`text-sm font-bold ${step.status === 'COMPLETADO' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                                                                {step.treatmentName}
-                                                            </p>
-                                                            {step.toothId && (
-                                                                <span className="text-[10px] font-bold text-slate-400">Diente #{step.toothId}</span>
-                                                            )}
+                                    ) : (
+                                        <>
+                                            <div className="divide-y divide-slate-50">
+                                                {(showDoneStepsPerPlan.has(plan.id) ? plan.steps : plan.steps.filter(s => s.status !== 'COMPLETADO')).map((step, idx) => {
+                                                    const cfg = STATUS_CONFIG[step.status] || STATUS_CONFIG['PENDIENTE'];
+                                                    return (
+                                                        <div key={step.id} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors group">
+                                                            <span className="text-xs font-black text-slate-300 w-6 text-center">{idx + 1}</span>
+                                                            <button
+                                                                onClick={() => handleToggleStepStatus(step)}
+                                                                className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${cfg.bg} ${cfg.color}`}
+                                                                title={`Click para cambiar a: ${STATUS_CONFIG[nextStatus(step.status)].label}`}
+                                                            >
+                                                                {cfg.icon}
+                                                            </button>
+                                                            <div className="flex-1">
+                                                                <p className={`text-sm font-bold ${step.status === 'COMPLETADO' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                                                    {step.treatmentName}
+                                                                </p>
+                                                                {step.toothId && (
+                                                                    <span className="text-[10px] font-bold text-slate-400">Diente #{step.toothId}</span>
+                                                                )}
+                                                            </div>
+                                                            <span className={`text-[10px] font-black uppercase ${cfg.color}`}>{cfg.label}</span>
+                                                            <button
+                                                                onClick={() => handleDeleteStep(step.id)}
+                                                                className="opacity-0 group-hover:opacity-100 p-1 text-red-300 hover:text-red-500 transition-all"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
                                                         </div>
-                                                        <span className={`text-[10px] font-black uppercase ${cfg.color}`}>{cfg.label}</span>
-                                                        <button
-                                                            onClick={() => handleDeleteStep(step.id)}
-                                                            className="opacity-0 group-hover:opacity-100 p-1 text-red-300 hover:text-red-500 transition-all"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        {doneSteps.length > 0 && (
-                                            <div className="px-6 pb-2">
-                                                <button
-                                                    onClick={() => setShowDoneStepsPerPlan(prev => {
-                                                        const next = new Set(prev);
-                                                        if (next.has(plan.id)) next.delete(plan.id); else next.add(plan.id);
-                                                        return next;
-                                                    })}
-                                                    className="text-xs font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1.5 py-1.5 transition-colors"
-                                                >
-                                                    {showDoneSteps ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                                                    {showDoneSteps ? 'Ocultar realizados' : `Realizados (${doneSteps.length})`}
-                                                </button>
+                                                    );
+                                                })}
                                             </div>
-                                        )}
-                                        </>);
-                                    })()
+                                            {plan.steps.filter(s => s.status === 'COMPLETADO').length > 0 && (
+                                                <div className="px-6 pb-2">
+                                                    <button
+                                                        onClick={() => setShowDoneStepsPerPlan(prev => {
+                                                            const next = new Set(prev);
+                                                            if (next.has(plan.id)) next.delete(plan.id); else next.add(plan.id);
+                                                            return next;
+                                                        })}
+                                                        className="text-xs font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1.5 py-1.5 transition-colors"
+                                                    >
+                                                        {showDoneStepsPerPlan.has(plan.id) ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                                        {showDoneStepsPerPlan.has(plan.id) ? 'Ocultar realizados' : `Realizados (${plan.steps.filter(s => s.status === 'COMPLETADO').length})`}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
 
                                     {/* Add Step */}
                                     {addingStepToPlan === plan.id ? (
@@ -406,9 +405,13 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                                 </div>
                             )}
                         </div>
+                            );
+                        })}
+                        </>
                     );
-                })}
-                </>); })()}
+                })()}
+                </>
+            )}
         </div>
     );
 };
