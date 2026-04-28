@@ -71,7 +71,7 @@ const Settings: React.FC = () => {
 
     // SECURITY: Limit tabs for RECEPTION role
     useEffect(() => {
-        if (isReception && !['templates', 'whatsapp', 'gmail', 'pagos'].includes(settingsTab)) {
+        if (isReception && !['templates', 'whatsapp', 'gmail', 'pagos', 'schedule'].includes(settingsTab)) {
             setSettingsTab('templates');
         }
     }, [isReception, settingsTab]);
@@ -393,6 +393,16 @@ const Settings: React.FC = () => {
                     </button>
                     <button onClick={() => setSettingsTab('audit')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'audit' ? 'bg-rose-50 text-rose-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <ShieldCheck size={14} /> Auditoría
+                    </button>
+                </div>
+                )}
+
+                {/* HORARIOS — visible for RECEPTION */}
+                {isReception && (
+                <div className="mb-4">
+                    <p className="text-[9px] font-black uppercase text-slate-400 px-2 mb-2">Agendas</p>
+                    <button onClick={() => setSettingsTab('schedule')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'schedule' ? 'bg-purple-50 text-purple-600' : 'text-slate-400 hover:bg-slate-50'}`}>
+                        <Calendar size={14} /> Horarios
                     </button>
                 </div>
                 )}
@@ -1080,7 +1090,7 @@ const Settings: React.FC = () => {
                 {settingsTab === 'clinic' && !isReception && <ClinicInfo />}
 
                 {/* SCHEDULE AVAILABILITY SECTION */}
-                {settingsTab === 'schedule' && !isReception && <ScheduleAvailability />}
+                {settingsTab === 'schedule' && <ScheduleAvailability />}
 
                 {/* VACATIONS SECTION */}
                 {settingsTab === 'vacations' && !isReception && <Vacations />}

@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { prisma } = require('../lib/db');
+const { prisma, getSupabase } = require('../lib/db');
 const crypto = require('crypto');
 
 const router = express.Router();
@@ -106,19 +106,27 @@ router.get('/jornada/history', async (req, res) => {
 
 router.get('/agenda-closures', async (req, res) => {
     try {
+        const supabase = getSupabase();
         const { date, doctorId } = req.query;
-        const whereClause = {};
 
-        if (date) whereClause.date = new Date(date);
+        let query = supabase
+            .from('agenda_closures')
+            .select('*')
+            .order('closure_date', { ascending: false });
+
+        if (date) {
+            query = query.eq('closure_date', date);
+        }
         if (doctorId) {
-            whereClause.OR = [{ doctorId }, { doctorId: null }];
+            query = query.or(`doctor_id.eq.${doctorId},doctor_id.is.null`);
         }
 
-        const data = await prisma.agendaClosure.findMany({
-            where: whereClause,
-            orderBy: { date: 'desc' }
-        });
-        res.json(data || []);
+        const { data, error } = await query;
+        if (error) throw new Error(error.message);
+
+        // Map closure_date → date so the frontend keeps working as before
+        const rows = (data || []).map(r => ({ ...r, date: r.closure_date }));
+        res.json(rows);
     } catch (e) {
         console.error('Error fetching agenda closures:', e);
         res.status(500).json({ error: e.message });
@@ -127,33 +135,53 @@ router.get('/agenda-closures', async (req, res) => {
 
 router.post('/agenda-closures', async (req, res) => {
     try {
+        const supabase = getSupabase();
         const { date, doctorId, reason, createdBy } = req.body;
         if (!date) return res.status(400).json({ error: 'date is required' });
 
-        // Validate doctorId exists in Doctor table before creating (prevents FK constraint error)
+        // Validate doctorId exists in Doctor table before inserting
         if (doctorId) {
-            const doctor = await prisma.doctor.findUnique({ where: { id: doctorId }, select: { id: true } });
+            const { data: doctor } = await supabase
+                .from('Doctor')
+                .select('id')
+                .eq('id', doctorId)
+                .maybeSingle();
             if (!doctor) {
                 return res.status(400).json({ error: `Doctor con ID "${doctorId}" no encontrado. Puede que haya sido eliminado.` });
             }
         }
 
-        const checkWhere = { date: new Date(date), doctorId: doctorId || null };
-        const existing = await prisma.agendaClosure.findMany({ where: checkWhere });
+        // Check for existing closure on this date + doctor combination
+        let dupQuery = supabase
+            .from('agenda_closures')
+            .select('id')
+            .eq('closure_date', date);
+        if (doctorId) {
+            dupQuery = dupQuery.eq('doctor_id', doctorId);
+        } else {
+            dupQuery = dupQuery.is('doctor_id', null);
+        }
+        const { data: existing } = await dupQuery;
         if (existing && existing.length > 0) {
             return res.status(409).json({ error: 'This agenda is already closed for this date' });
         }
 
-        const data = await prisma.agendaClosure.create({
-            data: {
+        const { data, error } = await supabase
+            .from('agenda_closures')
+            .insert({
                 id: crypto.randomUUID(),
-                date: new Date(date),
-                doctorId: doctorId || null,
+                closure_date: date,
+                doctor_id: doctorId || null,
                 reason: reason || null,
-                createdBy: createdBy || null
-            }
-        });
-        res.status(201).json(data);
+                created_by: createdBy || null
+            })
+            .select()
+            .single();
+
+        if (error) throw new Error(error.message);
+
+        // Map closure_date → date for frontend compatibility
+        res.status(201).json({ ...data, date: data.closure_date });
     } catch (e) {
         console.error('Error creating agenda closure:', e);
         res.status(500).json({ error: e.message });
@@ -162,7 +190,12 @@ router.post('/agenda-closures', async (req, res) => {
 
 router.delete('/agenda-closures/:id', async (req, res) => {
     try {
-        await prisma.agendaClosure.delete({ where: { id: req.params.id } });
+        const supabase = getSupabase();
+        const { error } = await supabase
+            .from('agenda_closures')
+            .delete()
+            .eq('id', req.params.id);
+        if (error) throw new Error(error.message);
         res.json({ success: true });
     } catch (e) {
         console.error('Error deleting agenda closure:', e);
