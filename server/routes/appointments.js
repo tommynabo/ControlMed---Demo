@@ -75,6 +75,9 @@ router.post('/', async (req, res) => {
                 treatmentName: resolvedTreatmentName,
                 budgetId: safeBudgetId,
                 budgetItemId: safeBudgetItemId || null,
+                budgetItemIds: (Array.isArray(budgetItemIds) && budgetItemIds.length > 0)
+                    ? JSON.stringify(budgetItemIds.map(id => String(id)))
+                    : null,
                 amount: amount || null,
                 status: 'Scheduled',
                 paid: false,
@@ -269,7 +272,14 @@ router.put('/:id', async (req, res) => {
         // Preserve treatment name if frontend sent legacy 'treatment' key instead of 'treatmentName'
         if (updates.treatment && !updates.treatmentName) updates.treatmentName = String(updates.treatment);
 
-        delete updates.serviceIds; delete updates.budgetItemIds; delete updates.treatment;
+        // Serialize budgetItemIds array to JSON string for storage
+        if (Array.isArray(updates.budgetItemIds)) {
+            updates.budgetItemIds = updates.budgetItemIds.length > 0
+                ? JSON.stringify(updates.budgetItemIds.map(id => String(id)))
+                : null;
+        }
+
+        delete updates.serviceIds; delete updates.treatment;
         delete updates.doctor; delete updates.patient; delete updates.budget;
         delete updates.liquidation; delete updates.id; delete updates.created_at; delete updates.deleted_at;
         delete updates.created_by; // Never overwrite creation author

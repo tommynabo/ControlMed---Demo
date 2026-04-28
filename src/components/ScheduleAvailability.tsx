@@ -144,8 +144,8 @@ const ScheduleAvailability: React.FC = () => {
     // Only show users marked as doctors (isDoctor=true covers ADMIN+DOCTOR dual-role AND pure DOCTOR role)
     if (!doc.isDoctor && doc.role !== 'DOCTOR') return false;
     if (doc.is_active === false) return false;
-    // If not ADMIN, only allow managing their own schedule
-    if (currentUserRole !== 'ADMIN' && doc.id !== currentUser?.id) return false;
+    // If not ADMIN/RECEPTION, only allow managing their own schedule
+    if (currentUserRole !== 'ADMIN' && currentUserRole !== 'RECEPTION' && doc.id !== currentUser?.id) return false;
 
     return (doc.full_name || '').toLowerCase().includes(doctorSearchInput.toLowerCase()) ||
       (doc.email || '').toLowerCase().includes(doctorSearchInput.toLowerCase());
@@ -154,7 +154,7 @@ const ScheduleAvailability: React.FC = () => {
   // Filter schedules for viewing based on selectedViewDoctorId and Role
   const displayedSchedules = doctors.filter(doc => {
     const scheduleDoctorId = doc.doctorId || doc.doctor_id;
-    if (currentUserRole !== 'ADMIN') return scheduleDoctorId === currentUser?.id;
+    if (currentUserRole !== 'ADMIN' && currentUserRole !== 'RECEPTION') return scheduleDoctorId === currentUser?.id;
     if (selectedViewDoctorId === 'all') return true;
     return scheduleDoctorId === selectedViewDoctorId;
   });

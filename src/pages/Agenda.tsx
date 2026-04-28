@@ -446,12 +446,18 @@ const Agenda: React.FC = () => {
         if ((appt as any).budgetId) {
             const budget = patientBudgets.find(b => b.id === (appt as any).budgetId);
             if (budget && budget.items) {
-                if ((appt as any).budgetItemId) {
-                    const selectedItems = budget.items.filter((item: any) => item.id === (appt as any).budgetItemId);
-                    setSelectedBudgetItems(selectedItems);
-                } else {
-                    setSelectedBudgetItems([]);
-                }
+                // Prefer the multi-item array (budgetItemIds), fall back to singular budgetItemId
+                const storedIds: string[] = (() => {
+                    try {
+                        const raw = (appt as any).budgetItemIds;
+                        if (raw) return JSON.parse(raw) as string[];
+                    } catch (_) {}
+                    return (appt as any).budgetItemId ? [(appt as any).budgetItemId as string] : [];
+                })();
+                const selectedItems = budget.items.filter((item: any) => storedIds.includes(item.id));
+                setSelectedBudgetItems(selectedItems);
+            } else {
+                setSelectedBudgetItems([]);
             }
         } else {
             setSelectedBudgetItems([]);
@@ -1934,42 +1940,75 @@ const Agenda: React.FC = () => {
                                 <div>
                                     <label className="text-xs font-bold uppercase text-slate-400">Conceptos del Presupuesto</label>
                                     <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 max-h-40 overflow-y-auto">
-                                        {patientBudgets.find(b => b.id === bookingBudgetId)?.items.map((item: any, idx: number) => {
-                                            const isChecked = selectedBudgetItems.some((si: any) => (si.id || idx.toString()) === (item.id || idx.toString()));
-                                            return (
-                                                <label key={idx} className="flex items-center gap-2 cursor-pointer hover:bg-white rounded-lg p-1 transition-colors">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="w-4 h-4 rounded"
-                                                        checked={isChecked}
-                                                        disabled={false}
-                                                        onChange={() => {
-                                                            let newSelected;
-                                                            if (isChecked) {
-                                                                newSelected = selectedBudgetItems.filter((si: any) => (si.id || '') !== (item.id || idx.toString()));
-                                                            } else {
-                                                                newSelected = [...selectedBudgetItems, { ...item, _idx: idx }];
-                                                            }
-                                                            setSelectedBudgetItems(newSelected);
-                                                            // Auto-fill treatment names and total price (with per-item discount applied)
-                                                            setBookingTreatment(newSelected.map((i: any) => i.name).join(', '));
-                                                            setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0));
-                                                            setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
-                                                        }}
-                                                    />
-                                                    <span className="text-xs font-bold text-slate-600 flex-1">{item.name}</span>
-                                                    {(Number(item.discount) || 0) > 0 ? (
-                                                        <span className="text-xs font-bold flex items-center gap-1">
-                                                            <span className="line-through text-slate-300">{Number(item.price).toFixed(2)}€</span>
-                                                            <span className="text-green-600">{(Number(item.price) * (1 - Number(item.discount) / 100)).toFixed(2)}€</span>
-                                                            <span className="text-red-500">(-{item.discount}%)</span>
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs font-bold text-slate-400">{item.price}€</span>
-                                                    )}
-                                                </label>
+                                        {(() => {
+                                            // Build a set of budgetLineItem IDs already used in OTHER appointments
+                                            // for this same patient + budget (excluding the appointment being edited now)
+                                            const usedBudgetItemIds = new Set<string>(
+                                                appointments
+                                                    .filter((a: any) =>
+                                                        a.patientId === bookingPatientId &&
+                                                        a.budgetId === bookingBudgetId &&
+                                                        a.id !== selectedAppt?.id &&
+                                                        !a.deleted_at
+                                                    )
+                                                    .flatMap((a: any) => {
+                                                        try {
+                                                            const multi = a.budgetItemIds ? JSON.parse(a.budgetItemIds) as string[] : [];
+                                                            return multi.length > 0 ? multi : (a.budgetItemId ? [a.budgetItemId as string] : []);
+                                                        } catch (_) {
+                                                            return a.budgetItemId ? [a.budgetItemId as string] : [];
+                                                        }
+                                                    })
                                             );
-                                        })}
+
+                                            const availableItems = (patientBudgets.find(b => b.id === bookingBudgetId)?.items || [])
+                                                .filter((item: any) => !usedBudgetItemIds.has(item.id));
+
+                                            if (availableItems.length === 0) {
+                                                return (
+                                                    <p className="text-xs text-slate-400 text-center py-2">
+                                                        Todos los tratamientos de este presupuesto ya han sido agendados.
+                                                    </p>
+                                                );
+                                            }
+
+                                            return availableItems.map((item: any, idx: number) => {
+                                                const isChecked = selectedBudgetItems.some((si: any) => (si.id || idx.toString()) === (item.id || idx.toString()));
+                                                return (
+                                                    <label key={idx} className={`flex items-center gap-2 cursor-pointer rounded-lg p-1 transition-colors border ${isChecked ? 'bg-green-50 border-green-200' : 'hover:bg-white border-transparent'}`}>
+                                                        <input
+                                                            type="checkbox"
+                                                            className="w-4 h-4 rounded"
+                                                            checked={isChecked}
+                                                            onChange={() => {
+                                                                let newSelected;
+                                                                if (isChecked) {
+                                                                    newSelected = selectedBudgetItems.filter((si: any) => (si.id || '') !== (item.id || idx.toString()));
+                                                                } else {
+                                                                    newSelected = [...selectedBudgetItems, { ...item, _idx: idx }];
+                                                                }
+                                                                setSelectedBudgetItems(newSelected);
+                                                                // Auto-fill treatment names and total price (with per-item discount applied)
+                                                                setBookingTreatment(newSelected.map((i: any) => i.name).join(', '));
+                                                                setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0));
+                                                                setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
+                                                            }}
+                                                        />
+                                                        {isChecked && <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-green-500 shrink-0" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>}
+                                                        <span className={`text-xs flex-1 ${isChecked ? 'font-black text-green-700' : 'font-bold text-slate-600'}`}>{item.name}</span>
+                                                        {(Number(item.discount) || 0) > 0 ? (
+                                                            <span className="text-xs font-bold flex items-center gap-1">
+                                                                <span className="line-through text-slate-300">{Number(item.price).toFixed(2)}€</span>
+                                                                <span className="text-green-600">{(Number(item.price) * (1 - Number(item.discount) / 100)).toFixed(2)}€</span>
+                                                                <span className="text-red-500">(-{item.discount}%)</span>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs font-bold text-slate-400">{item.price}€</span>
+                                                        )}
+                                                    </label>
+                                                );
+                                            });
+                                        })()}
                                     </div>
                                     {selectedBudgetItems.length > 0 && (
                                         <div className="mt-2 text-right text-xs font-black text-blue-600">

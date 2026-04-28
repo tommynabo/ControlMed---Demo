@@ -56,8 +56,9 @@ router.post('/jornada/manual', async (req, res) => {
             return res.status(400).json({ error: 'Faltan campos obligatorios (fecha, inicio, fin).' });
         }
 
-        const clockIn  = new Date(`${date}T${startTime}:00`);
-        const clockOut = new Date(`${date}T${endTime}:00`);
+        // startTime and endTime arrive as ISO strings (timezone-aware) from the browser
+        const clockIn  = new Date(startTime);
+        const clockOut = new Date(endTime);
 
         if (clockOut <= clockIn) {
             return res.status(400).json({ error: 'La hora de fin debe ser posterior a la de inicio.' });

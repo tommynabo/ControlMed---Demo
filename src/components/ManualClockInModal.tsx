@@ -33,11 +33,15 @@ const ManualClockInModal: React.FC<ManualClockInModalProps> = ({ isOpen, onClose
         setLoading(true);
         try {
             if (!currentUser?.id) throw new Error('Usuario no identificado');
-            
+
+            // Convert local HH:MM to ISO UTC so the server stores the correct UTC timestamp
+            const startISO = new Date(`${date}T${startTime}:00`).toISOString();
+            const endISO   = new Date(`${date}T${endTime}:00`).toISOString();
+
             await api.attendance.manual(currentUser.id, currentUserRole, {
                 date,
-                startTime,
-                endTime,
+                startTime: startISO,
+                endTime: endISO,
                 breakMinutes,
                 notes
             });

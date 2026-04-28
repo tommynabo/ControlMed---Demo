@@ -232,6 +232,7 @@ model Appointment {
   budgetId     String?
   budget       Budget?   @relation(fields: [budgetId], references: [id])
   budgetItemId String?
+  budgetItemIds String?
   amount       Float?
   liquidation Liquidation?
   invoice     Invoice?

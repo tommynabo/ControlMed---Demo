@@ -1736,7 +1736,7 @@ const Patients: React.FC = () => {
                                                 <div className="space-y-3">
                                                     {patientAppointments
                                                         .filter(a => a.status === 'Scheduled' || a.status === 'PENDIENTE')
-                                                        .sort((a, b) => new Date(normalizeDateStr(a.date)).getTime() - new Date(normalizeDateStr(b.date)).getTime())
+                                                        .sort((a, b) => new Date(normalizeDateStr(b.date)).getTime() - new Date(normalizeDateStr(a.date)).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
                                                             const isEditing = editingVisitId === visit.id;
