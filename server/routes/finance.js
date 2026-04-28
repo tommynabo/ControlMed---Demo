@@ -476,6 +476,39 @@ router.post('/payments/create', async (req, res) => {
 
         res.status(200).json({ success: true, ...result });
 
+        // Mark PatientTreatment rows as COMPLETADO after a full (non-partial) payment
+        if (!result.isPartial) {
+            try {
+                const supabasePost = getSupabase();
+                const treatmentIdsFromBody = req.body.treatmentIds;
+                if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
+                    // Explicit list of PatientTreatment IDs provided by the frontend
+                    await supabasePost
+                        .from('PatientTreatment')
+                        .update({ status: 'COMPLETADO' })
+                        .in('id', treatmentIdsFromBody)
+                        .eq('patientId', patientId);
+                } else if (appointmentId) {
+                    // Fallback: look up the appointment's serviceId and update matching treatments
+                    const { data: appt } = await supabasePost
+                        .from('Appointment')
+                        .select('treatmentId')
+                        .eq('id', appointmentId)
+                        .single();
+                    if (appt?.treatmentId) {
+                        await supabasePost
+                            .from('PatientTreatment')
+                            .update({ status: 'COMPLETADO' })
+                            .eq('serviceId', appt.treatmentId)
+                            .eq('patientId', patientId)
+                            .not('status', 'in', '("COMPLETADO","PAGADO")');
+                    }
+                }
+            } catch (treatErr) {
+                console.error('⚠️ Error actualizando estado de tratamientos (no crítico):', treatErr.message);
+            }
+        }
+
         // Gmail invoice email (fire-and-forget, never blocks the response)
         if (patient.email && result.invoice) {
             (async () => {
@@ -720,6 +753,35 @@ router.post('/payments/create-split', async (req, res) => {
 
         res.status(200).json({ success: true, ...result });
 
+        // Mark PatientTreatment rows as COMPLETADO after a split payment
+        try {
+            const supabasePost = getSupabase();
+            const treatmentIdsFromBody = req.body.treatmentIds;
+            if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
+                await supabasePost
+                    .from('PatientTreatment')
+                    .update({ status: 'COMPLETADO' })
+                    .in('id', treatmentIdsFromBody)
+                    .eq('patientId', patientId);
+            } else if (appointmentId) {
+                const { data: appt } = await supabasePost
+                    .from('Appointment')
+                    .select('treatmentId')
+                    .eq('id', appointmentId)
+                    .single();
+                if (appt?.treatmentId) {
+                    await supabasePost
+                        .from('PatientTreatment')
+                        .update({ status: 'COMPLETADO' })
+                        .eq('serviceId', appt.treatmentId)
+                        .eq('patientId', patientId)
+                        .not('status', 'in', '("COMPLETADO","PAGADO")');
+                }
+            }
+        } catch (treatErr) {
+            console.error('⚠️ Error actualizando estado de tratamientos en split (no crítico):', treatErr.message);
+        }
+
         try {
             logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'payments_split', resourceId: result.payment?.id, newValues: { patientId, totalAmount: numericTotal, method, splits: splits.length }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         } catch (_) {}
@@ -791,7 +853,7 @@ router.post('/pay-with-wallet', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { patientId, amount, appointmentId, treatmentName } = req.body;
+        const { patientId, amount, appointmentId, treatmentName, treatmentIds } = req.body;
         if (!patientId || !amount) return res.status(400).json({ error: 'patientId and amount are required' });
 
         const numericAmount = parseFloat(amount);
@@ -810,7 +872,34 @@ router.post('/pay-with-wallet', async (req, res) => {
             return payment;
         });
 
-        res.json({ success: true, payment: result });
+        // Mark the paid PatientTreatment rows as COMPLETADO
+        if (Array.isArray(treatmentIds) && treatmentIds.length > 0) {
+            await supabase
+                .from('PatientTreatment')
+                .update({ status: 'COMPLETADO' })
+                .in('id', treatmentIds)
+                .eq('patientId', patientId);
+        }
+
+        // Also update the linked appointment's PatientTreatment via serviceId (fallback)
+        if (appointmentId && !(Array.isArray(treatmentIds) && treatmentIds.length > 0)) {
+            const { data: appt } = await supabase
+                .from('Appointment')
+                .select('treatmentId')
+                .eq('id', appointmentId)
+                .single();
+            if (appt?.treatmentId) {
+                await supabase
+                    .from('PatientTreatment')
+                    .update({ status: 'COMPLETADO' })
+                    .eq('serviceId', appt.treatmentId)
+                    .eq('patientId', patientId)
+                    .not('status', 'in', '("COMPLETADO","PAGADO")');
+            }
+        }
+
+        const newBalance = (patient.wallet || 0) - numericAmount;
+        res.json({ success: true, payment: result, newBalance });
     } catch (e) {
         console.error('❌ Pay with wallet error:', e);
         res.status(500).json({ error: e.message });

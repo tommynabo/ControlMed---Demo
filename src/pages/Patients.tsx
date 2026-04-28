@@ -3096,6 +3096,9 @@ const Patients: React.FC = () => {
                             api.invoices.getAll().then(setInvoices);
                             setPatientTab('billing');
                         }
+
+                        // 3. Refresh treatments list so paid treatments move to completed section
+                        setTreatmentRefreshKey(k => k + 1);
                     }
                     setIsPaymentModalOpen(false);
                 }}
