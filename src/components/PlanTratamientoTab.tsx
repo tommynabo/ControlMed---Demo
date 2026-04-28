@@ -23,6 +23,8 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     const [plans, setPlans] = useState<ClinicalTreatmentPlan[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
+    const [showCompleted, setShowCompleted] = useState(false);
+    const [showDoneStepsPerPlan, setShowDoneStepsPerPlan] = useState<Set<string>>(new Set());
     const [showNewPlan, setShowNewPlan] = useState(false);
     const [newPlanName, setNewPlanName] = useState('');
     const [newStepName, setNewStepName] = useState('');
@@ -202,8 +204,23 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                     <p className="text-sm font-bold text-slate-400">No hay planes de tratamiento</p>
                     <p className="text-xs text-slate-300 mt-1">Crea un plan para organizar los tratamientos del paciente</p>
                 </div>
-            ) : (
-                plans.map(plan => {
+            ) : (() => {
+                const activePlans = plans.filter(p => p.status !== 'COMPLETED' && p.status !== 'CANCELLED');
+                const completedPlans = plans.filter(p => p.status === 'COMPLETED' || p.status === 'CANCELLED');
+                const visiblePlans = [...activePlans, ...(showCompleted ? completedPlans : [])];
+                return (<>
+                {completedPlans.length > 0 && (
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => setShowCompleted(v => !v)}
+                            className="text-xs font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                        >
+                            {showCompleted ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            {showCompleted ? 'Ocultar completados' : `Mostrar completados (${completedPlans.length})`}
+                        </button>
+                    </div>
+                )}
+                {visiblePlans.map(plan => {
                     const isExpanded = expandedPlan === plan.id;
                     const completedSteps = plan.steps.filter(s => s.status === 'COMPLETADO').length;
                     const totalSteps = plan.steps.length;
@@ -265,9 +282,14 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                                         <div className="p-6 text-center text-xs text-slate-400">
                                             No hay pasos aún. Añade el primer paso.
                                         </div>
-                                    ) : (
+                                    ) : (() => {
+                                        const activeSteps = plan.steps.filter(s => s.status !== 'COMPLETADO');
+                                        const doneSteps = plan.steps.filter(s => s.status === 'COMPLETADO');
+                                        const showDoneSteps = showDoneStepsPerPlan.has(plan.id);
+                                        const stepsToShow = showDoneSteps ? plan.steps : activeSteps;
+                                        return (<>
                                         <div className="divide-y divide-slate-50">
-                                            {plan.steps.map((step, idx) => {
+                                            {stepsToShow.map((step, idx) => {
                                                 const cfg = STATUS_CONFIG[step.status] || STATUS_CONFIG['PENDIENTE'];
                                                 return (
                                                     <div key={step.id} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors group">
@@ -298,7 +320,23 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                                                 );
                                             })}
                                         </div>
-                                    )}
+                                        {doneSteps.length > 0 && (
+                                            <div className="px-6 pb-2">
+                                                <button
+                                                    onClick={() => setShowDoneStepsPerPlan(prev => {
+                                                        const next = new Set(prev);
+                                                        if (next.has(plan.id)) next.delete(plan.id); else next.add(plan.id);
+                                                        return next;
+                                                    })}
+                                                    className="text-xs font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1.5 py-1.5 transition-colors"
+                                                >
+                                                    {showDoneSteps ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                                    {showDoneSteps ? 'Ocultar realizados' : `Realizados (${doneSteps.length})`}
+                                                </button>
+                                            </div>
+                                        )}
+                                        </>);
+                                    })()
 
                                     {/* Add Step */}
                                     {addingStepToPlan === plan.id ? (
@@ -369,8 +407,8 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                             )}
                         </div>
                     );
-                })
-            )}
+                })}
+                </>); })()}
         </div>
     );
 };

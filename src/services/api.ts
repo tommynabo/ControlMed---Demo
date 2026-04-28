@@ -1148,6 +1148,47 @@ export const api = {
                 console.error('Error updating doctor schedule:', error);
                 throw error;
             }
+        },
+
+        getOverrides: async (params?: { doctorId?: string; dateFrom?: string; dateTo?: string }) => {
+            try {
+                const query = params ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v)).join('&') : '';
+                const res = await fetch(`${API_URL}/doctor-schedules/overrides${query}`, { headers });
+                if (!res.ok) throw new Error('Failed to fetch schedule overrides');
+                return await res.json();
+            } catch (error) {
+                console.error('Error fetching schedule overrides:', error);
+                return [];
+            }
+        },
+
+        createOverride: async (data: { doctorId: string; date: string; startTime: string; endTime: string; notes?: string | null }) => {
+            try {
+                const res = await fetch(`${API_URL}/doctor-schedules/overrides`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(data)
+                });
+                if (!res.ok) throw new Error('Failed to create schedule override');
+                return await res.json();
+            } catch (error) {
+                console.error('Error creating schedule override:', error);
+                throw error;
+            }
+        },
+
+        deleteOverride: async (id: string) => {
+            try {
+                const res = await fetch(`${API_URL}/doctor-schedules/overrides/${id}`, {
+                    method: 'DELETE',
+                    headers
+                });
+                if (!res.ok) throw new Error('Failed to delete schedule override');
+                return await res.json();
+            } catch (error) {
+                console.error('Error deleting schedule override:', error);
+                throw error;
+            }
         }
     },
 

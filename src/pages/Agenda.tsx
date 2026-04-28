@@ -126,6 +126,16 @@ const Agenda: React.FC = () => {
     // Feature 8: Editable duration for existing appointments
     const [isEditingAppt, setIsEditingAppt] = useState(false);
 
+    // Schedule Overrides (turnos excepcionales)
+    const [scheduleOverrides, setScheduleOverrides] = useState<any[]>([]);
+    const [showOverrideModal, setShowOverrideModal] = useState(false);
+    const [overrideDoctorId, setOverrideDoctorId] = useState<string>('');
+    const [overrideDate, setOverrideDate] = useState<string>('');
+    const [overrideStart, setOverrideStart] = useState<string>('09:00');
+    const [overrideEnd, setOverrideEnd] = useState<string>('14:00');
+    const [overrideNotes, setOverrideNotes] = useState<string>('');
+    const [isSavingOverride, setIsSavingOverride] = useState(false);
+
     // Feature 9: Drag & Drop and Resizing
     const [draggingAppt, setDraggingAppt] = useState<Appointment | null>(null);
     const [resizingAppt, setResizingAppt] = useState<Appointment | null>(null);
@@ -213,6 +223,28 @@ const Agenda: React.FC = () => {
         };
         loadClosures();
     }, [api]);
+
+    // Load Schedule Overrides (turnos excepcionales)
+    useEffect(() => {
+        api.doctorSchedules.getOverrides?.()
+            .then((data: any[]) => setScheduleOverrides(data || []))
+            .catch(() => {});
+    }, [api]);
+
+    // Quick status change handler for appointment modal
+    const handleQuickStatusChange = async (newStatus: string) => {
+        if (!selectedAppt) return;
+        try {
+            const updated = await api.appointments.update(selectedAppt.id, { status: newStatus });
+            const enriched = { ...updated, updated_by_name: updated.updated_by_name || (currentUser as any)?.name || null };
+            setAppointments(prev => prev.map(a => a.id === enriched.id ? { ...a, ...enriched } : a));
+            setSelectedAppt({ ...selectedAppt, status: newStatus });
+            await refreshAppointments();
+            toast.success('Estado actualizado');
+        } catch (e: any) {
+            toast.error('Error al actualizar estado: ' + e.message);
+        }
+    };
 
     const isDateClosedForDoctor = (date: Date, doctorId?: string): boolean => {
         // Safe local date string format YYYY-MM-DD
@@ -309,6 +341,24 @@ const Agenda: React.FC = () => {
         const doctor = doctors.find(d => d.id === doctorId);
         if (!doctor) return TIME_SLOTS;
 
+        // Check schedule overrides (turnos excepcionales) for this specific date
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const overridesForDay = scheduleOverrides.filter(o => {
+            const oDate = typeof o.date === 'string' ? o.date.split('T')[0] : '';
+            return oDate === dateStr && o.doctorId === doctorId;
+        });
+        if (overridesForDay.length > 0) {
+            return TIME_SLOTS.filter(slot => {
+                const [slotH, slotM] = slot.split(':').map(Number);
+                const slotTime = slotH + slotM / 60;
+                return overridesForDay.some(ov => {
+                    const [sH, sM] = ov.startTime.split(':').map(Number);
+                    const [eH, eM] = ov.endTime.split(':').map(Number);
+                    return slotTime >= (sH + sM / 60) && slotTime < (eH + eM / 60);
+                });
+            });
+        }
+
         // 1. Diccionario exacto sugerido para mapeo local
         const dayMap: Record<number, string> = { 
             0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 
@@ -361,6 +411,38 @@ const Agenda: React.FC = () => {
                 return inMorning || inAfternoon;
             });
         });
+    };
+
+    // Handle saving a schedule override
+    const handleSaveOverride = async () => {
+        if (!overrideDoctorId || !overrideDate || !overrideStart || !overrideEnd) {
+            toast.error('Completa todos los campos obligatorios');
+            return;
+        }
+        setIsSavingOverride(true);
+        try {
+            const result = await api.doctorSchedules.createOverride?.({
+                doctorId: overrideDoctorId,
+                date: overrideDate,
+                startTime: overrideStart,
+                endTime: overrideEnd,
+                notes: overrideNotes || null,
+            });
+            setScheduleOverrides(prev => [...prev, result]);
+            setShowOverrideModal(false);
+            setOverrideDoctorId('');
+            setOverrideDate('');
+            setOverrideStart('09:00');
+            setOverrideEnd('14:00');
+            setOverrideNotes('');
+            toast.success('Turno excepcional creado');
+            // Reload schedules to reflect new override
+            api.doctorSchedules.getOverrides?.().then((data: any[]) => setScheduleOverrides(data || [])).catch(() => {});
+        } catch (e: any) {
+            toast.error('Error: ' + (e.message || e));
+        } finally {
+            setIsSavingOverride(false);
+        }
     };
 
     // Feature 5: Filter doctors working today (must be AFTER getAvailableTimeSlots)
@@ -1073,6 +1155,17 @@ const Agenda: React.FC = () => {
                     );
                 })()}
 
+                {/* Turno Excepcional button */}
+                <button
+                    onClick={() => {
+                        setOverrideDate(formatDateLocal(currentDate));
+                        setShowOverrideModal(true);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:border-blue-300 hover:text-blue-600 transition-all"
+                >
+                    <Plus size={14} /> Turno Excepcional
+                </button>
+
                 {/* Day closed banner */}
                 {isDateClosedForDoctor(currentDate) && (
                     <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold border border-red-200">
@@ -1128,6 +1221,77 @@ const Agenda: React.FC = () => {
                 </div>
             )}
 
+            {/* Override Modal (Turno Excepcional) */}
+            {showOverrideModal && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[90] flex items-center justify-center p-6">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 space-y-5">
+                        <h3 className="text-xl font-black text-slate-900">Turno Excepcional</h3>
+                        <p className="text-xs text-slate-400">Añadir disponibilidad puntual para un doctor en una fecha concreta.</p>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Doctor *</label>
+                            <select
+                                value={overrideDoctorId}
+                                onChange={(e) => setOverrideDoctorId(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                                style={{ colorScheme: 'light' }}
+                            >
+                                <option value="">Seleccionar doctor...</option>
+                                {doctors.map(d => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Fecha *</label>
+                            <input
+                                type="date"
+                                value={overrideDate}
+                                onChange={(e) => setOverrideDate(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 block mb-2">Hora inicio *</label>
+                                <input
+                                    type="time"
+                                    value={overrideStart}
+                                    onChange={(e) => setOverrideStart(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 block mb-2">Hora fin *</label>
+                                <input
+                                    type="time"
+                                    value={overrideEnd}
+                                    onChange={(e) => setOverrideEnd(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Notas (opcional)</label>
+                            <input
+                                type="text"
+                                value={overrideNotes}
+                                onChange={(e) => setOverrideNotes(e.target.value)}
+                                placeholder="Ej: Guardia, sustitución..."
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold outline-none"
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowOverrideModal(false)} className="flex-1 py-3 text-sm font-bold text-slate-500">
+                                Cancelar
+                            </button>
+                            <button onClick={handleSaveOverride} disabled={isSavingOverride} className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                                {isSavingOverride ? <><Loader2 className="animate-spin w-4 h-4" /> Guardando...</> : 'Crear Turno'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Unassigned Appointments Warning Strip */}
             {unassignedApptsToShow.length > 0 && (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-4 overflow-x-auto shadow-sm items-center">
@@ -1136,7 +1300,10 @@ const Agenda: React.FC = () => {
                         CITAS SIN ASIGNAR ({unassignedApptsToShow.length}):
                     </div>
                     {unassignedApptsToShow.map(a => {
-                        const patName = patients.find(p => p.id === a.patientId)?.name || '⚠️ Paciente Eliminado';
+                        const patient = patients.find(p => p.id === a.patientId);
+                        const patName = patient
+                            ? (patient.historyNumber ? `${patient.historyNumber} · ${patient.name}` : patient.name)
+                            : '⚠️ Paciente Eliminado';
                         return (
                             <div key={a.id} className="bg-white border border-amber-200 p-3 rounded-xl flex-shrink-0 min-w-[200px] hover:shadow-md transition-shadow cursor-pointer"
                                 onClick={() => { setSelectedAppt(a); setIsAppointmentModalOpen(true); }}
@@ -1634,7 +1801,10 @@ const Agenda: React.FC = () => {
                                                                                         {(() => {
                                                                                             const patient = patients.find(p => p.id === appt.patientId) || (appt as any).patient;
                                                                                             if (!patient) return '⚠️ Paciente Eliminado';
-                                                                                            return patient.name || 'Sin nombre';
+                                                                                            const histNum = patient.historyNumber;
+                                                                                            return histNum
+                                                                                                ? `${histNum} · ${patient.name || 'Sin nombre'}`
+                                                                                                : patient.name || 'Sin nombre';
                                                                                         })()}
                                                                                     </span>
                                                                                 </div>
@@ -2265,6 +2435,37 @@ const Agenda: React.FC = () => {
                             {selectedAppt && (selectedAppt as any).updated_by_name && (
                                 <div className="text-xs text-slate-400 pt-1">
                                     <span className="font-semibold">Última modificación:</span> ✎ {(selectedAppt as any).updated_by_name}
+                                </div>
+                            )}
+
+                            {/* Quick Status Buttons */}
+                            {selectedAppt && !isDuplicating && (
+                                <div className="pt-2">
+                                    <label className="text-xs font-bold uppercase text-slate-400 block mb-2">Estado de la cita</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { status: 'Scheduled', label: 'Pendiente', color: 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200' },
+                                            { status: 'Completed', label: '✓ Realizada', color: 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100' },
+                                            { status: 'NoShow', label: '⚠ No Vino', color: 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100' },
+                                            { status: 'Canceled', label: '✕ Anular', color: 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100' },
+                                        ].map(({ status, label, color }) => {
+                                            const currentStatus = (selectedAppt.status || '').toLowerCase();
+                                            const isActive = currentStatus === status.toLowerCase() ||
+                                                (status === 'Scheduled' && (currentStatus === 'scheduled' || currentStatus === 'pendiente')) ||
+                                                (status === 'Completed' && (currentStatus === 'completed' || currentStatus === 'realizada')) ||
+                                                (status === 'NoShow' && (currentStatus === 'noshow' || currentStatus === 'no vino')) ||
+                                                (status === 'Canceled' && (currentStatus === 'canceled' || currentStatus === 'cancelled' || currentStatus === 'anulada'));
+                                            return (
+                                                <button
+                                                    key={status}
+                                                    onClick={() => handleQuickStatusChange(status)}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${color} ${isActive ? 'ring-2 ring-offset-1 ring-current font-black' : ''}`}
+                                                >
+                                                    {label}
+                                            </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
 

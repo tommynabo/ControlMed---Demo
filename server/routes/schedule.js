@@ -242,4 +242,85 @@ router.post('/cleanup', async (req, res) => {
     }
 });
 
+// ─── Schedule Overrides (Turnos Excepcionales) ───────────────────────────────
+
+// GET /api/doctor-schedules/overrides
+router.get('/overrides', async (req, res) => {
+    try {
+        const { doctorId, dateFrom, dateTo } = req.query;
+        const where = {};
+        if (doctorId) where.doctorId = doctorId;
+        if (dateFrom || dateTo) {
+            where.date = {};
+            if (dateFrom) where.date.gte = new Date(dateFrom);
+            if (dateTo) where.date.lte = new Date(dateTo);
+        }
+        const overrides = await prisma.doctorScheduleOverride.findMany({
+            where,
+            orderBy: { date: 'asc' },
+            include: { doctor: { select: { id: true, name: true } } }
+        });
+        // Normalize to frontend format
+        const result = overrides.map(o => ({
+            id: o.id,
+            doctorId: o.doctorId,
+            doctorName: o.doctor?.name,
+            date: o.date.toISOString().split('T')[0],
+            startTime: o.startTime,
+            endTime: o.endTime,
+            notes: o.notes,
+            createdAt: o.createdAt,
+        }));
+        res.json(result);
+    } catch (e) {
+        console.error('Error fetching schedule overrides:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /api/doctor-schedules/overrides
+router.post('/overrides', async (req, res) => {
+    try {
+        const { doctorId, date, startTime, endTime, notes } = req.body;
+        if (!doctorId || !date || !startTime || !endTime) {
+            return res.status(400).json({ error: 'doctorId, date, startTime, endTime are required' });
+        }
+        const override = await prisma.doctorScheduleOverride.create({
+            data: {
+                doctorId,
+                date: new Date(date),
+                startTime,
+                endTime,
+                notes: notes || null,
+            },
+            include: { doctor: { select: { id: true, name: true } } }
+        });
+        res.status(201).json({
+            id: override.id,
+            doctorId: override.doctorId,
+            doctorName: override.doctor?.name,
+            date: override.date.toISOString().split('T')[0],
+            startTime: override.startTime,
+            endTime: override.endTime,
+            notes: override.notes,
+            createdAt: override.createdAt,
+        });
+    } catch (e) {
+        console.error('Error creating schedule override:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// DELETE /api/doctor-schedules/overrides/:id
+router.delete('/overrides/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.doctorScheduleOverride.delete({ where: { id } });
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting schedule override:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = { scheduleRouter: router, durationsRouter };
