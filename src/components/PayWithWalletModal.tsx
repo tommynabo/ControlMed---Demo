@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Wallet, X, Check, FileText, User, Coins } from 'lucide-react';
 import { Patient, Doctor } from '../../types';
-import { api } from '../services/api';
+import { api, apiHeaders } from '../services/api';
 
 interface PayWithWalletModalProps {
     isOpen: boolean;
@@ -74,7 +74,7 @@ export const PayWithWalletModal: React.FC<PayWithWalletModalProps> = ({ isOpen, 
 
             const res = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { ...apiHeaders },
                 body: JSON.stringify({
                     patientId: patient.id,
                     amount: totalAmount,

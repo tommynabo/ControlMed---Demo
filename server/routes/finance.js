@@ -13,7 +13,44 @@ const { logAudit } = require('../lib/audit');
 
 const router = express.Router();
 
-// ─── FINANCE: Financing plan ──────────────────────────────────────────────────
+// ─── Helper: mark BudgetLineItems as paid after a treatment payment ───────────
+// Matches items by serviceName (prefix) inside the given budget so they can be
+// hidden from the patient's budget view once paid.
+async function markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName }) {
+    if (!budgetId) return;
+    try {
+        if (Array.isArray(treatmentIds) && treatmentIds.length > 0) {
+            // Fetch the serviceName for each paid PatientTreatment row
+            const { data: pts } = await supabase
+                .from('PatientTreatment')
+                .select('serviceName')
+                .in('id', treatmentIds);
+            if (pts && pts.length > 0) {
+                for (const pt of pts) {
+                    if (!pt.serviceName) continue;
+                    await supabase
+                        .from('BudgetLineItem')
+                        .update({ paid: true })
+                        .eq('budgetId', budgetId)
+                        .eq('paid', false)
+                        .ilike('name', `${pt.serviceName}%`);
+                }
+            }
+        } else if (treatmentName) {
+            // Fallback: match by treatment name/concept
+            await supabase
+                .from('BudgetLineItem')
+                .update({ paid: true })
+                .eq('budgetId', budgetId)
+                .eq('paid', false)
+                .ilike('name', `${treatmentName}%`);
+        }
+    } catch (e) {
+        console.error('⚠️ Error marcando BudgetLineItems como pagados (no crítico):', e.message);
+    }
+}
+
+
 router.post('/financing', async (req, res) => {
     try {
         const result = await financeService.createFinancingPlan(prisma, req.body);
@@ -507,6 +544,13 @@ router.post('/payments/create', async (req, res) => {
             } catch (treatErr) {
                 console.error('⚠️ Error actualizando estado de tratamientos (no crítico):', treatErr.message);
             }
+
+            // Mark matched BudgetLineItems as paid
+            await markBudgetLineItemsPaid(supabasePost, {
+                budgetId: budgetId || req.body.budgetId,
+                treatmentIds: req.body.treatmentIds,
+                treatmentName: solvedTreatmentName
+            });
         }
 
         // Gmail invoice email (fire-and-forget, never blocks the response)
@@ -782,6 +826,13 @@ router.post('/payments/create-split', async (req, res) => {
             console.error('⚠️ Error actualizando estado de tratamientos en split (no crítico):', treatErr.message);
         }
 
+        // Mark matched BudgetLineItems as paid
+        await markBudgetLineItemsPaid(supabase, {
+            budgetId,
+            treatmentIds: req.body.treatmentIds,
+            treatmentName: concept
+        });
+
         try {
             logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'payments_split', resourceId: result.payment?.id, newValues: { patientId, totalAmount: numericTotal, method, splits: splits.length }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });
         } catch (_) {}
@@ -853,7 +904,7 @@ router.post('/pay-with-wallet', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { patientId, amount, appointmentId, treatmentName, treatmentIds } = req.body;
+        const { patientId, amount, appointmentId, treatmentName, treatmentIds, budgetId } = req.body;
         if (!patientId || !amount) return res.status(400).json({ error: 'patientId and amount are required' });
 
         const numericAmount = parseFloat(amount);
@@ -897,6 +948,9 @@ router.post('/pay-with-wallet', async (req, res) => {
                     .not('status', 'in', '("COMPLETADO","PAGADO")');
             }
         }
+
+        // Mark matched BudgetLineItems as paid so they disappear from the budget view
+        await markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName });
 
         const newBalance = (patient.wallet || 0) - numericAmount;
         res.json({ success: true, payment: result, newBalance });

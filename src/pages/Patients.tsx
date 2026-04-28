@@ -2445,7 +2445,7 @@ const Patients: React.FC = () => {
 
                                                     {/* Items List - Gray Container */}
                                                     <div className="bg-slate-50 rounded-xl p-4 space-y-3 mb-6">
-                                                        {budget.items?.map((item: any, idx: number) => {
+                                                        {budget.items?.filter((item: any) => !item.paid).map((item: any, idx: number) => {
                                                             const commissionPct = Number(budget.commissionPercent) || 0;
                                                             const displayPrice = ((Number(item.price) || 0) * (1 + commissionPct / 100)).toFixed(2);
                                                             return (
@@ -2474,7 +2474,7 @@ const Patients: React.FC = () => {
                                                                 )}
                                                             </div>
                                                         ); })}
-                                                        {(!budget.items || budget.items.length === 0) && (
+                                                        {(!budget.items || budget.items.filter((i: any) => !i.paid).length === 0) && (
                                                             <div className="text-center text-xs text-slate-400 italic py-2">Sin conceptos</div>
                                                         )}
                                                     </div>
