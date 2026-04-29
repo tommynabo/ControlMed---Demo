@@ -515,8 +515,8 @@ router.post('/payments/create', async (req, res) => {
 
         // Mark PatientTreatment rows as COMPLETADO after a full (non-partial) payment
         if (!result.isPartial) {
+            const supabasePost = getSupabase();
             try {
-                const supabasePost = getSupabase();
                 const treatmentIdsFromBody = req.body.treatmentIds;
                 if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
                     // Explicit list of PatientTreatment IDs provided by the frontend
@@ -541,16 +541,16 @@ router.post('/payments/create', async (req, res) => {
                             .not('status', 'in', '("COMPLETADO","PAGADO")');
                     }
                 }
-            } catch (treatErr) {
-                console.error('⚠️ Error actualizando estado de tratamientos (no crítico):', treatErr.message);
-            }
 
-            // Mark matched BudgetLineItems as paid
-            await markBudgetLineItemsPaid(supabasePost, {
-                budgetId: budgetId || req.body.budgetId,
-                treatmentIds: req.body.treatmentIds,
-                treatmentName: solvedTreatmentName
-            });
+                // Mark matched BudgetLineItems as paid
+                await markBudgetLineItemsPaid(supabasePost, {
+                    budgetId: budgetId || req.body.budgetId,
+                    treatmentIds: req.body.treatmentIds,
+                    treatmentName: solvedTreatmentName
+                });
+            } catch (treatErr) {
+                console.error('⚠️ Error actualizando estado de tratamientos/presupuesto (no crítico):', treatErr.message);
+            }
         }
 
         // Gmail invoice email (fire-and-forget, never blocks the response)
