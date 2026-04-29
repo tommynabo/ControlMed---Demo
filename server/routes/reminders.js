@@ -1,6 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const { getSupabase } = require('../lib/db');
+const { getSupabase, prisma } = require('../lib/db');
+
+// ─── CRON secret validation helper ───────────────────────────────────────────
+function validateCronSecret(req, res) {
+    const authHeader = req.headers['authorization'] || req.headers['x-cron-secret'];
+    const expectedSecret = process.env.CRON_SECRET;
+
+    if (!expectedSecret) {
+        res.status(500).json({ error: 'Configuración del servidor incompleta' });
+        return false;
+    }
+
+    const providedToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+    if (!providedToken || providedToken !== expectedSecret.trim()) {
+        console.warn(`[CRON REMINDERS] Intento no autorizado. Token: ${providedToken ? '***' : 'NULO'}`);
+        res.status(401).json({ error: 'Unauthorized' });
+        return false;
+    }
+    return true;
+}
 
 /**
  * POST /api/reminders
@@ -160,6 +179,59 @@ router.get('/pending/due', async (req, res) => {
     } catch (error) {
         console.error('Error fetching pending reminders:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /api/reminders/process-whatsapp
+ * Cron-triggered: encola en WhatsAppQueue los recordatorios de tipo WHATSAPP/BOTH
+ * que están vencidos y aún no han enviado notificación.
+ * Protegido por CRON_SECRET.
+ */
+router.post('/process-whatsapp', async (req, res) => {
+    if (!validateCronSecret(req, res)) return;
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+
+        const { data: reminders, error } = await getSupabase()
+            .from('Reminder')
+            .select('*, Patient:patient_id(name, phone)')
+            .eq('status', 'PENDING')
+            .in('notification_method', ['WHATSAPP', 'BOTH'])
+            .lte('due_date', today)
+            .eq('notification_sent', false);
+
+        if (error) throw error;
+
+        const stats = { queued: 0, skipped: 0 };
+
+        for (const reminder of (reminders || [])) {
+            const phone = reminder.Patient?.phone;
+            if (!phone) { stats.skipped++; continue; }
+
+            const messageWithOptOut =
+                `Recordatorio: ${reminder.description}` +
+                '\n\n_Responde "NO" para dejar de recibir avisos_';
+
+            await prisma.whatsAppQueue.create({
+                data: { phone, message: messageWithOptOut, status: 'PENDING' },
+            });
+
+            await getSupabase()
+                .from('Reminder')
+                .update({ notification_sent: true, updated_at: new Date().toISOString() })
+                .eq('id', reminder.id);
+
+            stats.queued++;
+        }
+
+        console.log('[REMINDERS CRON] Recordatorios encolados:', stats);
+        res.json({ message: 'Reminders processed', stats });
+
+    } catch (e) {
+        console.error('[REMINDERS CRON] Error:', e.message);
+        res.status(500).json({ error: e.message });
     }
 });
 

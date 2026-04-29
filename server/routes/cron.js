@@ -79,23 +79,18 @@ router.post('/whatsapp-reminders', async (req, res) => {
                     .replace(/{{hora}}/g, formattedTime)
                     .replace(/{{tratamiento}}/g, treatmentName);
 
-                try {
-                    let number = appt.patient.phone.replace(/[^0-9]/g, '');
-                    if (number.length === 9) number = '34' + number;
+                let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                if (number.length === 9) number = '34' + number;
+                const messageWithOptOut = message + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
-                    await whatsappService.sendMessage(number, message);
-                    await prisma.appointment.update({ where: { id: appt.id }, data: { whatsappSent: true } });
-                    await prisma.whatsAppLog.create({
-                        data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'SENT', content: message, sentAt: new Date() }
-                    });
-                    globalStats.reminders.sent++;
-                } catch (err) {
-                    const errDetail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
-                    globalStats.reminders.failed++;
-                    await prisma.whatsAppLog.create({
-                        data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'FAILED', content: message, error: errDetail, sentAt: new Date() }
-                    });
-                }
+                await prisma.whatsAppQueue.create({
+                    data: { phone: number, message: messageWithOptOut, status: 'PENDING' }
+                });
+                await prisma.appointment.update({ where: { id: appt.id }, data: { whatsappSent: true } });
+                await prisma.whatsAppLog.create({
+                    data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'PENDING', content: messageWithOptOut, sentAt: new Date() }
+                });
+                globalStats.reminders.sent++;
             }
         }
 
@@ -140,21 +135,17 @@ router.post('/whatsapp-reminders', async (req, res) => {
                 .replace(/{{nombre}}/g, patient.name)
                 .replace(/{{PACIENTE}}/g, patient.name);
 
-            try {
-                let number = patient.phone.replace(/[^0-9]/g, '');
-                if (number.length === 9) number = '34' + number;
+            let number = patient.phone.replace(/[^0-9]/g, '');
+            if (number.length === 9) number = '34' + number;
+            const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
-                await whatsappService.sendMessage(number, content);
-                await prisma.whatsAppLog.create({
-                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'SENT', content, sentAt: new Date() }
-                });
-                globalStats.birthdays.sent++;
-            } catch (err) {
-                await prisma.whatsAppLog.create({
-                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'FAILED', content, error: err.message, sentAt: new Date() }
-                });
-                globalStats.birthdays.failed++;
-            }
+            await prisma.whatsAppQueue.create({
+                data: { phone: number, message: contentWithOptOut, status: 'PENDING' }
+            });
+            await prisma.whatsAppLog.create({
+                data: { patientId: patient.id, type: 'BIRTHDAY', status: 'PENDING', content: contentWithOptOut, sentAt: new Date() }
+            });
+            globalStats.birthdays.sent++;
         }
 
         console.log('[MASTER CRON] ✅ Bloque 2 completado:', globalStats.birthdays);
@@ -197,21 +188,17 @@ router.post('/whatsapp-reminders', async (req, res) => {
                     .replace(/{{tratamiento}}/g, treatmentName)
                     .replace(/{{TRATAMIENTO}}/g, treatmentName);
 
-                try {
-                    let number = appt.patient.phone.replace(/[^0-9]/g, '');
-                    if (number.length === 9) number = '34' + number;
+                let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                if (number.length === 9) number = '34' + number;
+                const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
-                    await whatsappService.sendMessage(number, content);
-                    await prisma.whatsAppLog.create({
-                        data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'SENT', content, sentAt: new Date() }
-                    });
-                    globalStats.followups.sent++;
-                } catch (err) {
-                    await prisma.whatsAppLog.create({
-                        data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'FAILED', content, error: err.message, sentAt: new Date() }
-                    });
-                    globalStats.followups.failed++;
-                }
+                await prisma.whatsAppQueue.create({
+                    data: { phone: number, message: contentWithOptOut, status: 'PENDING' }
+                });
+                await prisma.whatsAppLog.create({
+                    data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'PENDING', content: contentWithOptOut, sentAt: new Date() }
+                });
+                globalStats.followups.sent++;
             }
         }
 
@@ -262,21 +249,17 @@ router.post('/whatsapp-birthdays', async (req, res) => {
                 .replace(/{{nombre}}/g, patient.name)
                 .replace(/{{PACIENTE}}/g, patient.name);
 
-            try {
-                let number = patient.phone.replace(/[^0-9]/g, '');
-                if (number.length === 9) number = '34' + number;
+            let number = patient.phone.replace(/[^0-9]/g, '');
+            if (number.length === 9) number = '34' + number;
+            const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
-                await whatsappService.sendMessage(number, content);
-                await prisma.whatsAppLog.create({
-                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'SENT', content, sentAt: new Date() }
-                });
-                stats.sent++;
-            } catch (err) {
-                await prisma.whatsAppLog.create({
-                    data: { patientId: patient.id, type: 'BIRTHDAY', status: 'FAILED', content, error: err.message, sentAt: new Date() }
-                });
-                stats.failed++;
-            }
+            await prisma.whatsAppQueue.create({
+                data: { phone: number, message: contentWithOptOut, status: 'PENDING' }
+            });
+            await prisma.whatsAppLog.create({
+                data: { patientId: patient.id, type: 'BIRTHDAY', status: 'PENDING', content: contentWithOptOut, sentAt: new Date() }
+            });
+            stats.sent++;
         }
 
         res.json({ message: 'Birthday cron finished', stats });
@@ -328,21 +311,17 @@ router.post('/whatsapp-followups', async (req, res) => {
                     .replace(/{{tratamiento}}/g, treatmentName)
                     .replace(/{{TRATAMIENTO}}/g, treatmentName);
 
-                try {
-                    let number = appt.patient.phone.replace(/[^0-9]/g, '');
-                    if (number.length === 9) number = '34' + number;
+                let number = appt.patient.phone.replace(/[^0-9]/g, '');
+                if (number.length === 9) number = '34' + number;
+                const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
-                    await whatsappService.sendMessage(number, content);
-                    await prisma.whatsAppLog.create({
-                        data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'SENT', content, sentAt: new Date() }
-                    });
-                    stats.sent++;
-                } catch (err) {
-                    await prisma.whatsAppLog.create({
-                        data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'FAILED', content, error: err.message, sentAt: new Date() }
-                    });
-                    stats.failed++;
-                }
+                await prisma.whatsAppQueue.create({
+                    data: { phone: number, message: contentWithOptOut, status: 'PENDING' }
+                });
+                await prisma.whatsAppLog.create({
+                    data: { patientId: appt.patient.id, type: 'TREATMENT_FOLLOWUP', status: 'PENDING', content: contentWithOptOut, sentAt: new Date() }
+                });
+                stats.sent++;
             }
         }
 
@@ -350,6 +329,56 @@ router.post('/whatsapp-followups', async (req, res) => {
     } catch (e) {
         console.error('[CRON FOLLOWUPS] Error:', e);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── CRON WORKER: Procesa UN mensaje pendiente de la cola ───────────────────
+// Diseñado para Vercel Serverless: cada ejecución dura milisegundos (1 mensaje).
+// Se invoca automáticamente cada 2 minutos via vercel.json crons.
+router.post('/process-whatsapp-queue', async (req, res) => {
+    if (!validateCronSecret(req, res)) return;
+
+    try {
+        // Tomar ÚNICAMENTE el mensaje más antiguo en estado PENDING
+        const item = await prisma.whatsAppQueue.findFirst({
+            where: { status: 'PENDING' },
+            orderBy: { createdAt: 'asc' },
+        });
+
+        if (!item) {
+            return res.json({ message: 'Queue empty', processed: 0 });
+        }
+
+        console.log(`[QUEUE WORKER] Procesando mensaje ID: ${item.id} → ${item.phone}`);
+
+        try {
+            await whatsappService.sendEvolutionMessage(item.phone, item.message);
+
+            await prisma.whatsAppQueue.update({
+                where: { id: item.id },
+                data: { status: 'SENT' },
+            });
+
+            console.log(`[QUEUE WORKER] ✅ Enviado correctamente. ID: ${item.id}`);
+            return res.json({ message: 'Message sent', processed: 1, id: item.id, phone: item.phone });
+
+        } catch (sendErr) {
+            const errDetail = sendErr.response?.data
+                ? JSON.stringify(sendErr.response.data)
+                : sendErr.message;
+
+            await prisma.whatsAppQueue.update({
+                where: { id: item.id },
+                data: { status: 'FAILED', errorMessage: errDetail },
+            });
+
+            console.error(`[QUEUE WORKER] ❌ Fallo al enviar ID: ${item.id} — ${errDetail}`);
+            return res.status(200).json({ message: 'Message failed', processed: 1, id: item.id, error: errDetail });
+        }
+
+    } catch (e) {
+        console.error('[QUEUE WORKER] Error inesperado:', e.message);
+        return res.status(500).json({ error: e.message });
     }
 });
 

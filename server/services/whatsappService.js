@@ -1,25 +1,20 @@
-// ─── WhatsApp Service (Twilio) ────────────────────────────────────────────────
-// Envío de mensajes WhatsApp a través de la API oficial de Twilio.
-// IMPORTANTE: La API de Meta impone la regla de las 24h.
-//   - Para iniciar conversaciones (recordatorios) se deben usar plantillas
-//     pre-aprobadas en la cuenta de Twilio/Meta Business Manager.
-//   - Los mensajes de respuesta dentro de una ventana de 24h pueden ser libres.
+// ─── WhatsApp Service (Evolution API) ────────────────────────────────────────
+// Envío de mensajes WhatsApp a través de Evolution API (self-hosted o cloud).
+// Variables de entorno requeridas:
+//   EVOLUTION_API_URL      — URL base de la instancia (ej: https://evolution.midominio.com)
+//   EVOLUTION_API_KEY      — API Key de autenticación
+//   EVOLUTION_INSTANCE     — Nombre de la instancia configurada en Evolution
 // ─────────────────────────────────────────────────────────────────────────────
 require('dotenv').config();
 
-const twilio = require('twilio');
+const axios = require('axios');
 
-const ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN;
-const FROM_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER;
+const EVOLUTION_API_URL  = process.env.EVOLUTION_API_URL;
+const EVOLUTION_API_KEY  = process.env.EVOLUTION_API_KEY;
+const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE;
 
-// Inicializar cliente Twilio al cargar el módulo.
-// Si faltan las variables de entorno, el módulo sigue cargando pero los envíos fallarán con error claro.
-let client = null;
-if (ACCOUNT_SID && AUTH_TOKEN) {
-    client = twilio(ACCOUNT_SID, AUTH_TOKEN);
-} else {
-    console.warn('\x1b[33m%s\x1b[0m', '[WhatsApp] TWILIO_ACCOUNT_SID o TWILIO_AUTH_TOKEN no definidos. El servicio no enviará mensajes.');
+if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
+    console.warn('\x1b[33m%s\x1b[0m', '[WhatsApp] EVOLUTION_API_URL, EVOLUTION_API_KEY o EVOLUTION_INSTANCE no definidos. El servicio no enviará mensajes.');
 }
 
 // ─── Formateo de teléfono ─────────────────────────────────────────────────────
@@ -50,69 +45,78 @@ const formatPhone = (phone) => {
 
 // ─── Función central de envío ─────────────────────────────────────────────────
 /**
- * Envía un mensaje de WhatsApp usando la API de Twilio.
+ * Envía un mensaje de texto a través de Evolution API.
  * @param {string} to    - Número destino (cualquier formato; se normaliza internamente)
- * @param {string} body  - Texto del mensaje (debe coincidir exactamente con la plantilla aprobada
- *                         si se abre una conversación nueva — regla 24h de Meta)
- * @returns {Promise<{success: boolean, sid?: string, error?: string}>}
+ * @param {string} text  - Texto del mensaje
+ * @returns {Promise<{success: boolean, messageId?: string, error?: string}>}
  */
-const sendWhatsAppMessage = async (to, body) => {
-    if (!client) {
-        throw new Error('Cliente Twilio no inicializado. Verifica TWILIO_ACCOUNT_SID y TWILIO_AUTH_TOKEN en .env');
+const sendEvolutionMessage = async (to, text) => {
+    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
+        throw new Error('Evolution API no configurada. Verifica EVOLUTION_API_URL, EVOLUTION_API_KEY y EVOLUTION_INSTANCE en .env');
     }
+
     const formattedTo = formatPhone(to);
     if (!formattedTo) {
         throw new Error(`Número de teléfono inválido: ${to}`);
     }
 
-    const message = await client.messages.create({
-        from: `whatsapp:${FROM_NUMBER}`,
-        to:   `whatsapp:${formattedTo}`,
-        body: body,
-    });
+    const url = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`;
 
-    return { success: true, sid: message.sid };
+    const response = await axios.post(
+        url,
+        { number: formattedTo, text },
+        {
+            headers: {
+                'apikey': EVOLUTION_API_KEY,
+                'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+        }
+    );
+
+    return { success: true, messageId: response.data?.key?.id };
 };
 
 // ─── API pública (compatible con schedulerService y rutas existentes) ─────────
 
 /**
  * Envía un mensaje de WhatsApp con manejo de errores no-bloqueante.
- * Los errores de Twilio (número inválido, plantilla no aprobada, etc.) se loguean
- * en rojo pero NO lanzan excepción, para no interrumpir el bucle del cron job.
+ * Los errores de Evolution API se loguean en rojo pero NO lanzan excepción,
+ * para no interrumpir el bucle del cron job.
  */
 const sendMessage = async (to, body) => {
     try {
-        const result = await sendWhatsAppMessage(to, body);
-        console.log(`\x1b[32m[WhatsApp] ✅ Enviado a ${to} — SID: ${result.sid}\x1b[0m`);
+        const result = await sendEvolutionMessage(to, body);
+        console.log(`\x1b[32m[WhatsApp] ✅ Enviado a ${to} — ID: ${result.messageId}\x1b[0m`);
         return result;
     } catch (err) {
-        console.error(`\x1b[31m[WhatsApp] ❌ Error al enviar a ${to}: ${err.message}\x1b[0m`);
-        return { success: false, error: err.message };
+        const detail = err.response?.data ? JSON.stringify(err.response.data) : err.message;
+        console.error(`\x1b[31m[WhatsApp] ❌ Error al enviar a ${to}: ${detail}\x1b[0m`);
+        return { success: false, error: detail };
     }
 };
 
 const initialize = async () => {
-    if (client) {
-        console.log('[WhatsApp] Servicio Twilio inicializado correctamente.');
+    if (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE) {
+        console.log(`[WhatsApp] Servicio Evolution API inicializado. Instancia: ${EVOLUTION_INSTANCE}`);
     }
 };
 
 const getStatus = async () => {
     return {
-        status: client ? 'READY' : 'NOT_CONFIGURED',
+        status: (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE) ? 'READY' : 'NOT_CONFIGURED',
         qrCode: null,
-        provider: 'Twilio WhatsApp API',
+        provider: 'Evolution API',
     };
 };
 
 const getQrCode = async () => {
-    // Twilio no usa QR — se mantiene por compatibilidad con rutas existentes
+    // QR management is handled directly in the Evolution API dashboard
     return null;
 };
 
 const logout = async () => {
-    // No hay sesión que cerrar en Twilio — se mantiene por compatibilidad
+    // Session management is handled directly in the Evolution API dashboard
     return { success: true };
 };
 
@@ -121,7 +125,7 @@ module.exports = {
     getStatus,
     getQrCode,
     sendMessage,
-    sendWhatsAppMessage, // exportada también para pruebas manuales y uso directo
-    formatPhone,         // exportada para poder testear el formateo de teléfonos
+    sendEvolutionMessage, // exportada para uso directo en el worker de la cola
+    formatPhone,          // exportada para poder testear el formateo de teléfonos
     logout,
 };
