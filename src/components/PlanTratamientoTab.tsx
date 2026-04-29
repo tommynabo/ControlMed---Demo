@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Check, Clock, ChevronDown, ChevronUp, ClipboardList, AlertCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Patient, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
 
 interface PlanTratamientoTabProps {
@@ -31,6 +32,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     const [newStepTooth, setNewStepTooth] = useState('');
     const [addingStepToPlan, setAddingStepToPlan] = useState<string | null>(null);
     const [dbServices, setDbServices] = useState<{ id: string; name: string; specialty_name: string }[]>([]);
+    const [updatingStepId, setUpdatingStepId] = useState<string | null>(null);
 
     const fetchPlans = async () => {
         try {
@@ -100,12 +102,26 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     };
 
     const handleToggleStepStatus = async (step: ClinicalTreatmentStep) => {
+        if (updatingStepId === step.id) return;
+        const newSt = nextStatus(step.status);
+        // Optimistic update — change UI immediately before the server responds
+        setPlans(prev => prev.map(plan => ({
+            ...plan,
+            steps: plan.steps.map(s => s.id === step.id ? { ...s, status: newSt } : s)
+        })));
+        setUpdatingStepId(step.id);
         try {
-            const newSt = nextStatus(step.status);
             await api.clinicalPlans.updateStep(step.id, { status: newSt });
-            fetchPlans();
+            await fetchPlans();
         } catch (e) {
-            console.error('Error updating step:', e);
+            // Revert optimistic update on failure
+            setPlans(prev => prev.map(plan => ({
+                ...plan,
+                steps: plan.steps.map(s => s.id === step.id ? { ...s, status: step.status } : s)
+            })));
+            toast.error('Error al guardar el estado del tratamiento');
+        } finally {
+            setUpdatingStepId(null);
         }
     };
 
@@ -295,7 +311,8 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                                                             <span className="text-xs font-black text-slate-300 w-6 text-center">{idx + 1}</span>
                                                             <button
                                                                 onClick={() => handleToggleStepStatus(step)}
-                                                                className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${cfg.bg} ${cfg.color}`}
+                                                                disabled={updatingStepId === step.id}
+                                                                className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all ${cfg.bg} ${cfg.color} ${updatingStepId === step.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                                 title={`Click para cambiar a: ${STATUS_CONFIG[nextStatus(step.status)].label}`}
                                                             >
                                                                 {cfg.icon}
