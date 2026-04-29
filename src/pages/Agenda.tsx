@@ -1431,6 +1431,23 @@ const Agenda: React.FC = () => {
                                         // ── CASE A: Daily + specific doctor → merged blocks ──
                                         if (viewMode === 'daily' && selectedDoctorId && selectedDoctorId !== 'all') {
                                             const availableSlots = getAvailableTimeSlots(currentDate, selectedDoctorId);
+                                            const isClosed = isDateClosedForDoctor(currentDate, selectedDoctorId);
+
+                                            // If agenda is explicitly closed for this doctor/day
+                                            if (isClosed) {
+                                                return (
+                                                    <div style={{ height: `${TIME_SLOTS.length * slotH}px` }}
+                                                        className="flex items-center justify-center bg-red-50 rounded-xl border border-dashed border-red-200">
+                                                        <div className="text-center">
+                                                            <Lock className="w-12 h-12 text-red-300 mx-auto mb-2" />
+                                                            <p className="text-sm font-bold text-red-400">Agenda cerrada</p>
+                                                            {getClosureForDate(currentDate, selectedDoctorId)?.reason && (
+                                                                <p className="text-xs text-red-300 mt-1">{getClosureForDate(currentDate, selectedDoctorId)?.reason}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
 
                                             // If entire day is off
                                             if (availableSlots.length === 0) {
