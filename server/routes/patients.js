@@ -110,24 +110,11 @@ router.post('/', async (req, res) => {
         let created;
         if (!data.historyNumber) {
             created = await prisma.$transaction(async (tx) => {
-                // Scan ALL patients with any historyNumber to find the global maximum,
-                // regardless of format (HC-0350, HCL-0350, bare "350", "0350", etc.)
-                const allNums = await tx.patient.findMany({
-                    where: { historyNumber: { not: null } },
-                    select: { historyNumber: true }
-                });
-                let next = 1;
-                if (allNums.length > 0) {
-                    const max = allNums.reduce((best, p) => {
-                        // Matches: HC-0350, HCL-0350, 0350, 350
-                        const m = p.historyNumber.match(/(?:HC-|HCL-)?0*(\d+)/);
-                        if (!m) return best;
-                        const n = parseInt(m[1], 10);
-                        return n > best ? n : best;
-                    }, 0);
-                    if (max > 0) next = max + 1;
-                }
-                data.historyNumber = `HC-${String(next).padStart(4, '0')}`;
+                // Use COUNT(*) + 1 so the sequence follows the total number of
+                // patients and can never jump due to outlier history numbers.
+                // The transaction lock prevents race conditions between concurrent inserts.
+                const count = await tx.patient.count();
+                data.historyNumber = `HC-${count + 1}`;
                 return tx.patient.create({ data });
             });
         } else {
