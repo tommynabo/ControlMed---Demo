@@ -1190,6 +1190,25 @@ router.get('/cash-register/by-date/:date', async (req, res) => {
     }
 });
 
+// ─── CASH REGISTER: Most recent closing strictly before a given date ──────────
+// Usado para calcular el arrastre de días pasados aunque haya huecos (festivos, fines de semana)
+router.get('/cash-register/last-closing-before/:date', async (req, res) => {
+    try {
+        const { date } = req.params;
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+            return res.status(400).json({ error: 'Invalid date format, expected YYYY-MM-DD' });
+        }
+        const closing = await prisma.$queryRawUnsafe(
+            `SELECT * FROM cash_register_closings WHERE date < $1 ORDER BY date DESC LIMIT 1`,
+            date
+        );
+        const record = Array.isArray(closing) && closing.length > 0 ? closing[0] : null;
+        res.json(record);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ─── CASH REGISTER: Close the day ────────────────────────────────────────────
 router.post('/cash-register/close', async (req, res) => {
     try {

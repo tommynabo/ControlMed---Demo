@@ -141,13 +141,9 @@ const CashRegister: React.FC = () => {
                     }
                 }).catch(() => {});
             } else {
-                // For a past date, find the closing immediately before it
-                const prevDate = (() => {
-                    const d = new Date(selectedDate + 'T12:00:00');
-                    d.setDate(d.getDate() - 1);
-                    return d.toISOString().split('T')[0];
-                })();
-                (api as any).cashRegister.getByDate(prevDate).then((prev: any) => {
+                // For a past date, find the most recent closing before selectedDate
+                // (handles gaps: weekends, holidays, days with no activity)
+                (api as any).cashRegister.getLastClosingBefore(selectedDate).then((prev: any) => {
                     if (prev && prev.physicalCash != null) {
                         setOpeningCash(prev.physicalCash);
                     }

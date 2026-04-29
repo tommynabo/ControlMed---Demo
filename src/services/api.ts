@@ -1546,6 +1546,14 @@ export const api = {
                 return data || null;
             } catch { return null; }
         },
+        getLastClosingBefore: async (date: string) => {
+            try {
+                const res = await fetch(`${API_URL}/finance/cash-register/last-closing-before/${date}`, { headers });
+                if (!res.ok) return null;
+                const data = await res.json();
+                return data || null;
+            } catch { return null; }
+        },
         close: async (payload: {
             totalIncome: number; totalExpense: number; balance: number;
             cashIncome: number; cardIncome: number; transferIncome: number;
