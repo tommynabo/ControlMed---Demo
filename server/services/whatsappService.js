@@ -103,11 +103,30 @@ const initialize = async () => {
 };
 
 const getStatus = async () => {
-    return {
-        status: (EVOLUTION_API_URL && EVOLUTION_API_KEY && EVOLUTION_INSTANCE) ? 'READY' : 'NOT_CONFIGURED',
-        qrCode: null,
-        provider: 'Evolution API',
-    };
+    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
+        return { status: 'NOT_CONFIGURED', qrCode: null, provider: 'Evolution API' };
+    }
+
+    try {
+        const url = `${EVOLUTION_API_URL}/instance/connectionState/${EVOLUTION_INSTANCE}`;
+        const response = await axios.get(url, {
+            headers: { 'apikey': EVOLUTION_API_KEY },
+            timeout: 10000,
+        });
+
+        // Evolution API v2: { instance: { state: 'open' | 'close' | 'connecting' } }
+        const state = response.data?.instance?.state || response.data?.state || 'close';
+
+        let status;
+        if (state === 'open') status = 'AUTHENTICATED';
+        else if (state === 'connecting') status = 'INITIALIZING';
+        else status = 'DISCONNECTED';
+
+        return { status, qrCode: null, provider: 'Evolution API', evolutionState: state };
+    } catch (e) {
+        console.error('[WhatsApp] Error fetching connection state:', e.message);
+        return { status: 'DISCONNECTED', qrCode: null, provider: 'Evolution API' };
+    }
 };
 
 const getQrCode = async () => {
@@ -144,8 +163,23 @@ const getQrCode = async () => {
 };
 
 const logout = async () => {
-    // Session management is handled directly in the Evolution API dashboard
-    return { success: true };
+    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
+        return { success: false, error: 'Evolution API no configurada' };
+    }
+
+    try {
+        const url = `${EVOLUTION_API_URL}/instance/logout/${EVOLUTION_INSTANCE}`;
+        await axios.delete(url, {
+            headers: { 'apikey': EVOLUTION_API_KEY },
+            timeout: 10000,
+        });
+        console.log('[WhatsApp] Logout exitoso de Evolution API.');
+        return { success: true };
+    } catch (e) {
+        const detail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+        console.error('[WhatsApp] Error en logout:', detail);
+        return { success: false, error: detail };
+    }
 };
 
 module.exports = {
