@@ -827,7 +827,10 @@ export const api = {
         },
         getQr: async () => {
             const res = await fetch(`${API_URL}/whatsapp/qr`, { headers });
-            if (!res.ok) throw new Error('Failed to fetch QR');
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || 'Failed to fetch QR');
+            }
             return res.json();
         },
         logout: async () => {

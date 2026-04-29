@@ -16,6 +16,7 @@ router.get('/qr', async (req, res) => {
         const qr = await whatsappService.getQrCode();
         res.json({ qrCode: qr });
     } catch (e) {
+        console.error('[WhatsApp QR] Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

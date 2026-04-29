@@ -112,17 +112,34 @@ const getStatus = async () => {
 
 const getQrCode = async () => {
     if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
-        throw new Error('Evolution API no configurada. Verifica las variables de entorno.');
+        throw new Error('Evolution API no configurada. Verifica EVOLUTION_API_URL, EVOLUTION_API_KEY y EVOLUTION_INSTANCE en Vercel.');
     }
 
     const url = `${EVOLUTION_API_URL}/instance/connect/${EVOLUTION_INSTANCE}`;
-    const response = await axios.get(url, {
-        headers: { 'apikey': EVOLUTION_API_KEY },
-        timeout: 15000,
-    });
 
-    // Evolution API v2 devuelve base64 directo o anidado bajo qrcode
+    let response;
+    try {
+        response = await axios.get(url, {
+            headers: { 'apikey': EVOLUTION_API_KEY },
+            timeout: 15000,
+        });
+    } catch (axiosErr) {
+        const status = axiosErr.response?.status;
+        const detail = axiosErr.response?.data
+            ? JSON.stringify(axiosErr.response.data)
+            : axiosErr.message;
+        throw new Error(`Evolution API error ${status || ''}: ${detail}`);
+    }
+
+    // Evolution API v2: base64 directo o anidado bajo qrcode
     const base64 = response.data?.base64 || response.data?.qrcode?.base64 || null;
+
+    if (!base64) {
+        // La instancia ya puede estar conectada (state: open) — no hay QR disponible
+        const state = response.data?.instance?.state || response.data?.state || 'unknown';
+        throw new Error(`No hay QR disponible. Estado de la instancia: "${state}". Si ya está conectada, haz logout primero.`);
+    }
+
     return base64;
 };
 

@@ -181,9 +181,9 @@ const Settings: React.FC = () => {
             } else {
                 alert('No se pudo generar el código QR. Inténtalo de nuevo.');
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error('Error generating QR:', e);
-            alert('Error al conectar con el servidor de WhatsApp.');
+            alert(`Error al generar el QR:\n\n${e.message}`);
         } finally {
             setIsGeneratingQr(false);
         }
