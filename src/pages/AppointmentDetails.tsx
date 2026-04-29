@@ -598,6 +598,7 @@ export const AppointmentDetails: React.FC = () => {
                                     {appointment.paid ? '✓ Pagada' : 'Pendiente'}
                                 </span>
                             </label>
+                        </div>
 
                         {/* Observaciones */}
                         <div className="col-span-4">
