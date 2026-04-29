@@ -1017,6 +1017,18 @@ export const api = {
             if (!res.ok) throw new Error('Failed to disconnect Gmail');
             return res.json();
         },
+        sendInvoice: async (invoiceId: string): Promise<{ success: boolean }> => {
+            const res = await fetch(`${API_URL}/gmail/send-invoice`, {
+                method: 'POST',
+                headers: { ...headers, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ invoiceId }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({})) as { error?: string };
+                throw new Error(err.error || 'Error al enviar la factura');
+            }
+            return res.json();
+        },
     },
 
     // Clinic Info (Supabase Direct)

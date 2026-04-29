@@ -1,6 +1,9 @@
 'use strict';
 const express = require('express');
+const axios = require('axios');
 const gmailService = require('../services/gmailService');
+const { getSupabase } = require('../lib/db');
+const { getFreshPdfUrl } = require('../services/invoiceService');
 
 const router = express.Router();
 
@@ -54,6 +57,86 @@ router.delete('/disconnect', async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         console.error('Gmail disconnect error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// POST /api/gmail/send-invoice — JWT protected
+router.post('/send-invoice', async (req, res) => {
+    try {
+        const { invoiceId } = req.body;
+        if (!invoiceId) {
+            return res.status(400).json({ error: 'invoiceId es requerido' });
+        }
+
+        const supabase = getSupabase();
+
+        // 1. Fetch invoice
+        const { data: invoice, error: invError } = await supabase
+            .from('Invoice')
+            .select('id, invoiceNumber, url, patientId')
+            .eq('id', invoiceId)
+            .single();
+        if (invError || !invoice) {
+            return res.status(404).json({ error: 'Factura no encontrada' });
+        }
+
+        // 2. Fetch patient
+        const { data: patient, error: patError } = await supabase
+            .from('Patient')
+            .select('id, name, email')
+            .eq('id', invoice.patientId)
+            .single();
+        if (patError || !patient) {
+            return res.status(404).json({ error: 'Paciente no encontrado' });
+        }
+
+        // 3. Validate patient email
+        if (!patient.email || !patient.email.trim()) {
+            return res.status(400).json({ error: 'El paciente no tiene un correo asignado' });
+        }
+
+        // 4. Get PDF URL (use stored or fetch fresh)
+        let pdfUrl = invoice.url || null;
+        if (!pdfUrl) {
+            pdfUrl = await getFreshPdfUrl(invoice.invoiceNumber);
+        }
+        if (!pdfUrl) {
+            return res.status(400).json({ error: 'No se pudo obtener el PDF de la factura' });
+        }
+
+        // 5. Download PDF as buffer
+        const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer', timeout: 15000 });
+        const pdfBuffer = Buffer.from(pdfResponse.data);
+
+        // 6. Build email content
+        const subject = `Tu factura de CHC Clínica Dental - ${invoice.invoiceNumber}`;
+        const htmlBody = `<div style="font-family: Arial, sans-serif; color: #333;">
+  <p>Hola <strong>${patient.name}</strong>,</p>
+  <p>Adjunto a este correo encontrarás la factura correspondiente a tu tratamiento.</p>
+  <p>Si tienes alguna consulta, no dudes en contactarnos.</p>
+  <br>
+  <p>Gracias por confiar en nuestro equipo,</p>
+  <p><strong>CHC Clínica Dental</strong></p>
+</div>`;
+
+        // 7. Send via Gmail
+        await gmailService.sendGmail({
+            to: patient.email.trim(),
+            subject,
+            htmlBody,
+            attachments: [{
+                filename: `Factura-${invoice.invoiceNumber}.pdf`,
+                content: pdfBuffer,
+                mimeType: 'application/pdf',
+            }],
+        });
+
+        console.log(`✅ Invoice ${invoice.invoiceNumber} sent to ${patient.email}`);
+        res.json({ success: true });
+
+    } catch (e) {
+        console.error('Gmail send-invoice error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

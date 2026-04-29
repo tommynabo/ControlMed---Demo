@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Download, DollarSign, Calendar, User, FileText, Trash2,
-    Plus, BarChart3, QrCode, TrendingDown, TrendingUp, CreditCard, Mail
+    Plus, BarChart3, QrCode, TrendingDown, TrendingUp, CreditCard, Mail, Loader2
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAppContext } from '../context/AppContext';
 import { api as apiService } from '../services/api'; // Direct import to avoid context issues
 import { SearchableSelect } from '../components/SearchableSelect';
@@ -55,6 +56,24 @@ const Billing: React.FC = () => {
 
     const [isEmitting, setIsEmitting] = useState(false);
     const [emitError, setEmitError] = useState<string | null>(null);
+    const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+
+    const handleSendInvoiceEmail = async (inv: Invoice) => {
+        const patient = patients.find(p => p.id === inv.patientId);
+        if (!patient?.email?.trim()) {
+            toast.error('El paciente no tiene un correo asignado');
+            return;
+        }
+        setSendingInvoiceId(inv.id);
+        try {
+            await api.gmail.sendInvoice(inv.id);
+            toast.success('Factura enviada por Gmail ✓');
+        } catch (err: any) {
+            toast.error(err.message || 'Error al enviar la factura');
+        } finally {
+            setSendingInvoiceId(null);
+        }
+    };
 
     // Treatment search for invoice items
     const [treatmentSuggestions, setTreatmentSuggestions] = useState<any[]>([]);
@@ -419,11 +438,14 @@ const Billing: React.FC = () => {
                                                                 <Download size={18} />
                                                             </button>
                                                             <button
-                                                                onClick={() => alert(`📧 Factura enviada a ${patients.find(p => p.id === inv.patientId)?.email || 'cliente'}.`)}
-                                                                className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-purple-600 hover:border-purple-200 transition-all shadow-sm hover:shadow-md"
-                                                                title="Enviar email"
+                                                                onClick={() => handleSendInvoiceEmail(inv)}
+                                                                disabled={sendingInvoiceId === inv.id}
+                                                                className={`w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center transition-all shadow-sm hover:shadow-md ${sendingInvoiceId === inv.id ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-purple-600 hover:border-purple-200'}`}
+                                                                title="Enviar factura por Gmail"
                                                             >
-                                                                <Mail size={18} />
+                                                                {sendingInvoiceId === inv.id
+                                                                    ? <Loader2 size={18} className="animate-spin" />
+                                                                    : <Mail size={18} />}
                                                             </button>
                                                         </div>
                                                     </td>
