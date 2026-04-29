@@ -111,8 +111,19 @@ const getStatus = async () => {
 };
 
 const getQrCode = async () => {
-    // QR management is handled directly in the Evolution API dashboard
-    return null;
+    if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
+        throw new Error('Evolution API no configurada. Verifica las variables de entorno.');
+    }
+
+    const url = `${EVOLUTION_API_URL}/instance/connect/${EVOLUTION_INSTANCE}`;
+    const response = await axios.get(url, {
+        headers: { 'apikey': EVOLUTION_API_KEY },
+        timeout: 15000,
+    });
+
+    // Evolution API v2 devuelve base64 directo o anidado bajo qrcode
+    const base64 = response.data?.base64 || response.data?.qrcode?.base64 || null;
+    return base64;
 };
 
 const logout = async () => {
