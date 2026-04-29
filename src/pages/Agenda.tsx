@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { RefreshCw, Layers, Edit2, AlertCircle, FileText, Banknote, DollarSign, Euro, CreditCard, Stethoscope, Briefcase, Pill, Target, ShieldAlert, BadgeInfo, Sparkles, User, ExternalLink, Save, AlertTriangle, Edit3, Calendar, Eye, EyeOff, Lock, Unlock, CheckCircle2, X, Plus, Clock, Search, ChevronLeft, ChevronRight, Share2, Printer, AlignLeft, Calendar as CalendarIcon, Filter, Zap, Loader2, UserPlus } from 'lucide-react';
 import NewPatientModal from '../components/NewPatientModal';
-import PackSelectionModal from '../components/PackSelectionModal';
+import PackSelectionModal, { PackServiceItem } from '../components/PackSelectionModal';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -64,7 +64,7 @@ const Agenda: React.FC = () => {
     // 🆕 Feature 1: Real DB Services search state
     const [dbServices, setDbServices] = useState<Array<{id: string, name: string, final_price: number, specialty_name?: string}>>([]);
     const [bookingServiceSearch, setBookingServiceSearch] = useState<string>('');
-    const [selectedDbServices, setSelectedDbServices] = useState<Array<{id: string, name: string, price: number}>>([]);
+    const [selectedDbServices, setSelectedDbServices] = useState<PackServiceItem[]>([]);
     const [showServiceDropdown, setShowServiceDropdown] = useState(false);
 
     // 🆕 Feature 2: Revisión toggle state
@@ -553,12 +553,23 @@ const Agenda: React.FC = () => {
         setBookingIsRevision(!!(appt.isRevision || (appt as any).is_revision));
         
         // Populate services from DB catalogue if IDs exist
-        const initialServices: any[] = [];
+        // Prefer serviceBreakdown (has excludeFromLiquidation + custom prices) over serviceIds
+        const initialServices: PackServiceItem[] = [];
+        const apptBreakdown = (appt as any).serviceBreakdown || (appt as any).service_breakdown;
         const apptServiceIds = (appt as any).serviceIds || [];
-        if (apptServiceIds.length > 0) {
+        if (apptBreakdown && Array.isArray(apptBreakdown) && apptBreakdown.length > 0) {
+            apptBreakdown.forEach((item: any) => {
+                initialServices.push({
+                    id: item.id,
+                    name: item.name,
+                    price: item.price ?? 0,
+                    excludeFromLiquidation: item.excludeFromLiquidation ?? false
+                });
+            });
+        } else if (apptServiceIds.length > 0) {
             apptServiceIds.forEach((sid: string) => {
                 const svc = dbServices.find(s => s.id === sid);
-                if (svc) initialServices.push({ id: svc.id, name: svc.name, price: svc.final_price || 0 });
+                if (svc) initialServices.push({ id: svc.id, name: svc.name, price: svc.final_price || 0, excludeFromLiquidation: (svc as any).exclude_from_liquidation ?? false });
             });
         }
         
@@ -569,7 +580,7 @@ const Agenda: React.FC = () => {
         if (initialServices.length === 0 && newTreatmentValue) {
             const names = newTreatmentValue.split(',').map((n: string) => n.trim()).filter(Boolean);
             names.forEach((name: string, i: number) => {
-                initialServices.push({ id: `custom-existing-${i}`, name, price: 0 });
+                initialServices.push({ id: `custom-existing-${i}`, name, price: 0, excludeFromLiquidation: false });
             });
         }
         
@@ -608,14 +619,14 @@ const Agenda: React.FC = () => {
     };
 
     // Multi-treatment handlers
-    const handlePushTreatment = (svc: { id: string, name: string, price: number }) => {
+    const handlePushTreatment = (svc: { id: string, name: string, price: number, excludeFromLiquidation?: boolean }) => {
         // Prevent duplicates by ID (if it has one)
         if (svc.id && !svc.id.startsWith('custom-') && selectedDbServices.some(s => s.id === svc.id)) {
             toast.error('Este servicio ya ha sido añadido');
             return;
         }
         
-        const newList = [...selectedDbServices, svc];
+        const newList = [...selectedDbServices, { ...svc, excludeFromLiquidation: svc.excludeFromLiquidation ?? false }];
         setSelectedDbServices(newList);
         // If existing chips are custom placeholders (price 0 loaded from treatmentName),
         // add incrementally to preserve the manually-set total instead of overwriting it.
@@ -637,11 +648,12 @@ const Agenda: React.FC = () => {
             handlePushTreatment({
                 id: existingSvc.id,
                 name: existingSvc.name,
-                price: existingSvc.final_price || 0
+                price: existingSvc.final_price || 0,
+                excludeFromLiquidation: (existingSvc as any).exclude_from_liquidation ?? false
             });
         } else {
             // Concepto libre: añadir con precio 0 y activar edición de precio inmediatamente
-            const newList = [...selectedDbServices, { id: `custom-${Date.now()}`, name: query, price: 0 }];
+            const newList = [...selectedDbServices, { id: `custom-${Date.now()}`, name: query, price: 0, excludeFromLiquidation: false }];
             setSelectedDbServices(newList);
             // New chip has price 0; preserve existing total — user will set price via chip editor.
             // bookingPrice is updated incrementally in handleUpdateServicePrice.
@@ -761,6 +773,14 @@ const Agenda: React.FC = () => {
             // 🆕 Real DB service IDs (filter out custom ones)
             serviceIds: selectedDbServices.length > 0 
                 ? selectedDbServices.filter(s => !s.id.startsWith('custom-')).map(s => s.id) 
+                : null,
+            serviceBreakdown: selectedDbServices.length > 0
+                ? selectedDbServices.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    price: s.price,
+                    excludeFromLiquidation: s.excludeFromLiquidation ?? false
+                  }))
                 : null,
             budgetId: bookingBudgetId || null,
             budgetItemId: bookingBudgetItemId || null,
@@ -911,7 +931,7 @@ const Agenda: React.FC = () => {
         setIsPackSelectionModalOpen(true);
     };
 
-    const handleSelectPack = (packId: string, services: Array<{ id: string; name: string; price: number }>) => {
+    const handleSelectPack = (packId: string, services: PackServiceItem[]) => {
         const newList = [...selectedDbServices];
         services.forEach(s => {
             if (!newList.some(existing => existing.id === s.id)) {
@@ -950,12 +970,17 @@ const Agenda: React.FC = () => {
 
         // Rebuild selectedDbServices from the duplicated appointment's treatment name
         // to avoid bleeding stale services from a previously clicked appointment
-        const dupServices: Array<{id: string, name: string, price: number}> = [];
+        const dupServices: PackServiceItem[] = [];
+        const dupBreakdown = (selectedAppt as any).serviceBreakdown || (selectedAppt as any).service_breakdown;
         const dupServiceIds = (selectedAppt as any).serviceIds || [];
-        if (dupServiceIds.length > 0) {
+        if (dupBreakdown && Array.isArray(dupBreakdown) && dupBreakdown.length > 0) {
+            dupBreakdown.forEach((item: any) => {
+                dupServices.push({ id: item.id, name: item.name, price: item.price ?? 0, excludeFromLiquidation: item.excludeFromLiquidation ?? false });
+            });
+        } else if (dupServiceIds.length > 0) {
             dupServiceIds.forEach((sid: string) => {
                 const svc = dbServices.find(s => s.id === sid);
-                if (svc) dupServices.push({ id: svc.id, name: svc.name, price: svc.final_price || 0 });
+                if (svc) dupServices.push({ id: svc.id, name: svc.name, price: svc.final_price || 0, excludeFromLiquidation: (svc as any).exclude_from_liquidation ?? false });
             });
         }
         if (dupServices.length === 0 && treatmentValue) {
@@ -2522,6 +2547,14 @@ const Agenda: React.FC = () => {
                                                 isRevision: bookingIsRevision,
                                                 serviceIds: selectedDbServices.length > 0 
                                                     ? selectedDbServices.filter(s => !s.id.startsWith('custom-')).map(s => s.id) 
+                                                    : undefined,
+                                                serviceBreakdown: selectedDbServices.length > 0
+                                                    ? selectedDbServices.map(s => ({
+                                                        id: s.id,
+                                                        name: s.name,
+                                                        price: s.price,
+                                                        excludeFromLiquidation: s.excludeFromLiquidation ?? false
+                                                      }))
                                                     : undefined,
                                             });
 

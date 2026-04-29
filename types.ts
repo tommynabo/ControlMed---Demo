@@ -75,10 +75,18 @@ export interface ClinicalRecord {
   updated_by_name?: string;
 }
 
+export interface ServiceBreakdownItem {
+  id: string;
+  name: string;
+  price: number;
+  excludeFromLiquidation: boolean;
+}
+
 export interface Service {
   id: string;
   name: string;
   price: number;
+  excludeFromLiquidation?: boolean;
   insurancePrice?: Record<string, number>; // Precios por mutua
 }
 

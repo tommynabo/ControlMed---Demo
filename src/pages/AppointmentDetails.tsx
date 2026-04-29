@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Calendar, Trash2, Check, FileText } from 'lucide-react';
-import { Appointment, Patient, Budget, Payment, Invoice } from '../../types';
+import { ArrowLeft, CreditCard, Calendar, Trash2, Check, FileText, Building2, User } from 'lucide-react';
+import { Appointment, Patient, Budget, Payment, Invoice, ServiceBreakdownItem } from '../../types';
 import { PaymentModal } from '../components/PaymentModal';
 import { useAppContext } from '../context/AppContext';
 import { DENTAL_SERVICES, DURATION_OPTIONS } from '../constants';
@@ -17,6 +17,11 @@ export const AppointmentDetails: React.FC = () => {
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [invoice, setInvoice] = useState<any>(null);
+    const [amountInput, setAmountInput] = useState<string>('');
+
+    useEffect(() => {
+        setAmountInput(appointment?.amount != null ? String(appointment.amount) : '');
+    }, [appointment?.amount]);
 
     useEffect(() => {
         if (location.state?.appointment && location.state?.patient) {
@@ -491,20 +496,85 @@ export const AppointmentDetails: React.FC = () => {
                             <input
                                 type="number"
                                 step="0.01"
-                                value={appointment.amount || ''}
-                                onChange={async (e) => {
+                                value={amountInput}
+                                onChange={(e) => setAmountInput(e.target.value)}
+                                onBlur={async (e) => {
                                     const newAmount = parseFloat(e.target.value) || null;
                                     try {
                                         await api.appointments.update(appointment.id, { amount: newAmount });
                                         setAppointment({ ...appointment, amount: newAmount || undefined });
                                     } catch (err) {
                                         console.error('Error al actualizar importe:', err);
+                                        setAmountInput(appointment.amount != null ? String(appointment.amount) : '');
                                     }
                                 }}
                                 placeholder="Importe"
                                 className="w-full mt-1 bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
                             />
                         </div>
+
+                        {/* Desglose de servicios del pack */}
+                        {(appointment as any).serviceBreakdown && Array.isArray((appointment as any).serviceBreakdown) && (appointment as any).serviceBreakdown.length > 0 && (
+                            <div className="col-span-2">
+                                <p className="text-xs font-black uppercase text-slate-400 mb-2">Desglose de Servicios</p>
+                                <div className="space-y-2">
+                                    {((appointment as any).serviceBreakdown as ServiceBreakdownItem[]).map((item, idx) => (
+                                        <div
+                                            key={item.id + idx}
+                                            className={`flex items-center justify-between p-3 rounded-xl border-2 ${item.excludeFromLiquidation ? 'border-amber-200 bg-amber-50' : 'border-blue-100 bg-blue-50/40'}`}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                {item.excludeFromLiquidation
+                                                    ? <Building2 size={14} className="text-amber-500" />
+                                                    : <User size={14} className="text-blue-500" />
+                                                }
+                                                <span className="font-semibold text-sm text-slate-800">{item.name}</span>
+                                                {item.excludeFromLiquidation && (
+                                                    <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full border border-amber-200">
+                                                        🏥 Clínica
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                defaultValue={item.price}
+                                                onBlur={async (e) => {
+                                                    const newPrice = parseFloat(e.target.value) || 0;
+                                                    const updatedBreakdown = ((appointment as any).serviceBreakdown as ServiceBreakdownItem[]).map((s, i) =>
+                                                        i === idx ? { ...s, price: newPrice } : s
+                                                    );
+                                                    const newTotal = updatedBreakdown.reduce((sum, s) => sum + s.price, 0);
+                                                    try {
+                                                        await api.appointments.update(appointment.id, {
+                                                            serviceBreakdown: updatedBreakdown,
+                                                            amount: newTotal
+                                                        });
+                                                        setAppointment({ ...appointment, serviceBreakdown: updatedBreakdown, amount: newTotal } as any);
+                                                        refreshAppointments();
+                                                    } catch (err) {
+                                                        console.error('Error al actualizar desglose:', err);
+                                                    }
+                                                }}
+                                                className="w-20 text-right font-bold text-sm border border-slate-300 rounded-lg px-2 py-1 bg-white focus:outline-none focus:border-blue-400"
+                                            />
+                                            <span className="font-bold text-slate-600 text-sm ml-1">€</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between items-center pt-2 border-t border-slate-200 px-1">
+                                        <span className="text-xs font-bold text-blue-700 flex items-center gap-1">
+                                            <User size={11} /> Base doctor: {((appointment as any).serviceBreakdown as ServiceBreakdownItem[]).filter(s => !s.excludeFromLiquidation).reduce((sum, s) => sum + s.price, 0).toFixed(2)}€
+                                        </span>
+                                        {((appointment as any).serviceBreakdown as ServiceBreakdownItem[]).some(s => s.excludeFromLiquidation) && (
+                                            <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
+                                                <Building2 size={11} /> Clínica: {((appointment as any).serviceBreakdown as ServiceBreakdownItem[]).filter(s => s.excludeFromLiquidation).reduce((sum, s) => sum + s.price, 0).toFixed(2)}€
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Estado de Pago */}
                         <div>
@@ -528,7 +598,6 @@ export const AppointmentDetails: React.FC = () => {
                                     {appointment.paid ? '✓ Pagada' : 'Pendiente'}
                                 </span>
                             </label>
-                        </div>
 
                         {/* Observaciones */}
                         <div className="col-span-4">

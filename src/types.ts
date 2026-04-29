@@ -53,6 +53,13 @@ export interface ClinicalRecord {
     authorId?: string;
 }
 
+export interface ServiceBreakdownItem {
+    id: string;
+    name: string;
+    price: number;
+    excludeFromLiquidation: boolean;
+}
+
 export interface Appointment {
     id: string;
     patientId: string;
@@ -67,6 +74,7 @@ export interface Appointment {
     status: 'PENDIENTE' | 'EN_PROCESO' | 'COMPLETADO' | 'PRESUPUESTADO' | 'Scheduled';
     paid?: boolean;
     amount?: number;
+    serviceBreakdown?: ServiceBreakdownItem[];
 }
 
 export interface Invoice {

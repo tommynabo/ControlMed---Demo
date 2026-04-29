@@ -162,6 +162,7 @@ router.get('/liquidations/summary', async (req, res) => {
                     fecha: liq.createdAt,
                     concepto: liq.treatmentName || 'Tratamiento',
                     importeCobrado: liq.grossAmount || 0,
+                    baseAmount: liq.baseAmount ?? liq.grossAmount ?? 0,
                     nombrePaciente: liq.patientName || 'Desconocido',
                     numeroHistoria: apptPatient.historyNumber || '-',
                     doctorId: liq.doctorId,
@@ -412,6 +413,30 @@ router.post('/payments/create', async (req, res) => {
                 : numericAmount;
             const referralCommission = numericAmount - baseAmount;
 
+            // Doctor's base = baseAmount minus items that go to the clinic (e.g. OPG).
+            // If the appointment has a service_breakdown, sum only billable services.
+            let doctorBaseAmount = baseAmount;
+            if (appointmentId) {
+                try {
+                    const { data: apptRow } = await getSupabase()
+                        .from('Appointment')
+                        .select('service_breakdown')
+                        .eq('id', appointmentId)
+                        .single();
+                    if (apptRow?.service_breakdown && Array.isArray(apptRow.service_breakdown) && apptRow.service_breakdown.length > 0) {
+                        const billableTotal = apptRow.service_breakdown
+                            .filter(s => !s.excludeFromLiquidation)
+                            .reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+                        const allTotal = apptRow.service_breakdown
+                            .reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+                        // Scale proportionally to baseAmount in case there's a referral commission
+                        if (allTotal > 0) {
+                            doctorBaseAmount = baseAmount * (billableTotal / allTotal);
+                        }
+                    }
+                } catch (_) {}
+            }
+
             const payment = await tx.payment.create({
                 data: { id: crypto.randomUUID(), patientId, budgetId: budgetId || null, amount: numericAmount, method, type, notes: notes || null, doctorId: doctor?.id || null, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, createdAt: new Date().toISOString() }
             });
@@ -460,8 +485,8 @@ router.post('/payments/create', async (req, res) => {
             if (doctor && type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
-                // Doctor is paid based on baseAmount (original price, no markup)
-                const finalAmount = (baseAmount - labCost) * (rawRate / 100);
+                // finalAmount uses doctorBaseAmount (excludes clinic-only services like OPG)
+                const finalAmount = (doctorBaseAmount - labCost) * (rawRate / 100);
                 
                 // 🔧 FIX: Check if liquidation already exists for this appointment
                 // This handles edge cases where a liquidation exists (e.g., from failed invoice deletion)
@@ -477,7 +502,7 @@ router.post('/payments/create', async (req, res) => {
                             data: {
                                 doctorId: doctor.id,
                                 grossAmount: numericAmount,
-                                baseAmount,
+                                baseAmount: doctorBaseAmount,
                                 labCost,
                                 commissionRate: rawRate,
                                 finalAmount,
@@ -492,13 +517,13 @@ router.post('/payments/create', async (req, res) => {
                     } else {
                         // No existing liquidation → CREATE new one
                         liquidation = await tx.liquidation.create({
-                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: numericAmount, baseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: numericAmount, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                         });
                     }
                 } else {
                     // No appointmentId → CREATE without unique constraint concern
                     liquidation = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: numericAmount, baseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: numericAmount, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                     });
                 }
             }

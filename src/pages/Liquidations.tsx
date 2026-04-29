@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check, Pencil, X } from 'lucide-react';
+import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check, Pencil, X, Building2 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
 
@@ -14,6 +14,7 @@ interface LiquidationRecord {
     fecha: string;
     concepto: string;
     importeCobrado: number;
+    baseAmount?: number;
     nombrePaciente: string;
     numeroHistoria: string;
     doctorId: string;
@@ -138,7 +139,7 @@ export const Liquidations: React.FC = () => {
             doc.text(`Comisión Doctor (${commissionRate}%): ${commissionAmount.toFixed(2)} €`, 184, 43);
 
             // Table header
-            const colX = [14, 44, 110, 160, 200, 235, 260];
+            const colX = [14, 44, 110, 160, 200, 228, 253, 275];
             const headerY = 52;
             doc.setFillColor(226, 232, 240);
             doc.rect(14, headerY - 5, 269, 8, 'F');
@@ -150,8 +151,9 @@ export const Liquidations: React.FC = () => {
             doc.text('PACIENTE', colX[2], headerY);
             doc.text('NUM', colX[3], headerY);
             doc.text('IMPORTE', colX[4], headerY);
-            doc.text('COSTE LAB', colX[5], headerY);
-            doc.text('NETO', colX[6], headerY);
+            doc.text('BASE DOC', colX[5], headerY);
+            doc.text('LAB', colX[6], headerY);
+            doc.text('NETO', colX[7], headerY);
 
             // Table rows
             doc.setFont('helvetica', 'normal');
@@ -167,13 +169,21 @@ export const Liquidations: React.FC = () => {
                 const fecha = r.fecha ? r.fecha.substring(0, 10) : '-';
                 const lab = labCosts[r.id] || 0;
                 const net = r.importeCobrado - lab;
+                const hasDeduction = r.baseAmount !== undefined && Math.abs(r.baseAmount - r.importeCobrado) > 0.01;
                 doc.text(fecha, colX[0], y);
                 doc.text(doc.splitTextToSize(r.concepto || '-', 64)[0], colX[1], y);
                 doc.text(doc.splitTextToSize(r.nombrePaciente || '-', 48)[0], colX[2], y);
                 doc.text(r.numeroHistoria || '-', colX[3], y);
                 doc.text(`${r.importeCobrado.toFixed(2)} €`, colX[4], y);
-                doc.text(lab > 0 ? `${lab.toFixed(2)} €` : '-', colX[5], y);
-                doc.text(`${net.toFixed(2)} €`, colX[6], y);
+                if (hasDeduction) {
+                    doc.setTextColor(37, 99, 235);
+                    doc.text(`${r.baseAmount!.toFixed(2)} €`, colX[5], y);
+                    doc.setTextColor(30, 41, 59);
+                } else {
+                    doc.text('-', colX[5], y);
+                }
+                doc.text(lab > 0 ? `${lab.toFixed(2)} €` : '-', colX[6], y);
+                doc.text(`${net.toFixed(2)} €`, colX[7], y);
                 y += 7;
             });
 
@@ -186,8 +196,8 @@ export const Liquidations: React.FC = () => {
             doc.setTextColor(4, 120, 87);
             doc.text('TOTALES', colX[3], y);
             doc.text(`${totalImporte.toFixed(2)} €`, colX[4], y);
-            doc.text(`${totalLabCosts.toFixed(2)} €`, colX[5], y);
-            doc.text(`${netAfterLab.toFixed(2)} €`, colX[6], y);
+            doc.text(`${totalLabCosts.toFixed(2)} €`, colX[6], y);
+            doc.text(`${netAfterLab.toFixed(2)} €`, colX[7], y);
 
             // Commission row
             y += 9;
@@ -195,7 +205,7 @@ export const Liquidations: React.FC = () => {
             doc.rect(14, y - 4, 269, 8, 'F');
             doc.setTextColor(37, 99, 235);
             doc.text(`COMISIÓN DOCTOR (${commissionRate}%)`, colX[3], y);
-            doc.text(`${commissionAmount.toFixed(2)} €`, colX[6], y);
+            doc.text(`${commissionAmount.toFixed(2)} €`, colX[7], y);
 
             // Referral commission row (only if applicable)
             if (totalReferralCommission > 0) {
@@ -204,7 +214,7 @@ export const Liquidations: React.FC = () => {
                 doc.rect(14, y - 4, 269, 8, 'F');
                 doc.setTextColor(180, 83, 9);
                 doc.text('COMISIÓN CLÍNICA EXTERNA (10%)', colX[3], y);
-                doc.text(`${totalReferralCommission.toFixed(2)} €`, colX[6], y);
+                doc.text(`${totalReferralCommission.toFixed(2)} €`, colX[7], y);
             }
 
             // Footer
@@ -464,23 +474,42 @@ export const Liquidations: React.FC = () => {
                                                         <th className="px-6 py-3 text-left text-xs font-black uppercase text-slate-400 tracking-wider">Paciente</th>
                                                         <th className="px-6 py-3 text-left text-xs font-black uppercase text-slate-400 tracking-wider">NUM</th>
                                                         <th className="px-6 py-3 text-right text-xs font-black uppercase text-slate-400 tracking-wider">Importe</th>
+                                                        <th className="px-6 py-3 text-right text-xs font-black uppercase text-blue-400 tracking-wider">Base Doctor</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100">
-                                                    {group.records.map(r => (
-                                                        <tr key={r.id} className="hover:bg-slate-50">
-                                                            <td className="px-6 py-3 text-slate-500 text-xs">{String(r.fecha).length > 10 ? String(r.fecha).substring(11, 16) : '-'}</td>
-                                                            <td className="px-6 py-3 text-slate-700 text-xs font-semibold">{r.concepto}</td>
-                                                            <td className="px-6 py-3 text-slate-700 font-semibold">{r.nombrePaciente}</td>
-                                                            <td className="px-6 py-3 text-slate-500 text-xs">{r.numeroHistoria}</td>
-                                                            <td className="px-6 py-3 text-right font-black text-emerald-600">{r.importeCobrado.toFixed(2)}€</td>
-                                                        </tr>
-                                                    ))}
+                                                    {group.records.map(r => {
+                                                        const hasClinicDeduction = r.baseAmount !== undefined && Math.abs(r.baseAmount - r.importeCobrado) > 0.01;
+                                                        return (
+                                                            <tr key={r.id} className="hover:bg-slate-50">
+                                                                <td className="px-6 py-3 text-slate-500 text-xs">{String(r.fecha).length > 10 ? String(r.fecha).substring(11, 16) : '-'}</td>
+                                                                <td className="px-6 py-3 text-slate-700 text-xs font-semibold">{r.concepto}</td>
+                                                                <td className="px-6 py-3 text-slate-700 font-semibold">{r.nombrePaciente}</td>
+                                                                <td className="px-6 py-3 text-slate-500 text-xs">{r.numeroHistoria}</td>
+                                                                <td className="px-6 py-3 text-right font-black text-emerald-600">{r.importeCobrado.toFixed(2)}€</td>
+                                                                <td className="px-6 py-3 text-right">
+                                                                    {hasClinicDeduction ? (
+                                                                        <span className="font-black text-blue-600 flex items-center justify-end gap-1">
+                                                                            {(r.baseAmount!).toFixed(2)}€
+                                                                            <span title="OPG / servicios clínica excluidos" className="text-amber-500"><Building2 size={11} /></span>
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="text-slate-400 text-xs">—</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                                 <tfoot className="bg-emerald-50 border-t border-emerald-200">
                                                     <tr>
                                                         <td colSpan={4} className="px-6 py-3 text-xs font-black text-emerald-700 uppercase">Subtotal día</td>
                                                         <td className="px-6 py-3 text-right font-black text-emerald-700">{group.dayTotal.toFixed(2)}€</td>
+                                                        <td className="px-6 py-3 text-right font-black text-blue-700">
+                                                            {group.records.some(r => r.baseAmount !== undefined && Math.abs(r.baseAmount - r.importeCobrado) > 0.01)
+                                                                ? group.records.reduce((sum, r) => sum + (r.baseAmount ?? r.importeCobrado), 0).toFixed(2) + '€'
+                                                                : '—'}
+                                                        </td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
@@ -506,6 +535,7 @@ export const Liquidations: React.FC = () => {
                                         <th className="px-6 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">NUM</th>
                                         <th className="px-4 py-4 text-left text-xs font-black uppercase text-slate-500 tracking-wider">Doctor</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Importe</th>
+                                        <th className="px-6 py-4 text-right text-xs font-black uppercase text-blue-500 tracking-wider">Base Doctor</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Coste Lab</th>
                                         <th className="px-6 py-4 text-right text-xs font-black uppercase text-slate-500 tracking-wider">Neto</th>
                                     </tr>
@@ -630,6 +660,17 @@ export const Liquidations: React.FC = () => {
                                                     <span className="font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</span>
                                                 )}
                                             </td>
+                                            {/* Base Doctor */}
+                                            <td className="px-6 py-4 text-right">
+                                                {record.baseAmount !== undefined && Math.abs(record.baseAmount - record.importeCobrado) > 0.01 ? (
+                                                    <span className="font-black text-blue-600 flex items-center justify-end gap-1">
+                                                        {record.baseAmount.toFixed(2)}€
+                                                        <span title="OPG / servicios clínica excluidos"><Building2 size={11} className="text-amber-500" /></span>
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400 text-xs">—</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-2 text-right">
                                                 <input
                                                     type="number"
@@ -647,7 +688,7 @@ export const Liquidations: React.FC = () => {
                                     })}
                                     {/* Total Row */}
                                     <tr className="bg-emerald-50 border-t-2 border-emerald-200">
-                                        <td colSpan={6} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
+                                        <td colSpan={7} className="px-6 py-4 text-right font-black uppercase text-emerald-700 text-sm">
                                             TOTALES
                                         </td>
                                         <td className="px-6 py-4 text-right font-black text-emerald-700 text-lg">{totalImporte.toFixed(2)}€</td>
@@ -656,7 +697,7 @@ export const Liquidations: React.FC = () => {
                                     </tr>
                                     {/* Commission Row */}
                                     <tr className="bg-blue-50 border-t border-blue-200">
-                                        <td colSpan={8} className="px-6 py-3 text-right font-black uppercase text-blue-700 text-sm">
+                                        <td colSpan={9} className="px-6 py-3 text-right font-black uppercase text-blue-700 text-sm">
                                             COMISIÓN DOCTOR ({commissionRate}%)
                                         </td>
                                         <td className="px-6 py-3 text-right font-black text-blue-700 text-lg">{commissionAmount.toFixed(2)}€</td>
@@ -664,7 +705,7 @@ export const Liquidations: React.FC = () => {
                                     {/* Referral Commission Row — only shown when ODA patients exist */}
                                     {totalReferralCommission > 0 && (
                                         <tr className="bg-amber-50 border-t border-amber-200">
-                                            <td colSpan={8} className="px-6 py-3 text-right font-black uppercase text-amber-700 text-sm">
+                                            <td colSpan={9} className="px-6 py-3 text-right font-black uppercase text-amber-700 text-sm">
                                                 COMISIÓN CLÍNICA EXTERNA (10%)
                                             </td>
                                             <td className="px-6 py-3 text-right font-black text-amber-700 text-lg">{totalReferralCommission.toFixed(2)}€</td>

@@ -15,7 +15,7 @@ router.post('/', async (req, res) => {
         const {
             date, time, patientId, doctorId, treatmentId, treatmentName,
             duration, observations, visitDetails, budgetId, budgetItemId,
-            budgetItemIds, amount, isRevision, serviceIds
+            budgetItemIds, amount, isRevision, serviceIds, serviceBreakdown
         } = req.body;
 
         let supabase;
@@ -82,6 +82,9 @@ router.post('/', async (req, res) => {
                 status: 'Scheduled',
                 paid: false,
                 is_revision: isRevision === true,
+                service_breakdown: (Array.isArray(serviceBreakdown) && serviceBreakdown.length > 0)
+                    ? serviceBreakdown
+                    : null,
                 created_by: req.user?.id || null,
                 updated_by: req.user?.id || null,
             }])
@@ -278,6 +281,14 @@ router.put('/:id', async (req, res) => {
                 ? JSON.stringify(updates.budgetItemIds.map(id => String(id)))
                 : null;
         }
+
+        // Remap serviceBreakdown → service_breakdown for Supabase column name
+        if (Array.isArray(updates.serviceBreakdown) && updates.serviceBreakdown.length > 0) {
+            updates.service_breakdown = updates.serviceBreakdown;
+        } else if (updates.serviceBreakdown === null) {
+            updates.service_breakdown = null;
+        }
+        delete updates.serviceBreakdown;
 
         delete updates.serviceIds; delete updates.treatment;
         delete updates.doctor; delete updates.patient; delete updates.budget;
