@@ -431,9 +431,9 @@ const Billing: React.FC = () => {
                                                         <div className="flex justify-end gap-3 opacity-60 group-hover:opacity-100 transition-opacity">
                                                             <button
                                                                 onClick={() => handleDownloadInvoice(inv)}
-                                                                className={`w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center transition-all shadow-sm hover:shadow-md ${!inv.url ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-white text-slate-400 hover:text-blue-600 hover:border-blue-200'}`}
-                                                                title={inv.url ? "Descargar Factura Oficial" : "PDF No disponible"}
-                                                                disabled={!inv.url}
+                                                                className={`w-10 h-10 rounded-xl border border-slate-200 flex items-center justify-center transition-all shadow-sm hover:shadow-md ${(!inv.url && !inv.externalId) ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-white text-slate-400 hover:text-blue-600 hover:border-blue-200'}`}
+                                                                title={(inv.url || inv.externalId) ? "Descargar Factura Oficial" : "PDF No disponible"}
+                                                                disabled={!inv.url && !inv.externalId}
                                                             >
                                                                 <Download size={18} />
                                                             </button>

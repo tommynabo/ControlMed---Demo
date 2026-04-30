@@ -85,6 +85,7 @@ export interface Invoice {
     date: string;
     status: 'issued' | 'pending' | 'paid';
     url?: string;
+    externalId?: string;
     items?: InvoiceItem[];
 }
 
