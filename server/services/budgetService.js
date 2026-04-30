@@ -43,7 +43,7 @@ const createBudget = async (supabase, patientId, items = [], title = "", userId 
         const lineItems = items.map(item => ({
             id: crypto.randomUUID(),
             budgetId: budget.id,
-            name: item.tooth ? `${item.name} - Diente ${item.tooth}` : item.name,
+            name: item.name,
             price: Number(item.price),
             quantity: Number(item.quantity) || 1,
             tooth: item.tooth ? String(item.tooth) : null,

@@ -2455,8 +2455,7 @@ const Patients: React.FC = () => {
                                                                         x{item.quantity || 1}
                                                                     </div>
                                                                     <div className="flex flex-col">
-                                                                        <span>{item.name}</span>
-                                                                        {item.tooth && <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Diente(s): {item.tooth}</span>}
+                                                                        <span>{item.name}{item.tooth && !item.name?.includes(`Diente ${item.tooth}`) ? ` — Diente ${item.tooth}` : ''}</span>
                                                                         {item.doctorId && <span className="text-[10px] text-blue-500 font-bold uppercase tracking-wide">{doctors.find((d: any) => d.id === item.doctorId)?.name || '—'}</span>}
                                                                     </div>
                                                                 </div>
