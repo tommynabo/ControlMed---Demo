@@ -977,6 +977,50 @@ router.post('/pay-with-wallet', async (req, res) => {
         // Mark matched BudgetLineItems as paid so they disappear from the budget view
         await markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName });
 
+        // ── Create Liquidation for the doctor ────────────────────────────────
+        // Wallet payments previously skipped this step, causing appointments paid
+        // via wallet to be invisible in doctor liquidation reports.
+        if (appointmentId) {
+            try {
+                const { data: apptRow } = await supabase
+                    .from('Appointment')
+                    .select('doctorId, doctor:Doctor(commissionPercentage, name), patient:Patient(name)')
+                    .eq('id', appointmentId)
+                    .single();
+
+                if (apptRow?.doctorId) {
+                    const existingLiq = await prisma.liquidation.findFirst({ where: { appointmentId } });
+                    if (!existingLiq) {
+                        const rawRate = apptRow.doctor?.commissionPercentage || 30;
+                        const labCost = 0;
+                        const finalAmount = (numericAmount - labCost) * (rawRate / 100);
+                        await prisma.liquidation.create({
+                            data: {
+                                id: crypto.randomUUID(),
+                                doctorId: apptRow.doctorId,
+                                appointmentId,
+                                grossAmount: numericAmount,
+                                baseAmount: numericAmount,
+                                labCost,
+                                commissionRate: rawRate,
+                                finalAmount,
+                                referralCommission: 0,
+                                referralEntityName: null,
+                                treatmentName: treatmentName || 'Pago con saldo',
+                                patientName: apptRow.patient?.name || 'Paciente',
+                                paymentMethod: 'wallet',
+                                status: 'PENDING',
+                                createdAt: new Date().toISOString()
+                            }
+                        });
+                    }
+                }
+            } catch (liqErr) {
+                // Non-fatal: log but don't fail the payment response
+                console.error('⚠️  pay-with-wallet: could not create liquidation:', liqErr.message);
+            }
+        }
+
         const newBalance = (patient.wallet || 0) - numericAmount;
         res.json({ success: true, payment: result, newBalance });
     } catch (e) {

@@ -3077,6 +3077,20 @@ const Patients: React.FC = () => {
                 appointment={visitForPayment || undefined}
                 defaultAmount={visitForPayment ? (visitForPayment as any).amount || 0 : undefined}
                 defaultConcept={visitForPayment ? ((visitForPayment as any).treatmentName || visitForPayment.treatment || 'Visita') as string : undefined}
+                alreadyPaidAmount={(() => {
+                    // Sum up partial-payment invoices already recorded for this treatment
+                    // so the final instalment is correctly detected as non-partial.
+                    if (!visitForPayment || !selectedPatient) return 0;
+                    const treatmentName = ((visitForPayment as any).treatmentName || visitForPayment.treatment || '') as string;
+                    if (!treatmentName) return 0;
+                    return invoices
+                        .filter(inv =>
+                            inv.patientId === selectedPatient.id &&
+                            (inv as any).concept?.includes('Pago Parcial') &&
+                            (inv as any).concept?.startsWith(treatmentName)
+                        )
+                        .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+                })()}
                 onPaymentComplete={(payment, invoice) => {
                     if (selectedPatient) {
                         // 1. Immediate Update (Optimistic/Server-Confirmed)

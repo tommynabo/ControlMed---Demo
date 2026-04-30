@@ -12,6 +12,8 @@ interface PaymentModalProps {
     appointment?: any;
     defaultAmount?: number;
     defaultConcept?: string;
+    /** Sum of payments already made for this appointment/treatment (used to detect the final instalment) */
+    alreadyPaidAmount?: number;
 }
 
 interface PaymentSplit {
@@ -34,7 +36,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     onPaymentComplete,
     appointment,
     defaultAmount,
-    defaultConcept
+    defaultConcept,
+    alreadyPaidAmount = 0
 }) => {
     const isDirectPayment = !!appointment || (!!defaultAmount && defaultAmount > 0);
 
@@ -215,7 +218,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             const mainMethod = breakdown.length === 1 ? breakdown[0].method :
                 breakdown.sort((a, b) => b.amount - a.amount)[0].method;
 
-            const isPartialPayment = isDirectPayment && originalAmount > 0 && numericAmount < originalAmount;
+            // A payment is partial only when the current amount PLUS what was already paid
+            // is still less than the full treatment cost. This correctly identifies the
+            // final instalment of a split-payment treatment as a non-partial payment.
+            const isPartialPayment = isDirectPayment && originalAmount > 0 && (numericAmount + alreadyPaidAmount) < originalAmount;
 
             let response: any;
 
