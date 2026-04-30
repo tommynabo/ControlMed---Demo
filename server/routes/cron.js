@@ -15,9 +15,14 @@ function validateCronSecret(req, res) {
         return false;
     }
 
-    const providedToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
-    if (!providedToken || providedToken !== expectedSecret.trim()) {
-        console.warn(`[CRON] Intento no autorizado. Token: ${providedToken ? '***' : 'NULO'}`);
+    const headerToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '').trim() : null;
+    const queryToken  = req.query?.token ? String(req.query.token).trim() : null;
+
+    const isAuthorized = (headerToken && headerToken === expectedSecret.trim())
+                      || (queryToken  && queryToken  === expectedSecret.trim());
+
+    if (!isAuthorized) {
+        console.warn(`[CRON] Intento no autorizado. Header: ${headerToken ? '***' : 'NULO'}, Query token: ${queryToken ? '***' : 'NULO'}`);
         res.status(401).json({ error: 'Unauthorized' });
         return false;
     }

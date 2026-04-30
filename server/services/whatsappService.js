@@ -64,7 +64,11 @@ const sendEvolutionMessage = async (to, text) => {
 
     const response = await axios.post(
         url,
-        { number: formattedTo, text },
+        {
+            number: formattedTo,
+            options: { delay: 1200, presence: 'composing' },
+            textMessage: { text },
+        },
         {
             headers: {
                 'apikey': EVOLUTION_API_KEY,

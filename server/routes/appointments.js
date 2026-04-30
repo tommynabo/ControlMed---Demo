@@ -117,6 +117,25 @@ router.post('/', async (req, res) => {
             }
         } catch (_) {}
 
+        // ── Encolar recordatorio WhatsApp (fire-and-forget, nunca bloquea) ──
+        try {
+            const patientPhone = data.patient?.phone;
+            if (patientPhone) {
+                let normalized = patientPhone.replace(/[^0-9]/g, '');
+                if (normalized.length === 9) normalized = '34' + normalized;
+                const apptDate = new Date(data.date);
+                const formattedDate = apptDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                const treatmentLabel = data.treatmentName ? ` para ${data.treatmentName}` : '';
+                const patientName = data.patient?.name || 'Paciente';
+                const message = `Hola ${patientName}, te confirmamos tu cita el ${formattedDate} a las ${data.time}${treatmentLabel}. ¡Te esperamos!\n\n_Responde "NO" para dejar de recibir avisos_`;
+                await prisma.whatsAppQueue.create({
+                    data: { phone: normalized, message, status: 'PENDING', appointmentId: data.id },
+                });
+            }
+        } catch (_waq) {
+            console.warn('[WhatsApp Queue] No se pudo encolar recordatorio:', _waq.message);
+        }
+
         res.json(response);
     } catch (e) {
         console.error('Error saving appointment:', e);
@@ -337,6 +356,42 @@ router.put('/:id', async (req, res) => {
             }
         } catch (_) {}
 
+        // ── Gestionar cola WhatsApp (fire-and-forget) ──────────────────────
+        try {
+            const isCancelled = updates.status === 'CANCELADA' || updates.status === 'CANCELLED';
+            if (isCancelled) {
+                // Borrar recordatorios pendientes para esta cita
+                await prisma.whatsAppQueue.deleteMany({
+                    where: { appointmentId: id, status: 'PENDING' },
+                });
+            } else if (updates.date || updates.time) {
+                // Reagendar: borrar el antiguo y crear uno nuevo con fecha/hora actualizada
+                await prisma.whatsAppQueue.deleteMany({
+                    where: { appointmentId: id, status: 'PENDING' },
+                });
+                const patientId = data.patientId || oldRecord?.patientId;
+                if (patientId) {
+                    const { data: patient } = await supabase
+                        .from('Patient').select('name, phone').eq('id', patientId).single();
+                    if (patient?.phone) {
+                        let normalized = patient.phone.replace(/[^0-9]/g, '');
+                        if (normalized.length === 9) normalized = '34' + normalized;
+                        const apptDate = new Date(data.date || oldRecord?.date);
+                        const apptTime = data.time || oldRecord?.time || '';
+                        const formattedDate = apptDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+                        const treatmentLabel = (data.treatmentName || oldRecord?.treatmentName)
+                            ? ` para ${data.treatmentName || oldRecord?.treatmentName}` : '';
+                        const message = `Hola ${patient.name}, te recordamos tu cita actualizada el ${formattedDate} a las ${apptTime}${treatmentLabel}. ¡Te esperamos!\n\n_Responde "NO" para dejar de recibir avisos_`;
+                        await prisma.whatsAppQueue.create({
+                            data: { phone: normalized, message, status: 'PENDING', appointmentId: id },
+                        });
+                    }
+                }
+            }
+        } catch (_waq) {
+            console.warn('[WhatsApp Queue] No se pudo actualizar cola:', _waq.message);
+        }
+
         res.json(response);
     } catch (e) {
         console.error('Error updating appointment:', e);
@@ -378,6 +433,13 @@ router.delete('/:id', async (req, res) => {
             ipAddress:    req.ip,
             userAgent:    req.headers['user-agent'],
         });
+
+        // Eliminar recordatorios pendientes al borrar la cita
+        try {
+            await prisma.whatsAppQueue.deleteMany({ where: { appointmentId: id, status: 'PENDING' } });
+        } catch (_waq) {
+            console.warn('[WhatsApp Queue] No se pudo limpiar cola al borrar cita:', _waq.message);
+        }
 
         res.json({ success: true });
     } catch (e) {

@@ -16,7 +16,6 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 // Init DB & Services
 const { prisma } = require('./lib/db');
 const whatsappService = require('./services/whatsappService');
-const schedulerService = require('./services/schedulerService');
 
 // Import Routes
 const authRouter = require('./routes/auth');
@@ -129,7 +128,6 @@ app.use('/api', templatesRouter);
 
 // --- Initialization ---
 whatsappService.initialize();
-schedulerService.startScheduler(prisma);
 
 // --- Error Handler ---
 app.use(errorHandler);

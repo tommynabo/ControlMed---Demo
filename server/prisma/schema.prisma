@@ -535,14 +535,16 @@ model CashRegisterClosing {
 // Patrón anti-timeout para Vercel: los disparadores encolan aquí, y un cron
 // worker separado procesa UN mensaje por ejecución (milisegundos de duración).
 model WhatsAppQueue {
-  id           String   @id @default(uuid())
-  phone        String
-  message      String
-  status       String   @default("PENDING") // PENDING | SENT | FAILED
-  errorMessage String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(uuid())
+  phone         String
+  message       String
+  status        String   @default("PENDING") // PENDING | SENT | FAILED
+  errorMessage  String?
+  appointmentId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@map("whatsapp_queue")
   @@index([status, createdAt])
+  @@index([appointmentId])
 }

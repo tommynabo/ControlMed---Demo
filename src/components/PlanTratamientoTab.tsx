@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Check, Clock, ChevronDown, ChevronUp, ClipboardList, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Patient, ClinicalTreatmentPlan, ClinicalTreatmentStep } from '../../types';
@@ -21,6 +22,7 @@ const nextStatus = (current: string) => {
 };
 
 export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient, api }) => {
+    const queryClient = useQueryClient();
     const [plans, setPlans] = useState<ClinicalTreatmentPlan[]>([]);
     const [loading, setLoading] = useState(true);
     const [expandedPlan, setExpandedPlan] = useState<string | null>(null);
@@ -34,12 +36,12 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     const [dbServices, setDbServices] = useState<{ id: string; name: string; specialty_name: string }[]>([]);
     const [updatingStepId, setUpdatingStepId] = useState<string | null>(null);
 
-    const fetchPlans = async () => {
-        try {
-            setLoading(true);
+    // ── React Query — staleTime 0 garantiza re-fetch al reabrir el modal ──
+    const { data: queryPlans } = useQuery<ClinicalTreatmentPlan[]>({
+        queryKey: ['patient-treatments', patient.id],
+        queryFn: async () => {
             const data = await api.clinicalPlans.getByPatient(patient.id);
-            // Normalize DB column names to camelCase
-            const normalized = (data || []).map((p: any) => ({
+            return (data || []).map((p: any) => ({
                 id: p.id,
                 patientId: p.patient_id || p.patientId,
                 name: p.name,
@@ -58,19 +60,24 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
                     completedAt: s.completed_at || s.completedAt,
                     createdAt: s.created_at || s.createdAt
                 })).sort((a: any, b: any) => a.stepOrder - b.stepOrder)
-            }));
-            setPlans(normalized);
-            if (normalized.length > 0 && !expandedPlan) {
-                setExpandedPlan(normalized[0].id);
-            }
-        } catch (e) {
-            console.error('Error fetching plans:', e);
-        } finally {
-            setLoading(false);
-        }
-    };
+            })) as ClinicalTreatmentPlan[];
+        },
+        staleTime: 0,
+    });
 
-    useEffect(() => { fetchPlans(); }, [patient.id]);
+    // Sync query data → local state (preserves optimistic updates between invalidations)
+    useEffect(() => {
+        if (queryPlans !== undefined) {
+            setPlans(queryPlans);
+            setLoading(false);
+            if (queryPlans.length > 0 && !expandedPlan) {
+                setExpandedPlan(queryPlans[0].id);
+            }
+        }
+    }, [queryPlans]);
+
+    const invalidatePlans = () =>
+        queryClient.invalidateQueries({ queryKey: ['patient-treatments', patient.id] });
 
     useEffect(() => {
         api.services.getAll().then((data: any[]) => setDbServices(data || [])).catch(() => {});
@@ -85,7 +92,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
             });
             setNewPlanName('');
             setShowNewPlan(false);
-            fetchPlans();
+            invalidatePlans();
         } catch (e) {
             alert('Error al crear plan: ' + (e as Error).message);
         }
@@ -95,7 +102,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
         if (!confirm('¿Eliminar este plan y todos sus pasos?')) return;
         try {
             await api.clinicalPlans.delete(planId);
-            fetchPlans();
+            invalidatePlans();
         } catch (e) {
             alert('Error al eliminar: ' + (e as Error).message);
         }
@@ -112,7 +119,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
         setUpdatingStepId(step.id);
         try {
             await api.clinicalPlans.updateStep(step.id, { status: newSt });
-            await fetchPlans();
+            invalidatePlans();
         } catch (e) {
             // Revert optimistic update on failure
             setPlans(prev => prev.map(plan => ({
@@ -136,7 +143,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
             setNewStepName('');
             setNewStepTooth('');
             setAddingStepToPlan(null);
-            fetchPlans();
+            invalidatePlans();
         } catch (e) {
             alert('Error al añadir paso: ' + (e as Error).message);
         }
@@ -145,7 +152,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     const handleDeleteStep = async (stepId: string) => {
         try {
             await api.clinicalPlans.deleteStep(stepId);
-            fetchPlans();
+            invalidatePlans();
         } catch (e) {
             console.error('Error deleting step:', e);
         }
@@ -154,7 +161,7 @@ export const PlanTratamientoTab: React.FC<PlanTratamientoTabProps> = ({ patient,
     const handleUpdatePlanStatus = async (planId: string, status: string) => {
         try {
             await api.clinicalPlans.update(planId, { status });
-            fetchPlans();
+            invalidatePlans();
         } catch (e) {
             console.error('Error updating plan:', e);
         }
