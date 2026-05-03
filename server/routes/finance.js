@@ -14,13 +14,38 @@ const { logAudit } = require('../lib/audit');
 const router = express.Router();
 
 // ─── Helper: mark BudgetLineItems as paid after a treatment payment ───────────
-// Matches items by serviceName (prefix) inside the given budget so they can be
-// hidden from the patient's budget view once paid.
-async function markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName }) {
+// Priority: use exact budgetItemIds from the Appointment record (most reliable).
+// Falls back to serviceName prefix matching for backwards compatibility.
+async function markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName, appointmentId }) {
     if (!budgetId) return;
     try {
+        // ── Priority 1: Use exact BudgetLineItem IDs stored on the Appointment ──
+        if (appointmentId) {
+            const { data: apptRow } = await supabase
+                .from('Appointment')
+                .select('"budgetItemIds"')
+                .eq('id', appointmentId)
+                .single();
+            if (apptRow?.budgetItemIds) {
+                let itemIds = [];
+                try {
+                    itemIds = typeof apptRow.budgetItemIds === 'string'
+                        ? JSON.parse(apptRow.budgetItemIds)
+                        : apptRow.budgetItemIds;
+                } catch (_) {}
+                if (Array.isArray(itemIds) && itemIds.length > 0) {
+                    await supabase
+                        .from('BudgetLineItem')
+                        .update({ paid: true })
+                        .in('id', itemIds)
+                        .eq('paid', false);
+                    return; // Done — exact match succeeded
+                }
+            }
+        }
+
+        // ── Priority 2 (fallback): match by PatientTreatment serviceName ──
         if (Array.isArray(treatmentIds) && treatmentIds.length > 0) {
-            // Fetch the serviceName for each paid PatientTreatment row
             const { data: pts } = await supabase
                 .from('PatientTreatment')
                 .select('serviceName')
@@ -37,7 +62,7 @@ async function markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treat
                 }
             }
         } else if (treatmentName) {
-            // Fallback: match by treatment name/concept
+            // ── Priority 3 (last resort): match by treatment name/concept ──
             await supabase
                 .from('BudgetLineItem')
                 .update({ paid: true })
@@ -571,7 +596,8 @@ router.post('/payments/create', async (req, res) => {
                 await markBudgetLineItemsPaid(supabasePost, {
                     budgetId: budgetId || req.body.budgetId,
                     treatmentIds: req.body.treatmentIds,
-                    treatmentName: solvedTreatmentName
+                    treatmentName: solvedTreatmentName,
+                    appointmentId
                 });
             } catch (treatErr) {
                 console.error('⚠️ Error actualizando estado de tratamientos/presupuesto (no crítico):', treatErr.message);
@@ -855,7 +881,8 @@ router.post('/payments/create-split', async (req, res) => {
         await markBudgetLineItemsPaid(supabase, {
             budgetId,
             treatmentIds: req.body.treatmentIds,
-            treatmentName: concept
+            treatmentName: concept,
+            appointmentId
         });
 
         try {
@@ -975,7 +1002,7 @@ router.post('/pay-with-wallet', async (req, res) => {
         }
 
         // Mark matched BudgetLineItems as paid so they disappear from the budget view
-        await markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName });
+        await markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName, appointmentId });
 
         // ── Create Liquidation for the doctor ────────────────────────────────
         // Wallet payments previously skipped this step, causing appointments paid

@@ -756,6 +756,7 @@ const Patients: React.FC = () => {
     // Budget
     const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
     const [editingBudget, setEditingBudget] = useState<any>(null);
+    const [expandedRealizedBudgets, setExpandedRealizedBudgets] = useState<Set<string>>(new Set());
 
     // Wallet / Payment Modal
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -2476,6 +2477,45 @@ const Patients: React.FC = () => {
                                                         {(!budget.items || budget.items.filter((i: any) => !i.paid).length === 0) && (
                                                             <div className="text-center text-xs text-slate-400 italic py-2">Sin conceptos</div>
                                                         )}
+
+                                                        {/* ✓ Tratamientos realizados (paid items) */}
+                                                        {budget.items?.filter((item: any) => item.paid).length > 0 && (() => {
+                                                            const paidItems = budget.items.filter((item: any) => item.paid);
+                                                            const budgetKey = `realized-${budget.id}`;
+                                                            const isExpanded = (expandedRealizedBudgets || new Set()).has(budgetKey);
+                                                            return (
+                                                                <div className="mt-2 pt-2 border-t border-slate-200">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setExpandedRealizedBudgets((prev: Set<string>) => {
+                                                                                const next = new Set(prev);
+                                                                                if (next.has(budgetKey)) next.delete(budgetKey);
+                                                                                else next.add(budgetKey);
+                                                                                return next;
+                                                                            });
+                                                                        }}
+                                                                        className="flex items-center gap-1.5 text-[10px] font-black uppercase text-emerald-600 hover:text-emerald-700 transition-colors"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                                        {isExpanded ? 'Ocultar realizados' : `Realizados (${paidItems.length})`}
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">{isExpanded ? <polyline points="18 15 12 9 6 15"/> : <polyline points="6 9 12 15 18 9"/>}</svg>
+                                                                    </button>
+                                                                    {isExpanded && (
+                                                                        <div className="mt-2 space-y-1.5">
+                                                                            {paidItems.map((item: any, idx: number) => (
+                                                                                <div key={idx} className="flex justify-between items-center text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-100">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                                                                                        <span className="line-through text-emerald-400 text-xs">{item.name}{item.tooth ? ` — Diente ${item.tooth}` : ''}</span>
+                                                                                    </div>
+                                                                                    <span className="text-emerald-500 text-xs font-black">{Number(item.price).toFixed(2)}€</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </div>
 
                                                     {/* Footer Actions */}

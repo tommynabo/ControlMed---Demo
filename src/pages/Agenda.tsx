@@ -2151,18 +2151,47 @@ const Agenda: React.FC = () => {
                             {bookingBudgetId && (
                                 <div>
                                     <label className="text-xs font-bold uppercase text-slate-400">Conceptos del Presupuesto</label>
+
+                                    {/* Read-only summary: show items linked to THIS appointment with ✓/📅 status */}
+                                    {selectedAppt && !isDuplicating && selectedBudgetItems.length > 0 && (() => {
+                                        const apptStatus = (selectedAppt.status || '').toLowerCase();
+                                        const isDone = selectedAppt.paid || apptStatus === 'completed' || apptStatus === 'realizada';
+                                        return (
+                                            <div className="mt-2 space-y-1">
+                                                {selectedBudgetItems.map((item: any, idx: number) => (
+                                                    <div key={idx} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isDone ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
+                                                        {isDone
+                                                            ? <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 shrink-0"><polyline points="20 6 9 17 4 12"/></svg>
+                                                            : <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-blue-400 shrink-0"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                                        }
+                                                        <span className={`text-xs flex-1 font-bold ${isDone ? 'text-emerald-700' : 'text-blue-700'}`}>{item.name}</span>
+                                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${isDone ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                            {isDone ? '✓ Realizado' : 'Programado'}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+
                                     <div className="mt-2 bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 max-h-40 overflow-y-auto">
                                         {(() => {
                                             // Build a set of budgetLineItem IDs already used in OTHER appointments
                                             // for this same patient + budget (excluding the appointment being edited now)
+                                            // Note: exclude cancelled/anulada appointments so their items are freed up
                                             const usedBudgetItemIds = new Set<string>(
                                                 appointments
-                                                    .filter((a: any) =>
-                                                        a.patientId === bookingPatientId &&
-                                                        a.budgetId === bookingBudgetId &&
-                                                        a.id !== selectedAppt?.id &&
-                                                        !a.deleted_at
-                                                    )
+                                                    .filter((a: any) => {
+                                                        const s = (a.status || '').toLowerCase();
+                                                        const isCancelled = s === 'canceled' || s === 'cancelled' || s === 'anulada';
+                                                        return (
+                                                            a.patientId === bookingPatientId &&
+                                                            a.budgetId === bookingBudgetId &&
+                                                            a.id !== selectedAppt?.id &&
+                                                            !a.deleted_at &&
+                                                            !isCancelled
+                                                        );
+                                                    })
                                                     .flatMap((a: any) => {
                                                         try {
                                                             const multi = a.budgetItemIds ? JSON.parse(a.budgetItemIds) as string[] : [];
