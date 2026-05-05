@@ -306,7 +306,24 @@ router.get('/invoices', async (req, res) => {
 
         const { data, error } = await supabase.from('Invoice').select('*, items:InvoiceItem(*)').order('date', { ascending: false });
         if (error) return res.status(500).json({ error: error.message });
-        res.json(data);
+
+        // Enrich with liquidation data (doctorId) linked via appointmentId
+        const appointmentIds = (data || []).map(inv => inv.appointmentId).filter(Boolean);
+        let liquidationMap = {};
+        if (appointmentIds.length > 0) {
+            const { data: liqData } = await supabase
+                .from('Liquidation')
+                .select('id, doctorId, appointmentId')
+                .in('appointmentId', appointmentIds);
+            (liqData || []).forEach(l => {
+                liquidationMap[l.appointmentId] = { liquidationId: l.id, assignedDoctorId: l.doctorId };
+            });
+        }
+        const enriched = (data || []).map(inv => ({
+            ...inv,
+            ...(inv.appointmentId && liquidationMap[inv.appointmentId] ? liquidationMap[inv.appointmentId] : {})
+        }));
+        res.json(enriched);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

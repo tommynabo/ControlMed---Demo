@@ -131,6 +131,10 @@ export interface Invoice {
   rectifiesId?: string;
   concept?: string; // "Pago a Cuenta" | "Tratamiento: Endodoncia Diente 21"
   relatedPaymentId?: string;
+  // Internal fields (not on the legal document)
+  appointmentId?: string;
+  liquidationId?: string;
+  assignedDoctorId?: string;
 }
 
 export interface Payment {

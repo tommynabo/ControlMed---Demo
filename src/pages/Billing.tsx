@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
     Download, DollarSign, Calendar, User, FileText, Trash2,
-    Plus, BarChart3, QrCode, TrendingDown, TrendingUp, CreditCard, Mail, Loader2
+    Plus, BarChart3, QrCode, TrendingDown, TrendingUp, CreditCard, Mail, Loader2, Settings
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAppContext } from '../context/AppContext';
@@ -78,6 +78,43 @@ const Billing: React.FC = () => {
     // Treatment search for invoice items
     const [treatmentSuggestions, setTreatmentSuggestions] = useState<any[]>([]);
     const [activeSuggestionIdx, setActiveSuggestionIdx] = useState<number | null>(null);
+
+    // Internal edit modal (payment method + doctor — does NOT modify the legal invoice)
+    const [editingInternalInvoice, setEditingInternalInvoice] = useState<Invoice | null>(null);
+    const [internalEditPaymentMethod, setInternalEditPaymentMethod] = useState<string>('');
+    const [internalEditDoctorId, setInternalEditDoctorId] = useState<string>('');
+    const [isSavingInternal, setIsSavingInternal] = useState(false);
+
+    const handleOpenInternalEdit = (inv: Invoice) => {
+        setEditingInternalInvoice(inv);
+        setInternalEditPaymentMethod(inv.paymentMethod || 'cash');
+        setInternalEditDoctorId(inv.assignedDoctorId || '');
+    };
+
+    const handleSaveInternalEdit = async () => {
+        if (!editingInternalInvoice) return;
+        setIsSavingInternal(true);
+        try {
+            const methodChanged = internalEditPaymentMethod !== editingInternalInvoice.paymentMethod;
+            const doctorChanged = internalEditDoctorId !== (editingInternalInvoice.assignedDoctorId || '');
+
+            if (methodChanged) {
+                await api.invoices.update(editingInternalInvoice.id, { paymentMethod: internalEditPaymentMethod });
+            }
+            if (doctorChanged && editingInternalInvoice.liquidationId) {
+                await (api as any).liquidations.update(editingInternalInvoice.liquidationId, { doctorId: internalEditDoctorId || null });
+            }
+
+            const freshInvoices = await api.invoices.getAll();
+            setInvoices(freshInvoices);
+            toast.success('Datos internos actualizados ✓');
+            setEditingInternalInvoice(null);
+        } catch (e: any) {
+            toast.error('Error al guardar: ' + (e.message || e));
+        } finally {
+            setIsSavingInternal(false);
+        }
+    };
 
     // Load all services when modal opens
     useEffect(() => {
@@ -447,6 +484,13 @@ const Billing: React.FC = () => {
                                                                     ? <Loader2 size={18} className="animate-spin" />
                                                                     : <Mail size={18} />}
                                                             </button>
+                                                            <button
+                                                                onClick={() => handleOpenInternalEdit(inv)}
+                                                                className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 hover:text-amber-600 hover:border-amber-200 transition-all shadow-sm hover:shadow-md"
+                                                                title="Editar datos internos (método de pago y doctor)"
+                                                            >
+                                                                <Settings size={18} />
+                                                            </button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -797,6 +841,83 @@ const Billing: React.FC = () => {
                                     </button>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── INTERNAL EDIT MODAL ─────────────────────────────────────────── */}
+            {editingInternalInvoice && (
+                <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+                    <div className="bg-white max-w-sm w-full rounded-[2rem] shadow-2xl">
+                        <div className="p-8 border-b border-slate-100">
+                            <h3 className="text-lg font-black text-slate-900">Editar Datos Internos</h3>
+                            <p className="text-xs text-slate-400 mt-1 font-medium">
+                                Factura {editingInternalInvoice.invoiceNumber} — No altera el documento legal
+                            </p>
+                        </div>
+                        <div className="p-8 space-y-6">
+                            {/* Payment Method */}
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Método de Pago</p>
+                                {editingInternalInvoice.paymentMethod === 'wallet' ? (
+                                    <div className="px-4 py-3 bg-amber-50 rounded-xl border-2 border-amber-100">
+                                        <span className="text-xs text-amber-600 font-bold">Pago con monedero — no se puede cambiar a otro método</span>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {[
+                                            { value: 'cash', label: '💵 Efectivo' },
+                                            { value: 'card', label: '💳 Tarjeta' },
+                                            { value: 'transfer', label: '🏦 Transferencia' },
+                                        ].map(opt => (
+                                            <button
+                                                key={opt.value}
+                                                onClick={() => setInternalEditPaymentMethod(opt.value)}
+                                                className={`w-full text-left px-5 py-3 rounded-xl text-sm font-bold border-2 transition-all ${internalEditPaymentMethod === opt.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-100 bg-white text-slate-700 hover:border-slate-300'}`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Doctor */}
+                            <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">Doctor Asignado</p>
+                                {editingInternalInvoice.appointmentId ? (
+                                    <select
+                                        value={internalEditDoctorId}
+                                        onChange={e => setInternalEditDoctorId(e.target.value)}
+                                        className="w-full border-2 border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 bg-white focus:outline-none focus:border-slate-400 transition-colors"
+                                    >
+                                        <option value="">— Sin doctor asignado —</option>
+                                        {doctors.map(doc => (
+                                            <option key={doc.id} value={doc.id}>{doc.name}</option>
+                                        ))}
+                                    </select>
+                                ) : (
+                                    <div className="px-4 py-3 bg-slate-50 rounded-xl border-2 border-slate-100">
+                                        <span className="text-xs text-slate-400 font-bold">No disponible — pago sin cita asociada</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="p-8 pt-0 flex gap-3">
+                            <button
+                                onClick={() => setEditingInternalInvoice(null)}
+                                className="flex-1 py-3 rounded-xl text-sm font-black uppercase tracking-widest text-slate-500 border-2 border-slate-100 hover:bg-slate-50 transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleSaveInternalEdit}
+                                disabled={isSavingInternal}
+                                className="flex-1 py-3 rounded-xl text-sm font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-black transition-colors disabled:opacity-50"
+                            >
+                                {isSavingInternal ? 'Guardando...' : 'Guardar'}
+                            </button>
                         </div>
                     </div>
                 </div>
