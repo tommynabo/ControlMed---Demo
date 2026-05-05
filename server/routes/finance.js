@@ -260,19 +260,39 @@ router.put('/invoices/:id', async (req, res) => {
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         const { id } = req.params;
-        const { date } = req.body;
+        const { date, paymentMethod } = req.body;
 
         if (!id) return res.status(400).json({ error: 'Invoice ID is required' });
-        if (!date || !/^\d{4}-\d{2}-\d{2}/.test(date)) return res.status(400).json({ error: 'Valid date is required (YYYY-MM-DD)' });
+
+        const invoiceUpdate = {};
+        if (date) {
+            if (!/^\d{4}-\d{2}-\d{2}/.test(date)) return res.status(400).json({ error: 'Valid date is required (YYYY-MM-DD)' });
+            invoiceUpdate.date = date;
+        }
+        if (paymentMethod) {
+            const allowed = ['cash', 'card', 'transfer'];
+            if (!allowed.includes(paymentMethod)) return res.status(400).json({ error: 'paymentMethod must be cash, card or transfer' });
+            invoiceUpdate.paymentMethod = paymentMethod;
+        }
+        if (Object.keys(invoiceUpdate).length === 0) return res.status(400).json({ error: 'Nothing to update' });
 
         const { data, error } = await supabase
             .from('Invoice')
-            .update({ date })
+            .update(invoiceUpdate)
             .eq('id', id)
             .select()
             .single();
 
         if (error) throw error;
+
+        // If paymentMethod changed, keep the linked Payment.method in sync
+        if (paymentMethod) {
+            await supabase
+                .from('Payment')
+                .update({ method: paymentMethod.toUpperCase() })
+                .eq('invoiceId', id);
+        }
+
         res.json(data);
     } catch (e) {
         res.status(500).json({ error: e.message });

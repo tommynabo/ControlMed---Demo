@@ -128,7 +128,7 @@ export const api = {
             if (!res.ok) throw new Error('Failed to fetch invoice for appointment');
             return res.json();
         },
-        update: async (id: string, data: { date: string }) => {
+        update: async (id: string, data: { date?: string; paymentMethod?: string }) => {
             const res = await fetch(`${API_URL}/finance/invoices/${id}`, {
                 method: 'PUT', headers, body: JSON.stringify(data)
             });

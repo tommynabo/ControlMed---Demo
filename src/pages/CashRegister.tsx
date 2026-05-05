@@ -67,6 +67,10 @@ const CashRegister: React.FC = () => {
     const [editDate, setEditDate] = useState('');
     const [isSavingDate, setIsSavingDate] = useState(false);
 
+    // Payment method edit modal
+    const [editingMethodInvoice, setEditingMethodInvoice] = useState<any | null>(null);
+    const [isSavingMethod, setIsSavingMethod] = useState(false);
+
     const handleOpenEditDate = (type: 'invoice' | 'expense', item: any) => {
         const currentDate = item.date ? item.date.split('T')[0] : new Date().toISOString().split('T')[0];
         setEditDate(currentDate);
@@ -99,6 +103,24 @@ const CashRegister: React.FC = () => {
             alert('❌ Error al cambiar la fecha: ' + (e.message || e));
         } finally {
             setIsSavingDate(false);
+        }
+    };
+
+    const handleSaveMethod = async (newMethod: string) => {
+        if (!editingMethodInvoice) return;
+        setIsSavingMethod(true);
+        try {
+            await (api as any).invoices.update(editingMethodInvoice.id, { paymentMethod: newMethod });
+            const freshInvoices = await (api as any).invoices.getAll().catch(() => []);
+            setTodayInvoices(freshInvoices.filter((i: any) =>
+                i.date && i.date.split('T')[0] === selectedDate &&
+                !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
+            ));
+            setEditingMethodInvoice(null);
+        } catch (e: any) {
+            alert('❌ Error al cambiar el método de pago: ' + (e.message || e));
+        } finally {
+            setIsSavingMethod(false);
         }
     };
 
@@ -558,13 +580,22 @@ const CashRegister: React.FC = () => {
                                                 +{inv.amount.toFixed(2)}€
                                             </td>
                                             <td className="p-2">
-                                                <button
-                                                    onClick={() => handleOpenEditDate('invoice', inv)}
-                                                    className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Cambiar fecha de esta factura"
-                                                >
-                                                    <Pencil size={13} />
-                                                </button>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={() => setEditingMethodInvoice(inv)}
+                                                        className="p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition-colors"
+                                                        title="Cambiar método de pago (efectivo/tarjeta)"
+                                                    >
+                                                        <CreditCard size={13} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleOpenEditDate('invoice', inv)}
+                                                        className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        title="Cambiar fecha de esta factura"
+                                                    >
+                                                        <Pencil size={13} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         );
@@ -754,6 +785,56 @@ const CashRegister: React.FC = () => {
                                 className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-sm uppercase shadow-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
                             >
                                 {isSavingDate ? 'Guardando...' : '✅ Guardar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* PAYMENT METHOD EDIT MODAL */}
+            {editingMethodInvoice && (
+                <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-in fade-in">
+                    <div className="bg-white max-w-sm w-full rounded-[2rem] shadow-2xl">
+                        <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900">Cambiar Método de Pago</h3>
+                                <p className="text-xs text-slate-400 mt-1">
+                                    Factura {editingMethodInvoice.invoiceNumber}
+                                </p>
+                            </div>
+                            <button onClick={() => setEditingMethodInvoice(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-3">
+                            {[
+                                { value: 'cash', label: '💵 Efectivo', color: 'emerald' },
+                                { value: 'card', label: '💳 Tarjeta', color: 'blue' },
+                                { value: 'transfer', label: '🏦 Transferencia', color: 'violet' },
+                            ].map(opt => {
+                                const isCurrent = (editingMethodInvoice.paymentMethod || '').toLowerCase() === opt.value;
+                                return (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => !isCurrent && handleSaveMethod(opt.value)}
+                                        disabled={isSavingMethod || isCurrent}
+                                        className={`w-full py-3 px-5 rounded-xl text-sm font-black uppercase tracking-wide transition-colors border-2
+                                            ${isCurrent
+                                                ? 'border-slate-900 bg-slate-900 text-white cursor-default'
+                                                : 'border-slate-200 text-slate-700 hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50'
+                                            }`}
+                                    >
+                                        {isSavingMethod && !isCurrent ? 'Guardando...' : opt.label}
+                                        {isCurrent && <span className="ml-2 text-[10px] font-bold opacity-70">(actual)</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="px-8 pb-8 pt-0">
+                            <button
+                                onClick={() => setEditingMethodInvoice(null)}
+                                className="w-full py-3 text-slate-500 font-bold text-sm hover:bg-slate-50 rounded-xl transition-colors"
+                            >
+                                Cancelar
                             </button>
                         </div>
                     </div>
