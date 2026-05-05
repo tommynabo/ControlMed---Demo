@@ -89,7 +89,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         if (isOpen) {
             const amt = defaultAmount ? defaultAmount.toString() : '';
             setTotalAmount(amt);
-            setOriginalAmount(defaultAmount || 0);
+            // originalAmount must always represent the FULL treatment cost so that
+            // partial-payment detection (numericAmount + alreadyPaidAmount < originalAmount) works correctly.
+            setOriginalAmount((defaultAmount || 0) + alreadyPaidAmount);
             setConcept(defaultConcept || (appointment ? `Pago Cita ${appointment.date}` : 'Anticipo / Saldo de Cuenta'));
             setPrimaryMethod('card');
             setNotes('');
@@ -331,6 +333,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const numericTotal = parseFloat(totalAmount) || 0;
     const walletAmt = parseFloat(walletAmount) || 0;
     const remainingAfterWallet = numericTotal - walletAmt;
+    const isFullyPaid = isDirectPayment && alreadyPaidAmount > 0 && originalAmount > 0 && alreadyPaidAmount >= originalAmount;
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in">
@@ -501,6 +504,44 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                     )}
 
+                    {/* ── Partial payment breakdown ── */}
+                    {isDirectPayment && alreadyPaidAmount > 0 && originalAmount > 0 && (
+                        alreadyPaidAmount >= originalAmount ? (
+                            <div className="flex items-center gap-4 bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
+                                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                    <Check size={24} className="text-emerald-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-black text-emerald-800">Cita pagada en su totalidad</p>
+                                    <p className="text-xs text-emerald-600 mt-0.5">
+                                        Se cobraron {alreadyPaidAmount.toFixed(2)}€ de {originalAmount.toFixed(2)}€. No hay ningún importe pendiente.
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-3 tracking-wide">Resumen del Cobro</p>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs text-slate-500">Total del tratamiento</span>
+                                        <span className="text-xs font-bold text-slate-700">{originalAmount.toFixed(2)}€</span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs text-slate-500">Ya pagado</span>
+                                        <span className="text-xs font-bold text-emerald-600">−{alreadyPaidAmount.toFixed(2)}€</span>
+                                    </div>
+                                    <div className="h-px bg-slate-200 my-1" />
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-black text-slate-800 uppercase">Pendiente</span>
+                                        <span className="text-sm font-black text-red-600">{(originalAmount - alreadyPaidAmount).toFixed(2)}€</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    )}
+
+                    {/* Hide form when fully paid */}
+                    {!isFullyPaid && <>
                     <div className="grid grid-cols-2 gap-6">
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
@@ -677,6 +718,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none"
                         />
                     </div>
+                    </>}
                 </div>
 
                 {/* Footer */}
@@ -687,7 +729,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     >
                         Cancelar
                     </button>
-                    <button
+                    {!isFullyPaid && <button
                         onClick={handleSubmit}
                         disabled={isProcessing || !totalAmount}
                         className="flex-1 bg-slate-900 text-white py-4 rounded-xl text-sm font-black uppercase shadow-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -709,7 +751,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 </>
                             )
                         )}
-                    </button>
+                    </button>}
                 </div>
             </div>
         </div>

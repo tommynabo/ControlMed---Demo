@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard, Calendar, Trash2, Check, FileText, Building2, User } from 'lucide-react';
 import { Appointment, Patient, Budget, Payment, Invoice, ServiceBreakdownItem } from '../../types';
@@ -10,7 +10,7 @@ export const AppointmentDetails: React.FC = () => {
     const { appointmentId } = useParams<{ appointmentId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
-    const { patients, api, refreshAppointments, refreshInvoices, doctors, setAppointments } = useAppContext();
+    const { patients, api, refreshAppointments, refreshInvoices, doctors, setAppointments, invoices } = useAppContext();
 
     const [appointment, setAppointment] = useState<Appointment | null>(null);
     const [patient, setPatient] = useState<Patient | null>(null);
@@ -18,6 +18,19 @@ export const AppointmentDetails: React.FC = () => {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [invoice, setInvoice] = useState<any>(null);
     const [amountInput, setAmountInput] = useState<string>('');
+
+    // Sum of all invoices already linked to this appointment (partial payments)
+    const alreadyPaidViaInvoices = useMemo(() => {
+        if (!appointment?.id) return 0;
+        return (invoices as any[])
+            .filter((inv: any) => inv.appointmentId === appointment.id)
+            .reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0);
+    }, [invoices, appointment?.id]);
+
+    const treatmentTotal = appointment?.amount
+        || (typeof (appointment as any)?.treatment === 'object' ? ((appointment as any).treatment as any)?.price : 0)
+        || 0;
+    const remainingToPay = Math.max(0, treatmentTotal - alreadyPaidViaInvoices);
 
     useEffect(() => {
         setAmountInput(appointment?.amount != null ? String(appointment.amount) : '');
@@ -679,7 +692,8 @@ export const AppointmentDetails: React.FC = () => {
                 budgets={budgets}
                 onPaymentComplete={handlePaymentComplete}
                 appointment={appointment}
-                defaultAmount={appointment.amount || (typeof appointment.treatment === 'object' ? (appointment.treatment as any).price : 0)}
+                defaultAmount={remainingToPay}
+                alreadyPaidAmount={alreadyPaidViaInvoices}
                 defaultConcept={displayConcept}
             />
         </div>
