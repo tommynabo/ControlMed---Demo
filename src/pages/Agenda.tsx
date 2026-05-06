@@ -490,7 +490,12 @@ const Agenda: React.FC = () => {
             return 'bg-orange-100 text-orange-700 border-orange-200';
         }
 
-        // 🔴 Rojo tachado: Anulada
+        // � Ámbar: Pago parcial en curso (EN_PROCESO)
+        if (lower === 'en_proceso' || lower === 'en proceso') {
+            return 'bg-amber-100 text-amber-700 border-amber-200';
+        }
+
+        // �🔴 Rojo tachado: Anulada
         if (lower === 'canceled' || lower === 'cancelled' || lower === 'anulada') {
             return 'bg-red-100 text-red-700 border-red-200 line-through';
         }

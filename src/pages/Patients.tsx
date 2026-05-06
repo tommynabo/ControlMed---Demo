@@ -644,26 +644,12 @@ const Patients: React.FC = () => {
                     doctorId: (api as any).currentUser?.id || '00000000-0000-0000-0000-000000000000'
                 });
 
-                // Log to clinical records too for audit
-                await api.clinicalRecords.create({
-                    patientId: selectedPatient.id,
-                    treatment: `RECETA: ${formData.medication}`,
-                    observation: `Pauta: ${formData.schedulePattern}. ${formData.patientInstructions || ''}`,
-                    specialization: 'General',
-                    doctorId: (currentUser as any)?.id || '00000000-0000-0000-0000-000000000000'
-                });
-                toast("✅ Receta guardada y registrada en el historial.");
+                toast("✅ Receta guardada correctamente.");
             }
 
             // Refresh local list
             const updated = await api.prescriptions.getByPatient(selectedPatient.id);
             setLocalPrescriptions(updated);
-            
-            // Refresh clinical records for the timeline if it was a new record
-            if (!selectedPrescription) {
-                const records = await api.clinicalRecords.getByPatient(selectedPatient.id);
-                setClinicalRecords(records);
-            }
 
             setPrescriptionText("");
             setSelectedPrescription(null);
@@ -773,9 +759,23 @@ const Patients: React.FC = () => {
     const [editVisitForm, setEditVisitForm] = useState<{ date: string; time: string; doctorId: string; status: string; observations: string }>({ date: '', time: '', doctorId: '', status: '', observations: '' });
     const [isSavingVisit, setIsSavingVisit] = useState(false);
     const [visitForPayment, setVisitForPayment] = useState<Appointment | null>(null);
+    const [visitForPaymentPaid, setVisitForPaymentPaid] = useState<number>(0);
     const [visitBudgets, setVisitBudgets] = useState<any[]>([]);
     const [isVisitBudgetOpen, setIsVisitBudgetOpen] = useState(false);
     const [visitForBudget, setVisitForBudget] = useState<Appointment | null>(null);
+
+    const openPaymentModal = async (visit: Appointment) => {
+        setVisitForPayment(visit);
+        setVisitForPaymentPaid(0);
+        setIsPaymentModalOpen(true);
+        if (visit.id) {
+            try {
+                const payments = await (api as any).payments.getByAppointment(visit.id);
+                const paid = Array.isArray(payments) ? payments.reduce((s: number, p: any) => s + (Number(p.amount) || 0), 0) : 0;
+                setVisitForPaymentPaid(paid);
+            } catch (_) {}
+        }
+    };
 
     const handleEditVisit = (visit: Appointment) => {
         setEditingVisitId(visit.id);
@@ -1760,7 +1760,7 @@ const Patients: React.FC = () => {
                                                                             {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
                                                                             <span className={`px-2 py-1 text-[10px] font-black uppercase rounded-lg ${statusColor}`}>Programada</span>
                                                                             <button onClick={() => handleEditVisit(visit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
-                                                                            <button onClick={() => { setVisitForPayment(visit); setIsPaymentModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>
+                                                                            <button onClick={() => openPaymentModal(visit)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>
                                                                             <button onClick={() => handleOpenVisitBudget(visit)} className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Presupuesto"><Calculator size={14} /></button>
                                                                         </div>
                                                                     </div>
@@ -1847,7 +1847,7 @@ const Patients: React.FC = () => {
                                                                             {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
                                                                             <span className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-black uppercase rounded-lg">En Proceso</span>
                                                                             <button onClick={() => handleEditVisit(visit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
-                                                                            <button onClick={() => { setVisitForPayment(visit); setIsPaymentModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>
+                                                                            <button onClick={() => openPaymentModal(visit)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>
                                                                             <button onClick={() => handleOpenVisitBudget(visit)} className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Presupuesto"><Calculator size={14} /></button>
                                                                         </div>
                                                                     </div>
@@ -1934,7 +1934,7 @@ const Patients: React.FC = () => {
                                                                             {visit.amount && <span className="text-sm font-black text-slate-700">{visit.amount}€</span>}
                                                                             <span className={`px-2 py-1 text-[10px] font-black uppercase rounded-lg ${visit.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{visit.paid ? 'Pagado' : 'Completado'}</span>
                                                                             <button onClick={() => handleEditVisit(visit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
-                                                                            {!visit.paid && <button onClick={() => { setVisitForPayment(visit); setIsPaymentModalOpen(true); }} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>}
+                                                                            {!visit.paid && <button onClick={() => openPaymentModal(visit)} className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Cobrar"><DollarSign size={14} /></button>}
                                                                             <button onClick={() => handleOpenVisitBudget(visit)} className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors" title="Presupuesto"><Calculator size={14} /></button>
                                                                         </div>
                                                                     </div>
@@ -2014,10 +2014,10 @@ const Patients: React.FC = () => {
                                     </div>
                                     {isLoadingRecords ? (
                                         <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase animate-pulse">Cargando historial...</p></div>
-                                    ) : clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system').length === 0 ? (
+                                    ) : clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system' && !r.clinicalData?.treatment?.startsWith('RECETA:')).length === 0 ? (
                                         <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase">No hay historial clínico registrado</p></div>
                                     ) : (
-                                        clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system')
+                                        clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system' && !r.clinicalData?.treatment?.startsWith('RECETA:'))
                                             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                                             .map((r, idx) => {
                                                 const dateObj = new Date(r.date);
@@ -3116,20 +3116,7 @@ const Patients: React.FC = () => {
                 appointment={visitForPayment || undefined}
                 defaultAmount={visitForPayment ? (visitForPayment as any).amount || 0 : undefined}
                 defaultConcept={visitForPayment ? ((visitForPayment as any).treatmentName || visitForPayment.treatment || 'Visita') as string : undefined}
-                alreadyPaidAmount={(() => {
-                    // Sum up partial-payment invoices already recorded for this treatment
-                    // so the final instalment is correctly detected as non-partial.
-                    if (!visitForPayment || !selectedPatient) return 0;
-                    const treatmentName = ((visitForPayment as any).treatmentName || visitForPayment.treatment || '') as string;
-                    if (!treatmentName) return 0;
-                    return invoices
-                        .filter(inv =>
-                            inv.patientId === selectedPatient.id &&
-                            (inv as any).concept?.includes('Pago Parcial') &&
-                            (inv as any).concept?.startsWith(treatmentName)
-                        )
-                        .reduce((sum, inv) => sum + (inv.amount || 0), 0);
-                })()}
+                alreadyPaidAmount={visitForPaymentPaid}
                 onPaymentComplete={(payment, invoice) => {
                     if (selectedPatient) {
                         // 1. Immediate Update (Optimistic/Server-Confirmed)

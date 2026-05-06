@@ -392,12 +392,31 @@ router.get('/payments', async (req, res) => {
 });
 
 // ─── PAYMENTS: CREATE ─────────────────────────────────────────────────────────
+// ─── PAYMENTS: GET by appointment ────────────────────────────────────────────
+router.get('/payments/by-appointment/:appointmentId', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { data, error } = await supabase
+            .from('Payment')
+            .select('*')
+            .eq('appointmentId', req.params.appointmentId)
+            .order('createdAt', { ascending: true });
+
+        if (error) return res.status(500).json({ error: error.message });
+        res.json(data || []);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.post('/payments/create', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { patientId, amount, method, type, notes, appointmentId, budgetId, isPartial, originalAmount } = req.body;
+        const { patientId, amount, method, type, notes, appointmentId, budgetId } = req.body;
 
         if (!patientId || !amount || !method) {
             return res.status(400).json({ error: 'patientId, amount, and method are required' });
@@ -427,34 +446,74 @@ router.post('/payments/create', async (req, res) => {
             if (t) solvedTreatmentName = t.name;
         }
 
-        // Attempt Quipu invoice creation
-        let quipuResult = { success: false };
-        try {
-            const contactData = {
-                name: patient.name || 'Paciente',
-                email: patient.email,
-                tax_id: patient.dni,
-                address: patient.address,
-                city: patient.city,
-                zip_code: patient.zipCode || patient.zip_code
-            };
-            const contact = await quipuService.getOrCreateContact(contactData);
-            if (contact && contact.id) {
-                const today = new Date().toISOString().split('T')[0];
-                const histSuffix = patient.historyNumber ? ` — Nº Historia: ${patient.historyNumber}` : '';
-                quipuResult = await quipuService.createInvoice(
-                    contact.id,
-                    [{ name: `${solvedTreatmentName}${histSuffix}`, quantity: 1, price: numericAmount }],
-                    today, today,
-                    method === 'card' ? 'credit_card' : method
-                );
+        // ── Server-side partial-payment detection ──────────────────────────────
+        // We determine if this is a partial or final payment based on actual DB data,
+        // not the client-supplied isPartial flag (which can be stale).
+        let isPartialPayment = false;
+        let isFinalPayment = false;
+        let appointmentAmount = null;
+        let allPreviousPayments = [];
+
+        if (appointmentId && type !== 'ADVANCE_PAYMENT') {
+            const { data: apptRow } = await supabase
+                .from('Appointment')
+                .select('amount')
+                .eq('id', appointmentId)
+                .single();
+            appointmentAmount = apptRow?.amount ? parseFloat(apptRow.amount) : null;
+
+            if (appointmentAmount && appointmentAmount > 0) {
+                const { data: prevPayments } = await supabase
+                    .from('Payment')
+                    .select('id, amount, method, "createdAt"')
+                    .eq('appointmentId', appointmentId);
+                allPreviousPayments = prevPayments || [];
+
+                const alreadyPaid = allPreviousPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+                const totalAfterThis = alreadyPaid + numericAmount;
+
+                // 0.01 tolerance for floating point rounding
+                if (totalAfterThis >= appointmentAmount - 0.01) {
+                    isFinalPayment = true;
+                    isPartialPayment = false;
+                } else {
+                    isPartialPayment = true;
+                    isFinalPayment = false;
+                }
             }
-        } catch (qErr) {
-            console.error('⚠️ Quipu Error (continuing with local only):', qErr.response?.data || qErr.message);
+        }
+
+        // ── Quipu invoice creation — only for non-partial payments ─────────────
+        let quipuResult = { success: false };
+        if (!isPartialPayment) {
+            try {
+                const contactData = {
+                    name: patient.name || 'Paciente',
+                    email: patient.email,
+                    tax_id: patient.dni,
+                    address: patient.address,
+                    city: patient.city,
+                    zip_code: patient.zipCode || patient.zip_code
+                };
+                const contact = await quipuService.getOrCreateContact(contactData);
+                if (contact && contact.id) {
+                    const today = new Date().toISOString().split('T')[0];
+                    const histSuffix = patient.historyNumber ? ` — Nº Historia: ${patient.historyNumber}` : '';
+                    // For consolidated invoices use the full appointment amount; otherwise use the current payment amount
+                    const invoiceAmount = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
+                    quipuResult = await quipuService.createInvoice(
+                        contact.id,
+                        [{ name: `${solvedTreatmentName}${histSuffix}`, quantity: 1, price: invoiceAmount }],
+                        today, today,
+                        method === 'card' ? 'credit_card' : method
+                    );
+                }
+            } catch (qErr) {
+                console.error('⚠️ Quipu Error (continuing with local only):', qErr.response?.data || qErr.message);
+            }
         }
 
         const result = await prisma.$transaction(async (tx) => {
-            const isPartialPayment = isPartial === true;
 
             // Resolve budget commission so doctor is paid on the original price,
             // and the markup goes to the referral entity separately.
@@ -499,71 +558,125 @@ router.post('/payments/create', async (req, res) => {
                 } catch (_) {}
             }
 
+            // Create the Payment record, now including appointmentId for traceability
             const payment = await tx.payment.create({
-                data: { id: crypto.randomUUID(), patientId, budgetId: budgetId || null, amount: numericAmount, method, type, notes: notes || null, doctorId: doctor?.id || null, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, createdAt: new Date().toISOString() }
-            });
-
-            if (appointmentId) {
-                await tx.appointment.update({
-                    where: { id: appointmentId },
-                    data: isPartialPayment ? { paid: false, status: 'EN_PROCESO' } : { paid: true, status: 'Completed' }
-                });
-            }
-
-            // Always generate a sequential invoice number (F-YYYY-NNNN).
-            // Quipu's reference is stored separately in externalId only.
-            const year = new Date().getFullYear();
-            const prefix = `F-${year}-`;
-            const existing = await tx.invoice.findMany({
-                where: { invoiceNumber: { startsWith: prefix } },
-                select: { invoiceNumber: true }
-            });
-            const maxNum = existing.reduce((max, inv) => {
-                const suffix = inv.invoiceNumber.slice(prefix.length);
-                const num = parseInt(suffix, 10);
-                return isNaN(num) ? max : Math.max(max, num);
-            }, 0);
-            const invoiceNumber = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
-
-            const invoice = await tx.invoice.create({
                 data: {
-                    id: crypto.randomUUID(), invoiceNumber,
-                    externalId: quipuResult.success ? String(quipuResult.id) : null,
-                    url: quipuResult.success ? quipuResult.pdf_url : null,
-                    patientId, amount: numericAmount, date: new Date(), status: 'issued',
-                    paymentMethod: method,
-                    concept: isPartialPayment ? `${solvedTreatmentName} (Pago Parcial)` : solvedTreatmentName,
-                    appointmentId: (appointmentId && !isPartialPayment) ? appointmentId : null,
-                    relatedPaymentId: payment.id
+                    id: crypto.randomUUID(),
+                    patientId,
+                    appointmentId: appointmentId || null,
+                    budgetId: budgetId || null,
+                    amount: numericAmount,
+                    method,
+                    type,
+                    notes: notes || null,
+                    doctorId: doctor?.id || null,
+                    referralCommission: referralCommission || 0,
+                    referralEntityName: referralEntityName || null,
+                    createdAt: new Date().toISOString()
                 }
             });
 
-            await tx.invoiceItem.create({ data: { id: crypto.randomUUID(), invoiceId: invoice.id, name: solvedTreatmentName, price: numericAmount } });
-            await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
+            // Update appointment status
+            if (appointmentId) {
+                await tx.appointment.update({
+                    where: { id: appointmentId },
+                    data: isPartialPayment
+                        ? { paid: false, status: 'EN_PROCESO' }
+                        : { paid: true, status: 'Completed' }
+                });
+            }
+
+            // ── Invoice: only created on the FINAL payment ─────────────────────
+            // Partial payments do NOT generate an invoice — they are tracked only
+            // via the Payment record (with appointmentId). This avoids duplicate
+            // invoices and makes it impossible to "pay" an already-paid appointment.
+            let invoice = null;
+            let invoiceNumber = null;
+
+            if (!isPartialPayment) {
+                // Sequential invoice number (F-YYYY-NNNN)
+                const year = new Date().getFullYear();
+                const prefix = `F-${year}-`;
+                const existing = await tx.invoice.findMany({
+                    where: { invoiceNumber: { startsWith: prefix } },
+                    select: { invoiceNumber: true }
+                });
+                const maxNum = existing.reduce((max, inv) => {
+                    const suffix = inv.invoiceNumber.slice(prefix.length);
+                    const num = parseInt(suffix, 10);
+                    return isNaN(num) ? max : Math.max(max, num);
+                }, 0);
+                invoiceNumber = `${prefix}${String(maxNum + 1).padStart(4, '0')}`;
+
+                // Build paymentBreakdown for consolidated invoices (≥2 payments on same appointment)
+                let paymentBreakdown = null;
+                const invoiceAmount = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
+                const invoicePaymentMethod = (isFinalPayment && allPreviousPayments.length > 0) ? 'mixed' : method;
+
+                if (isFinalPayment && allPreviousPayments.length > 0) {
+                    // Aggregate all payments (previous + current) by method
+                    const breakdownMap = {};
+                    for (const p of [...allPreviousPayments, { method, amount: numericAmount }]) {
+                        const m = p.method || 'cash';
+                        breakdownMap[m] = (breakdownMap[m] || 0) + parseFloat(p.amount);
+                    }
+                    paymentBreakdown = Object.entries(breakdownMap).map(([m, a]) => ({
+                        method: m,
+                        amount: Math.round(a * 100) / 100
+                    }));
+                }
+
+                invoice = await tx.invoice.create({
+                    data: {
+                        id: crypto.randomUUID(),
+                        invoiceNumber,
+                        externalId: quipuResult.success ? String(quipuResult.id) : null,
+                        url: quipuResult.success ? quipuResult.pdf_url : null,
+                        patientId,
+                        amount: invoiceAmount,
+                        date: new Date(),
+                        status: 'issued',
+                        paymentMethod: invoicePaymentMethod,
+                        paymentBreakdown,
+                        concept: solvedTreatmentName,
+                        appointmentId: appointmentId || null,
+                        relatedPaymentId: payment.id
+                    }
+                });
+
+                await tx.invoiceItem.create({
+                    data: {
+                        id: crypto.randomUUID(),
+                        invoiceId: invoice.id,
+                        name: solvedTreatmentName,
+                        price: invoiceAmount
+                    }
+                });
+                // Link invoice back to the final payment
+                await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
+            }
 
             let liquidation = null;
-            // Create liquidation for any real payment (DIRECT_CHARGE, ordinary, rectificative)
-            // but NOT for wallet top-ups (ADVANCE_PAYMENT) or partial payments
+            // Create liquidation for real payments (DIRECT_CHARGE) that are the final instalment.
+            // Partial payments do NOT trigger liquidation — only the final payment does.
             if (doctor && type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
-                // finalAmount uses doctorBaseAmount (excludes clinic-only services like OPG)
+                // Use the full appointment amount as gross for accurate commission on consolidated payments
+                const grossForLiquidation = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
                 const finalAmount = (doctorBaseAmount - labCost) * (rawRate / 100);
-                
-                // 🔧 FIX: Check if liquidation already exists for this appointment
-                // This handles edge cases where a liquidation exists (e.g., from failed invoice deletion)
+
                 if (appointmentId) {
                     const existingLiquidation = await tx.liquidation.findFirst({
                         where: { appointmentId }
                     });
-                    
+
                     if (existingLiquidation) {
-                        // Liquidation exists → UPDATE instead of CREATE
                         liquidation = await tx.liquidation.update({
                             where: { id: existingLiquidation.id },
                             data: {
                                 doctorId: doctor.id,
-                                grossAmount: numericAmount,
+                                grossAmount: grossForLiquidation,
                                 baseAmount: doctorBaseAmount,
                                 labCost,
                                 commissionRate: rawRate,
@@ -577,15 +690,13 @@ router.post('/payments/create', async (req, res) => {
                             }
                         });
                     } else {
-                        // No existing liquidation → CREATE new one
                         liquidation = await tx.liquidation.create({
-                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: numericAmount, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                         });
                     }
                 } else {
-                    // No appointmentId → CREATE without unique constraint concern
                     liquidation = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: numericAmount, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                     });
                 }
             }
@@ -595,7 +706,18 @@ router.post('/payments/create', async (req, res) => {
                 await tx.patient.update({ where: { id: patientId }, data: { wallet: { increment: balanceAdjustment } } });
             }
 
-            return { payment, invoice, payroll: liquidation, pdfUrl: quipuResult.success ? quipuResult.pdf_url : null, previewUrl: quipuResult.success ? quipuResult.preview_url : null, isPartial: isPartial === true, remainingBalance: (isPartial && originalAmount) ? parseFloat(originalAmount) - numericAmount : 0 };
+            return {
+                payment,
+                invoice,
+                payroll: liquidation,
+                pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
+                previewUrl: quipuResult.success ? quipuResult.preview_url : null,
+                isPartial: isPartialPayment,
+                isFinal: isFinalPayment,
+                remainingBalance: isPartialPayment && appointmentAmount
+                    ? Math.max(0, appointmentAmount - allPreviousPayments.reduce((s, p) => s + parseFloat(p.amount), 0) - numericAmount)
+                    : 0
+            };
         });
 
         res.status(200).json({ success: true, ...result });
@@ -669,7 +791,7 @@ router.post('/payments/create', async (req, res) => {
                             <p>Le enviamos su factura correspondiente al pago realizado en nuestra clínica.</p>
                             <table style="width:100%;border-collapse:collapse;margin:20px 0;">
                                 <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Concepto:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">${result.invoice.concept}</td></tr>
-                                <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Importe:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">€${numericAmount.toFixed(2)}</td></tr>
+                                <tr><td style="padding:8px;border-bottom:1px solid #e2e8f0;"><strong>Importe:</strong></td><td style="padding:8px;border-bottom:1px solid #e2e8f0;">€${result.invoice.amount.toFixed(2)}</td></tr>
                                 <tr><td style="padding:8px;"><strong>Método de pago:</strong></td><td style="padding:8px;">${method}</td></tr>
                             </table>
                             ${pdfSection}
@@ -1362,6 +1484,27 @@ router.post('/cash-register/close', async (req, res) => {
             openingCash = 0,
             closedBy = null
         } = req.body;
+
+        // Validate openingCash against last closing to detect stale or corrupted arrastre
+        try {
+            const lastClosingRows = await prisma.$queryRawUnsafe(
+                `SELECT "physicalCash" FROM cash_register_closings WHERE date < $1 ORDER BY date DESC LIMIT 1`,
+                today
+            );
+            const lastPhysical = Array.isArray(lastClosingRows) && lastClosingRows.length > 0
+                ? Number(lastClosingRows[0].physicalCash)
+                : null;
+            if (lastPhysical !== null && Math.abs(openingCash - lastPhysical) > 10) {
+                console.warn(
+                    `[Caja] DISCREPANCIA de arrastre al cerrar ${today}: ` +
+                    `frontend envió openingCash=${openingCash}€ pero último physicalCash en BD=${lastPhysical}€. ` +
+                    `Diferencia: ${Math.abs(openingCash - lastPhysical).toFixed(2)}€. ` +
+                    `Guardando igualmente el valor enviado por el frontend.`
+                );
+            }
+        } catch (warnErr) {
+            console.warn('[Caja] No se pudo validar el arrastre antes del cierre:', warnErr.message);
+        }
 
         const id = require('crypto').randomUUID();
         await prisma.$executeRawUnsafe(

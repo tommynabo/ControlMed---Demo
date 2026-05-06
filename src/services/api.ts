@@ -210,6 +210,11 @@ export const api = {
             if (!res.ok) throw new Error('Failed to fetch payments');
             return res.json();
         },
+        getByAppointment: async (appointmentId: string) => {
+            const res = await fetch(`${API_URL}/finance/payments/by-appointment/${appointmentId}`, { headers });
+            if (!res.ok) return [];
+            return res.json();
+        },
         create: async (paymentData: {
             patientId: string;
             amount: number;

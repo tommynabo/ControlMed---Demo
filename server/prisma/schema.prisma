@@ -287,6 +287,7 @@ model Payment {
   patientId          String
   patient            Patient  @relation(fields: [patientId], references: [id])
   budgetId           String?
+  appointmentId      String?  // Links partial payments to their appointment
   amount             Float
   method             String
   type               String
@@ -302,6 +303,7 @@ model Payment {
   referralEntityName String?
 
   @@index([patientId])
+  @@index([appointmentId])
 }
 
 model Invoice {
@@ -317,6 +319,7 @@ model Invoice {
   externalId       String?
   items            InvoiceItem[]
   concept          String?
+  paymentBreakdown Json?         // [{method, amount}] for consolidated multi-payment invoices
   appointmentId    String?       @unique
   appointment      Appointment?  @relation(fields: [appointmentId], references: [id])
   relatedPaymentId String?       @unique

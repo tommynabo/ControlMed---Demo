@@ -50,6 +50,37 @@ const CashRegister: React.FC = () => {
         setSelectedDate(d.toISOString().split('T')[0]);
     };
 
+    const recalcularArrastre = () => {
+        setArraystreLoadError(false);
+        if (isToday) {
+            (api as any).cashRegister.getLastClosing().then((prev: any) => {
+                if (prev && prev.physicalCash != null) {
+                    setOpeningCash(prev.physicalCash);
+                    setArraystreLoadError(false);
+                } else {
+                    console.warn('[Caja] recalcularArrastre: getLastClosing sin datos.');
+                    setArraystreLoadError(true);
+                }
+            }).catch((err: any) => {
+                console.error('[Caja] Error recalculando arrastre:', err);
+                setArraystreLoadError(true);
+            });
+        } else {
+            (api as any).cashRegister.getLastClosingBefore(selectedDate).then((prev: any) => {
+                if (prev && prev.physicalCash != null) {
+                    setOpeningCash(prev.physicalCash);
+                    setArraystreLoadError(false);
+                } else {
+                    console.warn('[Caja] recalcularArrastre: getLastClosingBefore sin datos.');
+                    setArraystreLoadError(true);
+                }
+            }).catch((err: any) => {
+                console.error('[Caja] Error recalculando arrastre:', err);
+                setArraystreLoadError(true);
+            });
+        }
+    };
+
     // Cash register closing state
     const [isClosed, setIsClosed] = useState(false);
     const [closingData, setClosingData] = useState<any>(null);
@@ -57,10 +88,13 @@ const CashRegister: React.FC = () => {
 
     // Opening cash (arrastre from previous day)
     const [openingCash, setOpeningCash] = useState<number | null>(null);
+    const [arrastreLoadError, setArraystreLoadError] = useState(false);
 
     // Stats for SELECTED DATE
     const [todayInvoices, setTodayInvoices] = useState<any[]>([]);
     const [todayExpenses, setTodayExpenses] = useState<any[]>([]);
+    // Partial payments (Payment records without an invoiceId) for the selected date
+    const [todayPartialPayments, setTodayPartialPayments] = useState<any[]>([]);
 
     // Date edit modal
     const [editingItem, setEditingItem] = useState<{ type: 'invoice' | 'expense'; item: any } | null>(null);
@@ -132,6 +166,15 @@ const CashRegister: React.FC = () => {
         setTodayExpenses(expenses.filter(e =>
             e.date && e.date.split('T')[0] === selectedDate
         ));
+        // Fetch partial payments for the selected date (payments without an invoiceId)
+        api.payments.getAll().then((allPayments: any[]) => {
+            const partial = allPayments.filter((p: any) =>
+                !p.invoiceId &&
+                p.createdAt && p.createdAt.split('T')[0] === selectedDate &&
+                p.type !== 'ADVANCE_PAYMENT'
+            );
+            setTodayPartialPayments(partial);
+        }).catch(() => setTodayPartialPayments([]));
     }, [invoices, expenses, selectedDate]);
 
     // Load closing status for selected date + openingCash (arrastre)
@@ -139,6 +182,7 @@ const CashRegister: React.FC = () => {
         setIsClosed(false);
         setClosingData(null);
         setOpeningCash(null);
+        setArraystreLoadError(false);
 
         const call = isToday
             ? (api as any).cashRegister.getToday()
@@ -160,33 +204,72 @@ const CashRegister: React.FC = () => {
                 (api as any).cashRegister.getLastClosing().then((prev: any) => {
                     if (prev && prev.physicalCash != null) {
                         setOpeningCash(prev.physicalCash);
+                        setArraystreLoadError(false);
+                    } else {
+                        console.warn('[Caja] No hay cierre anterior. El arrastre no pudo cargarse.');
+                        setArraystreLoadError(true);
                     }
-                }).catch(() => {});
+                }).catch((err: any) => {
+                    console.error('[Caja] Error cargando arrastre (getLastClosing):', err);
+                    setArraystreLoadError(true);
+                });
             } else {
                 // For a past date, find the most recent closing before selectedDate
                 // (handles gaps: weekends, holidays, days with no activity)
                 (api as any).cashRegister.getLastClosingBefore(selectedDate).then((prev: any) => {
                     if (prev && prev.physicalCash != null) {
                         setOpeningCash(prev.physicalCash);
+                        setArraystreLoadError(false);
+                    } else {
+                        console.warn('[Caja] No hay cierre anterior a', selectedDate, '. El arrastre no pudo cargarse.');
+                        setArraystreLoadError(true);
                     }
-                }).catch(() => {});
+                }).catch((err: any) => {
+                    console.error('[Caja] Error cargando arrastre (getLastClosingBefore):', err);
+                    setArraystreLoadError(true);
+                });
             }
-        }).catch(() => {});
+        }).catch((err: any) => {
+            console.error('[Caja] Error cargando estado del cierre:', err);
+            setArraystreLoadError(true);
+        });
     }, [selectedDate]);
 
     const stats = React.useMemo(() => {
-        const totalIncome = todayInvoices.reduce((acc, curr) => acc + curr.amount, 0);
-        const totalExpense = todayExpenses.reduce((acc, curr) => acc + curr.amount, 0);
-        const cashIncome = todayInvoices.filter(i => i.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
-        const cardIncome = todayInvoices.filter(i => i.paymentMethod === 'card').reduce((acc, curr) => acc + curr.amount, 0);
-        const transferIncome = todayInvoices.filter(i => i.paymentMethod === 'transfer').reduce((acc, curr) => acc + curr.amount, 0);
-        const cashExpenses = todayExpenses.filter(e => e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
-        const netCash = cashIncome - cashExpenses;
+        // Helper: extract cash/card/transfer amounts from an invoice, respecting paymentBreakdown for mixed invoices
+        const invoiceMethodAmounts = (inv: any) => {
+            if (inv.paymentMethod === 'mixed' && Array.isArray(inv.paymentBreakdown)) {
+                return inv.paymentBreakdown as { method: string; amount: number }[];
+            }
+            return [{ method: inv.paymentMethod, amount: inv.amount }];
+        };
+
+        const invoiceEntries = todayInvoices.flatMap(invoiceMethodAmounts);
+
+        const invoiceCash     = invoiceEntries.filter(e => e.method === 'cash').reduce((s, e) => s + e.amount, 0);
+        const invoiceCard     = invoiceEntries.filter(e => e.method === 'card').reduce((s, e) => s + e.amount, 0);
+        const invoiceTransfer = invoiceEntries.filter(e => e.method === 'transfer').reduce((s, e) => s + e.amount, 0);
+        const totalInvoiceIncome = todayInvoices.reduce((acc, curr) => acc + curr.amount, 0);
+
+        // Partial payments (no invoice yet) — each has a single method
+        const partialCash     = todayPartialPayments.filter(p => p.method === 'cash').reduce((s, p) => s + Number(p.amount), 0);
+        const partialCard     = todayPartialPayments.filter(p => p.method === 'card').reduce((s, p) => s + Number(p.amount), 0);
+        const partialTransfer = todayPartialPayments.filter(p => p.method === 'transfer').reduce((s, p) => s + Number(p.amount), 0);
+        const totalPartialIncome = todayPartialPayments.reduce((s, p) => s + Number(p.amount), 0);
+
+        const cashIncome     = invoiceCash + partialCash;
+        const cardIncome     = invoiceCard + partialCard;
+        const transferIncome = invoiceTransfer + partialTransfer;
+        const totalIncome    = totalInvoiceIncome + totalPartialIncome;
+
+        const totalExpense   = todayExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+        const cashExpenses   = todayExpenses.filter(e => e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
+        const netCash        = cashIncome - cashExpenses;
         // expectedCash = arrastre + efectivo de hoy
-        const expectedCash = (openingCash ?? 0) + netCash;
+        const expectedCash   = (openingCash ?? 0) + netCash;
 
         return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, netCash, expectedCash, balance: totalIncome - totalExpense };
-    }, [todayInvoices, todayExpenses, openingCash]);
+    }, [todayInvoices, todayPartialPayments, todayExpenses, openingCash]);
 
 
     const calculatedPhysicalCash = DENOMINATIONS.reduce(
@@ -403,11 +486,27 @@ const CashRegister: React.FC = () => {
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-5">Resumen Caja Efectivo</p>
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-sm text-slate-600 font-medium">Arrastre (caja inicial)</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-slate-600 font-medium">Arrastre (caja inicial)</span>
+                                        {!isClosed && (
+                                            <button
+                                                onClick={recalcularArrastre}
+                                                title="Recalcular arrastre desde el último cierre"
+                                                className="text-[10px] text-slate-400 hover:text-amber-600 underline transition-colors leading-none"
+                                            >
+                                                ↺ recalcular
+                                            </button>
+                                        )}
+                                    </div>
                                     <span className="text-sm font-black text-amber-600">
                                         {openingCash != null ? `${openingCash.toFixed(2)}€` : '—'}
                                     </span>
                                 </div>
+                                {arrastreLoadError && (
+                                    <p className="text-[10px] text-rose-500 font-bold mt-1">
+                                        ⚠ No se pudo cargar el arrastre. Haz clic en &ldquo;↺ recalcular&rdquo; o verifica que el día anterior tenga cierre registrado.
+                                    </p>
+                                )}
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm text-slate-600 font-medium">+ Entradas efectivo</span>
                                     <span className="text-sm font-black text-emerald-600">+{stats.cashIncome.toFixed(2)}€</span>
@@ -518,7 +617,7 @@ const CashRegister: React.FC = () => {
                     <div className="p-8 border-b border-slate-100 bg-slate-50/50">
                         <h4 className="text-sm font-bold uppercase tracking-widest text-slate-800">Transacciones del Día</h4>
                     </div>
-                    {todayInvoices.length === 0 && todayExpenses.length === 0 ? (
+                    {todayInvoices.length === 0 && todayExpenses.length === 0 && todayPartialPayments.length === 0 ? (
                         <div className="p-12 text-center text-slate-400 font-bold uppercase text-xs">
                             No hay movimientos registrados hoy
                         </div>
@@ -537,9 +636,52 @@ const CashRegister: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-sm">
+                                    {/* Partial payments (no invoice yet) */}
+                                    {todayPartialPayments.map(p => {
+                                        const pat = patients.find(pt => pt.id === p.patientId);
+                                        const appt = appointments.find(a => a.id === p.appointmentId);
+                                        const doc = appt ? doctors.find(d => d.id === appt.doctorId) : null;
+                                        const methodLabel = p.method === 'cash' ? 'Efectivo' : p.method === 'card' ? 'Tarjeta' : p.method === 'transfer' ? 'Transferencia' : p.method;
+                                        return (
+                                            <tr key={p.id} className="hover:bg-amber-50/40 transition-colors bg-amber-50/20">
+                                                <td className="p-6 pl-8 font-mono text-slate-500 text-xs">
+                                                    {p.createdAt ? new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                                                </td>
+                                                <td className="p-6 font-bold text-amber-700">
+                                                    Pago Parcial
+                                                    <span className="block text-xs font-normal text-slate-400">
+                                                        {pat?.name || 'Paciente'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-6 max-w-[180px]">
+                                                    {appt?.treatmentName
+                                                        ? <span className="text-xs font-medium text-slate-600 line-clamp-2">{appt.treatmentName}</span>
+                                                        : <span className="text-xs text-slate-300">—</span>}
+                                                </td>
+                                                <td className="p-6">
+                                                    {doc
+                                                        ? <span className="text-xs font-bold text-violet-700">{doc.name}</span>
+                                                        : <span className="text-xs text-slate-300">—</span>}
+                                                </td>
+                                                <td className="p-6 text-center">
+                                                    <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold uppercase">
+                                                        Parcial ({methodLabel})
+                                                    </span>
+                                                </td>
+                                                <td className="p-6 text-right pr-8 font-bold text-amber-600">
+                                                    +{Number(p.amount).toFixed(2)}€
+                                                </td>
+                                                <td className="p-2"></td>
+                                            </tr>
+                                        );
+                                    })}
                                     {todayInvoices.map(inv => {
                                         const appt = appointments.find(a => a.id === inv.appointmentId);
                                         const doctor = appt ? doctors.find(d => d.id === appt.doctorId) : null;
+                                        // For mixed-method consolidated invoices show each breakdown as sub-label
+                                        const methodLabel = inv.paymentMethod === 'mixed' && Array.isArray(inv.paymentBreakdown)
+                                            ? inv.paymentBreakdown.map((b: any) => `${Number(b.amount).toFixed(2)}€ ${b.method === 'cash' ? 'Efectivo' : b.method === 'card' ? 'Tarjeta' : b.method === 'transfer' ? 'Transferencia' : b.method}`).join(' + ')
+                                            : inv.paymentMethod;
                                         return (
                                         <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
                                             <td className="p-6 pl-8 font-mono text-slate-500 text-xs">
@@ -573,7 +715,7 @@ const CashRegister: React.FC = () => {
                                             </td>
                                             <td className="p-6 text-center">
                                                 <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase">
-                                                    Ingreso ({inv.paymentMethod})
+                                                    Ingreso ({methodLabel})
                                                 </span>
                                             </td>
                                             <td className="p-6 text-right pr-8 font-bold text-emerald-600">

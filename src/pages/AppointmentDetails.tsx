@@ -10,7 +10,7 @@ export const AppointmentDetails: React.FC = () => {
     const { appointmentId } = useParams<{ appointmentId: string }>();
     const location = useLocation();
     const navigate = useNavigate();
-    const { patients, api, refreshAppointments, refreshInvoices, doctors, setAppointments, invoices } = useAppContext();
+    const { patients, api, refreshAppointments, refreshInvoices, doctors, setAppointments } = useAppContext();
 
     const [appointment, setAppointment] = useState<Appointment | null>(null);
     const [patient, setPatient] = useState<Patient | null>(null);
@@ -18,19 +18,28 @@ export const AppointmentDetails: React.FC = () => {
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [invoice, setInvoice] = useState<any>(null);
     const [amountInput, setAmountInput] = useState<string>('');
+    const [paymentsForAppointment, setPaymentsForAppointment] = useState<any[]>([]);
 
-    // Sum of all invoices already linked to this appointment (partial payments)
-    const alreadyPaidViaInvoices = useMemo(() => {
-        if (!appointment?.id) return 0;
-        return (invoices as any[])
-            .filter((inv: any) => inv.appointmentId === appointment.id)
-            .reduce((sum: number, inv: any) => sum + (Number(inv.amount) || 0), 0);
-    }, [invoices, appointment?.id]);
+    // Sum of all Payment records already linked to this appointment (including partial instalments)
+    const alreadyPaidForAppointment = useMemo(() => {
+        return paymentsForAppointment.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+    }, [paymentsForAppointment]);
 
     const treatmentTotal = appointment?.amount
         || (typeof (appointment as any)?.treatment === 'object' ? ((appointment as any).treatment as any)?.price : 0)
         || 0;
-    const remainingToPay = Math.max(0, treatmentTotal - alreadyPaidViaInvoices);
+    const remainingToPay = Math.max(0, treatmentTotal - alreadyPaidForAppointment);
+
+    // Reload payments for this appointment whenever appointment.id changes
+    useEffect(() => {
+        if (appointment?.id) {
+            api.payments.getByAppointment(appointment.id)
+                .then(setPaymentsForAppointment)
+                .catch(() => setPaymentsForAppointment([]));
+        } else {
+            setPaymentsForAppointment([]);
+        }
+    }, [appointment?.id]);
 
     useEffect(() => {
         setAmountInput(appointment?.amount != null ? String(appointment.amount) : '');
@@ -83,13 +92,17 @@ export const AppointmentDetails: React.FC = () => {
     const handlePaymentComplete = (payment: Payment, invoiceData: any) => {
         console.log('Payment completed:', payment);
 
-        // Mark appointment as paid locally to update UI immediately 
-        setAppointment({ ...appointment, paid: true, status: 'Completed' });
+        const wasPartial = invoiceData?.isPartial === true;
+        const newStatus = wasPartial ? 'EN_PROCESO' : 'Completed';
+        const newPaid = !wasPartial;
 
-        // Update global appointments array immediately so Agenda turns green without needing to reload
+        // Update local appointment state immediately so the UI reflects the new status
+        setAppointment(prev => prev ? { ...prev, paid: newPaid, status: newStatus } : prev);
+
+        // Update global appointments array so Agenda changes color without a full reload
         if (appointment) {
             setAppointments(prev => prev.map(a =>
-                a.id === appointment.id ? { ...a, paid: true, status: 'Completed' } : a
+                a.id === appointment.id ? { ...a, paid: newPaid, status: newStatus } : a
             ));
         }
 
@@ -107,6 +120,13 @@ export const AppointmentDetails: React.FC = () => {
 
         if (patient) {
             api.budget.getByPatient(patient.id).then(setBudgets);
+        }
+
+        // Reload payments so the "already paid" summary updates immediately
+        if (appointment?.id) {
+            api.payments.getByAppointment(appointment.id)
+                .then(setPaymentsForAppointment)
+                .catch(() => {});
         }
 
         // Refresh global state so CashRegister/Caja and Agenda reflect the payment
@@ -693,7 +713,7 @@ export const AppointmentDetails: React.FC = () => {
                 onPaymentComplete={handlePaymentComplete}
                 appointment={appointment}
                 defaultAmount={remainingToPay}
-                alreadyPaidAmount={alreadyPaidViaInvoices}
+                alreadyPaidAmount={alreadyPaidForAppointment}
                 defaultConcept={displayConcept}
             />
         </div>
