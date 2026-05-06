@@ -1468,12 +1468,19 @@ router.get('/cash-register/last-closing-before/:date', async (req, res) => {
 router.post('/cash-register/close', async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
+
+        // Allow closing a past date retroactively (e.g. forgot to close yesterday)
+        const requestedDate = req.body.date;
+        const closeDate = (requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate <= today)
+            ? requestedDate
+            : today;
+
         const existing = await prisma.$queryRawUnsafe(
             `SELECT id FROM cash_register_closings WHERE date = $1 LIMIT 1`,
-            today
+            closeDate
         );
         if (Array.isArray(existing) && existing.length > 0) {
-            return res.status(409).json({ error: 'La caja ya fue cerrada hoy.' });
+            return res.status(409).json({ error: `La caja del ${closeDate} ya fue cerrada.` });
         }
 
         const {
@@ -1489,14 +1496,14 @@ router.post('/cash-register/close', async (req, res) => {
         try {
             const lastClosingRows = await prisma.$queryRawUnsafe(
                 `SELECT "physicalCash" FROM cash_register_closings WHERE date < $1 ORDER BY date DESC LIMIT 1`,
-                today
+                closeDate
             );
             const lastPhysical = Array.isArray(lastClosingRows) && lastClosingRows.length > 0
                 ? Number(lastClosingRows[0].physicalCash)
                 : null;
             if (lastPhysical !== null && Math.abs(openingCash - lastPhysical) > 10) {
                 console.warn(
-                    `[Caja] DISCREPANCIA de arrastre al cerrar ${today}: ` +
+                    `[Caja] DISCREPANCIA de arrastre al cerrar ${closeDate}: ` +
                     `frontend envió openingCash=${openingCash}€ pero último physicalCash en BD=${lastPhysical}€. ` +
                     `Diferencia: ${Math.abs(openingCash - lastPhysical).toFixed(2)}€. ` +
                     `Guardando igualmente el valor enviado por el frontend.`
@@ -1513,7 +1520,7 @@ router.post('/cash-register/close', async (req, res) => {
               "cashIncome", "cardIncome", "transferIncome", "cashExpenses", "netCash",
               "physicalCash", "cashDiff", "invoiceCount", "completedAppointments", "openingCash")
              VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-            id, today, closedBy,
+            id, closeDate, closedBy,
             totalIncome, totalExpense, balance,
             cashIncome, cardIncome, transferIncome,
             cashExpenses, netCash, physicalCash, cashDiff,

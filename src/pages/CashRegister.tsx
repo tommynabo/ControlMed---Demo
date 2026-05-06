@@ -81,6 +81,54 @@ const CashRegister: React.FC = () => {
         }
     };
 
+    const handleCloseRetroactive = async () => {
+        if (isClosed || isToday || isClosing) return;
+        const label = new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const totalCaja = (openingCash ?? 0) + stats.cashIncome - stats.cashExpenses;
+        const confirmed = confirm(
+            `⚠️ CIERRE RETROACTIVO — ${label}\n\n` +
+            `Arrastre (caja inicial):  ${(openingCash ?? 0).toFixed(2)}€\n` +
+            `+ Entradas efectivo:      ${stats.cashIncome.toFixed(2)}€\n` +
+            (stats.cashExpenses > 0 ? `− Salidas efectivo:       ${stats.cashExpenses.toFixed(2)}€\n` : '') +
+            `= Total caja efectivo:    ${totalCaja.toFixed(2)}€\n\n` +
+            `Ingresos totales del día: ${stats.totalIncome.toFixed(2)}€\n` +
+            `  · Tarjeta:   ${stats.cardIncome.toFixed(2)}€\n` +
+            `  · Transfer:  ${stats.transferIncome.toFixed(2)}€\n\n` +
+            `El efectivo físico se registrará como el esperado (sin arqueo posible en días pasados).\n\n` +
+            `¿Confirmar cierre?`
+        );
+        if (!confirmed) return;
+        setIsClosing(true);
+        try {
+            const record = await (api as any).cashRegister.close({
+                date: selectedDate,
+                totalIncome: stats.totalIncome,
+                totalExpense: stats.totalExpense,
+                balance: stats.balance,
+                cashIncome: stats.cashIncome,
+                cardIncome: stats.cardIncome,
+                transferIncome: stats.transferIncome,
+                cashExpenses: stats.cashExpenses,
+                netCash: stats.netCash,
+                physicalCash: totalCaja,
+                cashDiff: 0,
+                openingCash: openingCash ?? 0,
+                invoiceCount: todayInvoices.length,
+                completedAppointments: 0,
+                closedBy: ((currentUser as any)?.name || 'Manual') + ' (retroactivo)',
+            });
+            setIsClosed(true);
+            setClosingData(record);
+            // Refresh arrastre on today's view if needed
+            if (!isToday) recalcularArrastre();
+            alert(`✅ Caja del ${label} cerrada correctamente.\nArrastre para el día siguiente: ${totalCaja.toFixed(2)}€`);
+        } catch (e: any) {
+            alert('❌ Error al cerrar la caja: ' + (e.message || e));
+        } finally {
+            setIsClosing(false);
+        }
+    };
+
     // Cash register closing state
     const [isClosed, setIsClosed] = useState(false);
     const [closingData, setClosingData] = useState<any>(null);
@@ -284,10 +332,6 @@ const CashRegister: React.FC = () => {
 
     const handleCloseCashRegister = async () => {
         if (isClosed) return;
-        if (!isToday) {
-            alert('⚠️ Solo se puede cerrar la caja del día actual desde la interfaz.\n\nPara cerrar días anteriores, usa el script SQL manual.');
-            return;
-        }
         if (!arqueoCompleted) {
             alert('⚠️ Debes realizar el Arqueo de Caja antes de cerrar.\n\nHaz clic en "Hacer Arqueo" para contabilizar el efectivo del cajón.');
             return;
@@ -599,15 +643,25 @@ const CashRegister: React.FC = () => {
                             >
                                 🧮 {arqueoCompleted ? 'Repetir Arqueo' : 'Hacer Arqueo'}
                             </button>
-                            <button
-                                onClick={handleCloseCashRegister}
-                                disabled={!isToday || !arqueoCompleted || isClosed || isClosing}
-                                className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-4 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 group"
-                                title={!isToday ? 'Solo puedes cerrar la caja del día actual' : isClosed ? 'La caja ya fue cerrada hoy' : ''}
-                            >
-                                <DollarSign size={16} className="group-hover:rotate-12 transition-transform" />
-                                {isClosing ? 'Guardando...' : isClosed ? 'Caja Cerrada' : 'Cerrar Caja del Día'}
-                            </button>
+                            {isToday ? (
+                                <button
+                                    onClick={handleCloseCashRegister}
+                                    disabled={!arqueoCompleted || isClosed || isClosing}
+                                    className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-4 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 group"
+                                >
+                                    <DollarSign size={16} className="group-hover:rotate-12 transition-transform" />
+                                    {isClosing ? 'Guardando...' : isClosed ? 'Caja Cerrada' : 'Cerrar Caja del Día'}
+                                </button>
+                            ) : !isClosed ? (
+                                <button
+                                    onClick={handleCloseRetroactive}
+                                    disabled={isClosing}
+                                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 disabled:from-slate-700 disabled:to-slate-600 disabled:cursor-not-allowed text-white py-4 rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2"
+                                >
+                                    <DollarSign size={16} />
+                                    {isClosing ? 'Guardando...' : 'Cerrar Caja de Este Día'}
+                                </button>
+                            ) : null}
                         </div>
                     </div>
                 </div>

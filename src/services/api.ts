@@ -1578,6 +1578,7 @@ export const api = {
             cashDiff: number; invoiceCount: number; completedAppointments: number;
             openingCash: number;
             closedBy?: string;
+            date?: string; // optional: YYYY-MM-DD for retroactive past-day closes
         }) => {
             const res = await fetch(`${API_URL}/finance/cash-register/close`, {
                 method: 'POST', headers, body: JSON.stringify(payload)
