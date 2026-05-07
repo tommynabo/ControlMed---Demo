@@ -21,16 +21,16 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 export const ROLE_ALLOWED_PAGES: Record<UserRole, string[]> = {
     ADMIN: [
         'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'billing',
-        'stock', 'ai', 'liquidations', 'payroll', 'settings', 'users', 'attendance',
+        'stock', 'ai', 'liquidations', 'payroll', 'settings', 'users', 'attendance', 'analytics',
     ],
     RECEPTION: [
-        'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'billing', 'stock', 'payroll', 'attendance', 'settings',
+        'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'billing', 'stock', 'payroll', 'attendance', 'settings', 'analytics',
     ],
     AUXILIAR: [
         'dashboard', 'patients', 'agenda', 'attendance',
     ],
     DOCTOR: [
-        'dashboard', 'patients', 'agenda', 'attendance',
+        'dashboard', 'patients', 'agenda', 'attendance', 'analytics',
     ],
 };
 
@@ -49,6 +49,7 @@ export const ROUTE_TO_PAGE: Record<string, string> = {
     '/settings': 'settings',
     '/users': 'users',
     '/jornada': 'attendance',
+    '/analytics': 'analytics',
 };
 
 export function canAccessPage(role: UserRole, pageId: string): boolean {

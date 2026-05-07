@@ -1733,6 +1733,15 @@ export const api = {
             return res.json();
         }
     },
+
+    // Analytics (Analítica Mensual)
+    analytics: {
+        getMonthly: async (month: string) => {
+            const res = await fetch(`${API_URL}/analytics/monthly?month=${encodeURIComponent(month)}`, { headers });
+            if (!res.ok) throw new Error('Error al obtener métricas mensuales');
+            return res.json();
+        },
+    },
 };
 
 /** SHA-256 hash using built-in Web Crypto API */

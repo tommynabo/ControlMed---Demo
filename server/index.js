@@ -36,6 +36,7 @@ const remindersRouter = require('./routes/reminders');
 const prescriptionsRouter = require('./routes/prescriptions');
 const templatesRouter = require('./routes/templates');
 const { scheduleRouter, durationsRouter } = require('./routes/schedule');
+const analyticsRouter = require('./routes/analytics');
 
 const { errorHandler } = require('./lib/errors');
 
@@ -120,6 +121,7 @@ app.use('/api/fix-services', servicesRouter);
 app.use('/api/whatsapp', whatsappRouter);
 app.use('/api/ai', aiLimiter, aiRouter);
 app.use('/api', agendaRouter);
+app.use('/api/analytics', analyticsRouter);
 app.use('/api/system-users', systemUsersRouter);
 app.use('/api/audit', auditRouter);
 app.use('/api/gmail', gmailRouter);

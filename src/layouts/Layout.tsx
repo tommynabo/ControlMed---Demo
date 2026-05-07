@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate, Navigate } from 'react-route
 import {
     Users, Activity, Calendar, Settings,
     PieChart, Brain, Package, LogOut, Search, Bell, Menu, ChevronRight,
-    Stethoscope, DollarSign, UserCog, KeyRound, Clock, TrendingDown, TrendingUp
+    Stethoscope, DollarSign, UserCog, KeyRound, Clock, TrendingDown, TrendingUp, BarChart2
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ROLE_LABELS } from '../config/roles';
@@ -35,6 +35,7 @@ const Layout: React.FC = () => {
         { id: 'caja', label: 'Caja', icon: DollarSign, path: '/caja' },
         { id: 'gastos', label: 'Gastos', icon: TrendingDown, path: '/gastos' },
         { id: 'billing', label: 'Facturación', icon: Activity, path: '/billing' },
+        { id: 'analytics', label: 'Analítica', icon: BarChart2, path: '/analytics' },
         { id: 'stock', label: 'Stock', icon: Package, path: '/stock' },
         { id: 'ai', label: 'Asistente IA', icon: Brain, path: '/ai' },
         { id: 'payroll', label: 'Liquid. Doctores', icon: Users, path: '/payroll' },

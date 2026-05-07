@@ -24,6 +24,7 @@ const Attendance = lazy(() => import('./src/pages/Attendance'));
 const UserManagement = lazy(() => import('./src/pages/UserManagement'));
 const Gastos = lazy(() => import('./src/pages/Gastos'));
 const Liquidations = lazy(() => import('./src/pages/Liquidations').then(m => ({ default: m.Liquidations })));
+const Analytics = lazy(() => import('./src/pages/Analytics'));
 const AppointmentDetails = lazy(() => import('./src/pages/AppointmentDetails').then(m => ({ default: m.AppointmentDetails })));
 
 export const queryClient = new QueryClient({
@@ -67,6 +68,7 @@ const App: React.FC = () => {
                 <Route path="jornada" element={<ProtectedRoute pageId="attendance"><Attendance /></ProtectedRoute>} />
                 <Route path="gastos" element={<ProtectedRoute pageId="gastos"><Gastos /></ProtectedRoute>} />
                 <Route path="liquidaciones" element={<ProtectedRoute pageId="liquidaciones"><Liquidations /></ProtectedRoute>} />
+                <Route path="analytics" element={<ProtectedRoute pageId="analytics"><Analytics /></ProtectedRoute>} />
               </Route>
               {/* Fallback route */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
