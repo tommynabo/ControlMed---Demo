@@ -2356,7 +2356,7 @@ const Agenda: React.FC = () => {
                                             );
 
                                             const availableItems = (patientBudgets.find(b => b.id === bookingBudgetId)?.items || [])
-                                                .filter((item: any) => !usedBudgetItemIds.has(item.id));
+                                                .filter((item: any) => !usedBudgetItemIds.has(item.id) && !item.paid);
 
                                             if (availableItems.length === 0) {
                                                 return (
