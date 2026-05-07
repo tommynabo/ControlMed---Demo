@@ -1517,7 +1517,7 @@ const Agenda: React.FC = () => {
                                 {viewMode === 'daily' ? (
                                     selectedDoctorId === 'all' ? (
                                         doctorsOnDuty.map(doc => (
-                                            <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-3 font-black uppercase tracking-wide text-xs flex items-end justify-center px-3 whitespace-nowrap ${isDateClosedForDoctor(currentDate, doc.id) ? 'text-red-400 line-through' : 'text-slate-900'
+                                            <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-3 font-black uppercase tracking-wide text-xs flex items-end justify-center px-3 whitespace-nowrap ${isDateFullyClosedForDoctor(currentDate, doc.id) ? 'text-red-400 line-through' : isDateClosedForDoctor(currentDate, doc.id) ? 'text-amber-500' : 'text-slate-900'
                                                 }`}>
                                                 {doc.name}
                                             </div>
@@ -1609,10 +1609,10 @@ const Agenda: React.FC = () => {
                                         // ── CASE A: Daily + specific doctor → merged blocks ──
                                         if (viewMode === 'daily' && selectedDoctorId && selectedDoctorId !== 'all') {
                                             const availableSlots = getAvailableTimeSlots(currentDate, selectedDoctorId);
-                                            const isClosed = isDateClosedForDoctor(currentDate, selectedDoctorId);
+                                            const isFullyClosed = isDateFullyClosedForDoctor(currentDate, selectedDoctorId);
 
-                                            // If agenda is explicitly closed for this doctor/day
-                                            if (isClosed) {
+                                            // If agenda is explicitly fully closed for this doctor/day
+                                            if (isFullyClosed) {
                                                 return (
                                                     <div style={{ height: `${TIME_SLOTS.length * slotH}px` }}
                                                         className="flex items-center justify-center bg-red-50 rounded-xl border border-dashed border-red-200">
