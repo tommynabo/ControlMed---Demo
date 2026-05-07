@@ -122,7 +122,7 @@ const Payroll: React.FC = () => {
             return `<tr>
                 <td>${r.patientName || '—'}</td>
                 <td>${r.treatmentName || '—'}</td>
-                <td>${r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : '—'}</td>
+                <td>${(r.appointment?.date || r.fecha || r.createdAt) ? new Date(r.appointment?.date || r.fecha || r.createdAt).toLocaleDateString('es-ES') : '—'}</td>
                 <td class="right">${(+gross).toFixed(2)} €</td>
                 <td class="right red">-${(+lab).toFixed(2)} €</td>
                 <td class="right">${rate}%</td>
@@ -430,7 +430,7 @@ const Payroll: React.FC = () => {
                                                         r.treatmentName || '-'
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-600">{r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : '-'}</td>
+                                                <td className="px-6 py-4 text-slate-600">{(r.appointment?.date || r.fecha || r.createdAt) ? new Date(r.appointment?.date || r.fecha || r.createdAt).toLocaleDateString('es-ES') : '-'}</td>
                                                 <td className="px-6 py-4 text-right">
                                                     <input
                                                         type="number"

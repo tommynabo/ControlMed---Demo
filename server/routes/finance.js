@@ -232,7 +232,22 @@ router.get('/liquidations/summary', async (req, res) => {
         const startDate = new Date(yearInt, monthInt - 1, 1);
         const endDate   = new Date(yearInt, monthInt, 0, 23, 59, 59);
 
-        const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+        // Try Supabase first (authoritative source), then fall back to Prisma.
+        // This prevents a 404 when Kevin or another doctor exists in Supabase
+        // but Prisma's local cache/schema is out of sync.
+        let doctor = null;
+        try {
+            const sbDoctor = getSupabase();
+            const { data: docRow } = await sbDoctor
+                .from('Doctor')
+                .select('id, name, specialization, commissionPercentage')
+                .eq('id', doctorId)
+                .single();
+            doctor = docRow || null;
+        } catch (_) {}
+        if (!doctor) {
+            try { doctor = await prisma.doctor.findUnique({ where: { id: doctorId } }); } catch (_) {}
+        }
         if (!doctor) return res.status(404).json({ error: 'Doctor not found' });
 
         let liquidations = [];
@@ -255,6 +270,17 @@ router.get('/liquidations/summary', async (req, res) => {
                         ? new Date(l.appointment.date)
                         : new Date(l.createdAt);
                     return refDate >= startDate && refDate <= endDate;
+                });
+
+                // Deduplicate by appointmentId: if two Liquidation rows share the same
+                // appointment, keep only the first (oldest by createdAt). This is a
+                // safety net for the rare case where a duplicate slips through.
+                const seenApptIds = new Set();
+                liquidations = liquidations.filter(l => {
+                    if (!l.appointmentId) return true; // rows without appointment are always kept
+                    if (seenApptIds.has(l.appointmentId)) return false;
+                    seenApptIds.add(l.appointmentId);
+                    return true;
                 });
             } else {
                 liquidations = await prisma.liquidation.findMany({
