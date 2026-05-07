@@ -499,6 +499,28 @@ router.post('/payments/create', async (req, res) => {
             if (apptRow?.doctorId) doctorId = apptRow.doctorId;
         }
 
+        // Safeguard: warn if the supplied doctorId differs from the appointment's doctorId.
+        // This catches accidental mis-assignments before they create wrong Liquidation records.
+        if (doctorId && appointmentId) {
+            try {
+                const { data: apptCheck } = await supabase
+                    .from('Appointment')
+                    .select('doctorId')
+                    .eq('id', appointmentId)
+                    .single();
+                if (apptCheck?.doctorId && apptCheck.doctorId !== doctorId) {
+                    console.warn(
+                        `[finance] Doctor mismatch on payment: appointmentId=${appointmentId} ` +
+                        `appointment.doctorId=${apptCheck.doctorId} but payment.doctorId=${doctorId}. ` +
+                        `Overriding to appointment doctor to keep Liquidation consistent.`
+                    );
+                    // Override to appointment doctor unless this is an intentional ODA/referral split
+                    // (splits go through /payments/create-split, not here)
+                    doctorId = apptCheck.doctorId;
+                }
+            } catch (_) {} // Non-fatal safeguard
+        }
+
         if (doctorId) {
             const { data: d } = await supabase.from('Doctor').select('*').eq('id', doctorId).single();
             doctor = d;

@@ -4,8 +4,9 @@ import { api } from '../services/api';
 import { useAppContext } from '../context/AppContext';
 import { PayWithWalletModal } from './PayWithWalletModal';
 
-// Statuses that mean a treatment has been paid / completed
-const DONE_STATUSES = ['COMPLETADO', 'PAGADO', 'COMPLETED'];
+// Statuses that mean a treatment has been applied, budgeted, or completed
+// These are hidden by default so the active list only shows what's truly pending
+const DONE_STATUSES = ['COMPLETADO', 'PAGADO', 'COMPLETED', 'PRESUPUESTADO'];
 
 interface TreatmentsListProps {
     patientId: string;
@@ -61,7 +62,7 @@ export const TreatmentsList: React.FC<TreatmentsListProps> = ({ patientId, refre
     if (loading) return <div className="text-center p-10 text-slate-400 text-xs">Cargando...</div>;
 
     if (treatments.length === 0) {
-        return <div className="p-4 text-center text-slate-400 text-xs text-center mt-4">No hay tratamientos activos.</div>;
+        return <div className="p-4 text-center text-slate-400 text-xs text-center mt-4">No hay tratamientos registrados.</div>;
     }
 
     // Grouping Logic
@@ -161,7 +162,7 @@ export const TreatmentsList: React.FC<TreatmentsListProps> = ({ patientId, refre
         <div className="space-y-2 mt-4">
             {/* ── Pending / Active treatments ── */}
             {pendingGroups.length === 0 ? (
-                <div className="p-4 text-center text-slate-400 text-xs mt-2">No hay tratamientos pendientes.</div>
+                <div className="p-4 text-center text-slate-400 text-xs mt-2">No hay tratamientos pendientes. {completedGroups.length > 0 && 'Todos los tratamientos han sido aplicados o presupuestados.'}</div>
             ) : (
                 pendingGroups.map((group: any) => renderRow(group, false))
             )}
@@ -174,7 +175,7 @@ export const TreatmentsList: React.FC<TreatmentsListProps> = ({ patientId, refre
                         className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-colors w-full text-left py-2 px-1 border-t border-slate-200"
                     >
                         {showCompleted ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                        <span className="text-emerald-600">✔ Tratamientos completados / pagados</span>
+                        <span className="text-emerald-600">✔ Tratamientos aplicados / presupuestados / completados</span>
                         <span className="ml-1 bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full text-[9px]">{completedGroups.length}</span>
                     </button>
                     {showCompleted && (
