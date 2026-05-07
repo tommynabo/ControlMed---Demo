@@ -219,7 +219,9 @@ export interface AgendaClosure {
     id: string;
     date: string;
     doctorId?: string;
+    doctor_id?: string;
     reason?: string;
     createdBy?: string;
     createdAt: string;
+    closure_type?: 'full_day' | 'morning_only' | 'afternoon_only';
 }

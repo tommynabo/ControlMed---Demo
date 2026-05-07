@@ -137,8 +137,10 @@ router.get('/agenda-closures', async (req, res) => {
 router.post('/agenda-closures', async (req, res) => {
     try {
         const supabase = getSupabase();
-        const { date, doctorId, reason, createdBy } = req.body;
+        const { date, doctorId, reason, createdBy, closureType } = req.body;
         if (!date) return res.status(400).json({ error: 'date is required' });
+        const validTypes = ['full_day', 'morning_only', 'afternoon_only'];
+        const resolvedType = validTypes.includes(closureType) ? closureType : 'full_day';
 
         // Validate doctorId exists in Doctor table before inserting
         if (doctorId) {
@@ -174,7 +176,8 @@ router.post('/agenda-closures', async (req, res) => {
                 closure_date: date,
                 doctor_id: doctorId || null,
                 reason: reason || null,
-                created_by: createdBy || null
+                created_by: createdBy || null,
+                closure_type: resolvedType
             })
             .select()
             .single();
@@ -185,6 +188,29 @@ router.post('/agenda-closures', async (req, res) => {
         res.status(201).json({ ...data, date: data.closure_date });
     } catch (e) {
         console.error('Error creating agenda closure:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// PATCH: update closure_type (for partial reopening)
+router.patch('/agenda-closures/:id', async (req, res) => {
+    try {
+        const supabase = getSupabase();
+        const { closureType } = req.body;
+        const validTypes = ['full_day', 'morning_only', 'afternoon_only'];
+        if (!validTypes.includes(closureType)) {
+            return res.status(400).json({ error: 'closureType must be full_day, morning_only, or afternoon_only' });
+        }
+        const { data, error } = await supabase
+            .from('agenda_closures')
+            .update({ closure_type: closureType })
+            .eq('id', req.params.id)
+            .select()
+            .single();
+        if (error) throw new Error(error.message);
+        res.json({ ...data, date: data.closure_date });
+    } catch (e) {
+        console.error('Error updating agenda closure:', e);
         res.status(500).json({ error: e.message });
     }
 });

@@ -87,6 +87,7 @@ const Agenda: React.FC = () => {
     const [showClosureModal, setShowClosureModal] = useState(false);
     const [closureReason, setClosureReason] = useState('');
     const [closureDoctorId, setClosureDoctorId] = useState<string>('');
+    const [closureTypeSelection, setClosureTypeSelection] = useState<'full_day' | 'morning_only' | 'afternoon_only'>('full_day');
 
     // Feature 5: Doctor on-duty filter
     const [showOnDutyOnly, setShowOnDutyOnly] = useState(false);
@@ -257,6 +258,19 @@ const Agenda: React.FC = () => {
         });
     };
 
+    // Returns true only if the FULL day is closed (not partial)
+    const isDateFullyClosedForDoctor = (date: Date, doctorId?: string): boolean => {
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        return agendaClosures.some(c => {
+            const cDate = typeof c.date === 'string' ? c.date.split('T')[0] : '';
+            if (cDate !== dateStr) return false;
+            const type = c.closure_type || 'full_day';
+            if (type !== 'full_day') return false;
+            if (!c.doctor_id) return true;
+            return doctorId ? c.doctor_id === doctorId : false;
+        });
+    };
+
     const getClosureForDate = (date: Date, doctorId?: string) => {
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
         return agendaClosures.find(c => {
@@ -275,14 +289,21 @@ const Agenda: React.FC = () => {
             await api.agendaClosures.create({
                 date: dateStr,
                 doctorId: closureDoctorId || undefined,
-                reason: closureReason || 'Agenda cerrada'
+                reason: closureReason || 'Agenda cerrada',
+                closureType: closureTypeSelection
             });
             const data = await api.agendaClosures.getAll();
             setAgendaClosures(data || []);
             setShowClosureModal(false);
             setClosureReason('');
             setClosureDoctorId('');
-            alert('✅ Agenda cerrada correctamente');
+            setClosureTypeSelection('full_day');
+            const labels: Record<string, string> = {
+                full_day: 'día completo',
+                morning_only: 'solo mañana',
+                afternoon_only: 'solo tarde'
+            };
+            alert(`✅ Agenda cerrada (${labels[closureTypeSelection] || closureTypeSelection}) correctamente`);
         } catch (e: any) {
             alert('Error: ' + (e.message || e));
         } finally {
@@ -296,6 +317,19 @@ const Agenda: React.FC = () => {
             const data = await api.agendaClosures.getAll();
             setAgendaClosures(data || []);
             alert('✅ Agenda abierta correctamente');
+        } catch (e: any) {
+            alert('Error: ' + (e.message || e));
+        }
+    };
+
+    // Partially reopen: change full_day → morning_only or afternoon_only
+    const handleReopenPartial = async (closureId: string, newType: 'morning_only' | 'afternoon_only') => {
+        try {
+            await api.agendaClosures.update(closureId, { closureType: newType });
+            const data = await api.agendaClosures.getAll();
+            setAgendaClosures(data || []);
+            const label = newType === 'morning_only' ? 'solo mañana abierta' : 'solo tarde abierta';
+            alert(`✅ Agenda actualizada: ${label}`);
         } catch (e: any) {
             alert('Error: ' + (e.message || e));
         }
@@ -382,7 +416,7 @@ const Agenda: React.FC = () => {
         if (activeSchedulesForDay.length === 0) return []; // Día completamente cerrado para este doctor
 
         // Filter TIME_SLOTS that fall within available hours of ANY active schedule fragment
-        return TIME_SLOTS.filter(slot => {
+        const scheduleSlots = TIME_SLOTS.filter(slot => {
             const [slotH, slotM] = slot.split(':').map(Number);
             const slotTime = slotH + slotM / 60;
 
@@ -411,6 +445,40 @@ const Agenda: React.FC = () => {
                 return inMorning || inAfternoon;
             });
         });
+
+        // Apply partial-closure filtering
+        const closure = getClosureForDate(date, doctorId);
+        if (closure) {
+            const cType = closure.closure_type || 'full_day';
+            if (cType === 'full_day') return [];
+
+            // For partial closures, find morning/afternoon boundary from the doctor's schedule
+            let morningEndTime = 14; // default noon+2 as boundary if not configured
+            for (const schedule of activeSchedulesForDay) {
+                if (schedule.morning_end !== null) {
+                    const [h, m] = schedule.morning_end.split(':').map(Number);
+                    morningEndTime = h + m / 60;
+                    break;
+                }
+            }
+
+            if (cType === 'morning_only') {
+                // Morning closed → only keep afternoon slots (>= morningEndTime)
+                return scheduleSlots.filter(slot => {
+                    const [h, m] = slot.split(':').map(Number);
+                    return (h + m / 60) >= morningEndTime;
+                });
+            }
+            if (cType === 'afternoon_only') {
+                // Afternoon closed → only keep morning slots (< morningEndTime)
+                return scheduleSlots.filter(slot => {
+                    const [h, m] = slot.split(':').map(Number);
+                    return (h + m / 60) < morningEndTime;
+                });
+            }
+        }
+
+        return scheduleSlots;
     };
 
     // Handle saving a schedule override
@@ -1164,15 +1232,55 @@ const Agenda: React.FC = () => {
 
                 {/* Agenda Closure Controls (Feature 4) */}
                 {(() => {
-                    const closure = getClosureForDate(currentDate);
+                    // Find closure for the currently visible doctor (or global if 'all')
+                    const activeDoctorForClosure = selectedDoctorId !== 'all' ? selectedDoctorId : undefined;
+                    const closure = getClosureForDate(currentDate, activeDoctorForClosure)
+                        ?? getClosureForDate(currentDate, undefined);
                     if (closure) {
+                        const cType = closure.closure_type || 'full_day';
                         return (
-                            <button
-                                onClick={() => handleOpenAgenda(closure.id)}
-                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-all"
-                            >
-                                <Unlock size={14} /> Abrir Agenda
-                            </button>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                    onClick={() => handleOpenAgenda(closure.id)}
+                                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-all"
+                                >
+                                    <Unlock size={14} /> Abrir Agenda
+                                </button>
+                                {cType === 'full_day' && (
+                                    <>
+                                        <button
+                                            onClick={() => handleReopenPartial(closure.id, 'afternoon_only')}
+                                            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all"
+                                            title="Abrir solo la mañana (mantener tarde cerrada)"
+                                        >
+                                            <Unlock size={12} /> Abrir solo mañana
+                                        </button>
+                                        <button
+                                            onClick={() => handleReopenPartial(closure.id, 'morning_only')}
+                                            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all"
+                                            title="Abrir solo la tarde (mantener mañana cerrada)"
+                                        >
+                                            <Unlock size={12} /> Abrir solo tarde
+                                        </button>
+                                    </>
+                                )}
+                                {cType === 'morning_only' && (
+                                    <button
+                                        onClick={() => handleOpenAgenda(closure.id)}
+                                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all"
+                                    >
+                                        <Unlock size={12} /> Abrir también la tarde
+                                    </button>
+                                )}
+                                {cType === 'afternoon_only' && (
+                                    <button
+                                        onClick={() => handleOpenAgenda(closure.id)}
+                                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all"
+                                    >
+                                        <Unlock size={12} /> Abrir también la mañana
+                                    </button>
+                                )}
+                            </div>
                         );
                     }
                     return (
@@ -1197,14 +1305,30 @@ const Agenda: React.FC = () => {
                 </button>
 
                 {/* Day closed banner */}
-                {isDateClosedForDoctor(currentDate) && (
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-700 rounded-xl text-xs font-bold border border-red-200">
-                        <AlertTriangle size={14} /> AGENDA CERRADA
-                        {getClosureForDate(currentDate)?.reason && (
-                            <span className="text-red-500"> — {getClosureForDate(currentDate)?.reason}</span>
-                        )}
-                    </div>
-                )}
+                {isDateClosedForDoctor(currentDate) && (() => {
+                    const activeDoctorForBanner = selectedDoctorId !== 'all' ? selectedDoctorId : undefined;
+                    const bannerClosure = getClosureForDate(currentDate, activeDoctorForBanner)
+                        ?? getClosureForDate(currentDate, undefined);
+                    const cType = bannerClosure?.closure_type || 'full_day';
+                    const labels: Record<string, string> = {
+                        full_day: 'AGENDA CERRADA',
+                        morning_only: 'MAÑANA CERRADA',
+                        afternoon_only: 'TARDE CERRADA'
+                    };
+                    const bannerLabel = labels[cType] || 'AGENDA CERRADA';
+                    return (
+                        <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold border ${
+                            cType === 'full_day'
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                            <AlertTriangle size={14} /> {bannerLabel}
+                            {bannerClosure?.reason && (
+                                <span className="opacity-70"> — {bannerClosure.reason}</span>
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Closure Modal (Feature 4) */}
@@ -1228,6 +1352,30 @@ const Agenda: React.FC = () => {
                                     <option key={d.id} value={d.id}>{d.name}</option>
                                 ))}
                             </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 block mb-2">Tipo de cierre</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {([
+                                    { value: 'full_day', label: 'Día completo', icon: '🔒' },
+                                    { value: 'morning_only', label: 'Solo mañana', icon: '🌅' },
+                                    { value: 'afternoon_only', label: 'Solo tarde', icon: '🌆' },
+                                ] as const).map(opt => (
+                                    <button
+                                        key={opt.value}
+                                        type="button"
+                                        onClick={() => setClosureTypeSelection(opt.value)}
+                                        className={`flex flex-col items-center gap-1 px-2 py-3 rounded-xl text-xs font-bold border transition-all ${
+                                            closureTypeSelection === opt.value
+                                                ? 'bg-red-50 text-red-700 border-red-300 shadow-sm'
+                                                : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <span className="text-base">{opt.icon}</span>
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-500 block mb-2">Motivo (opcional)</label>

@@ -2017,9 +2017,18 @@ const Patients: React.FC = () => {
                                     ) : clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system' && !r.clinicalData?.treatment?.startsWith('RECETA:')).length === 0 ? (
                                         <div className="text-center p-10 opacity-50"><p className="text-xs font-bold uppercase">No hay historial clínico registrado</p></div>
                                     ) : (
-                                        clinicalRecords.filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system' && !r.clinicalData?.treatment?.startsWith('RECETA:'))
-                                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                                            .map((r, idx) => {
+                                        (() => {
+                                            const seen = new Set<string>();
+                                            return clinicalRecords
+                                                .filter(r => r.patientId === selectedPatient.id && r.authorId !== 'system' && !r.clinicalData?.treatment?.startsWith('RECETA:'))
+                                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                                .filter(r => {
+                                                    const key = `${r.patientId}|${new Date(r.date).toDateString()}|${r.text || ''}`;
+                                                    if (seen.has(key)) return false;
+                                                    seen.add(key);
+                                                    return true;
+                                                });
+                                        })().map((r, idx) => {
                                                 const dateObj = new Date(r.date);
                                                 const dateStr = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
                                                 const timeStr = dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });

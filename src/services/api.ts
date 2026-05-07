@@ -1376,13 +1376,23 @@ export const api = {
             if (!res.ok) return [];
             return res.json();
         },
-        create: async (data: { date: string; doctorId?: string; reason?: string }) => {
+        create: async (data: { date: string; doctorId?: string; reason?: string; closureType?: string }) => {
             const res = await fetch(`${API_URL}/agenda-closures`, {
                 method: 'POST', headers, body: JSON.stringify(data)
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.error || 'Failed to create closure');
+            }
+            return res.json();
+        },
+        update: async (id: string, data: { closureType: string }) => {
+            const res = await fetch(`${API_URL}/agenda-closures/${id}`, {
+                method: 'PATCH', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to update closure');
             }
             return res.json();
         },
