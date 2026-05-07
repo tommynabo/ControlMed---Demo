@@ -32,6 +32,7 @@ router.get('/monthly', async (req, res) => {
             budgetsAcceptedAgg,
             realRevenueAgg,
             budgetsInMonth,
+            newPatientList,
         ] = await Promise.all([
             // Nuevos pacientes creados en el mes
             prisma.patient.count({
@@ -73,6 +74,13 @@ router.get('/monthly', async (req, res) => {
                 },
                 orderBy: { createdAt: 'asc' },
                 take: 300,
+            }),
+            // Lista de nuevos pacientes del mes (para desplegable en tarjeta)
+            prisma.patient.findMany({
+                where: { createdAt: { gte: startDate, lte: endDate } },
+                select: { historyNumber: true, name: true, firstName: true, lastName1: true },
+                orderBy: { createdAt: 'asc' },
+                take: 100,
             }),
         ]);
 
@@ -168,6 +176,10 @@ router.get('/monthly', async (req, res) => {
             },
             conversionRate,
             topTreatment,
+            newPatientList: newPatientList.map(p => ({
+                nhc:  p.historyNumber ?? '—',
+                name: ([p.firstName, p.lastName1].filter(Boolean).join(' ')) || p.name,
+            })),
             patientRows,
         });
     } catch (err) {

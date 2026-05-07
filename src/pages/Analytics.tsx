@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
     UserPlus, FileText, CheckCircle, DollarSign,
-    BarChart2, TrendingUp, Percent, Award,
+    BarChart2, TrendingUp, Percent, Award, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { api } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+interface PatientListItem {
+    nhc:  string;
+    name: string;
+}
 
 interface PatientRow {
     nhc:          string;
@@ -28,6 +33,7 @@ interface MonthlyAnalytics {
     realRevenue:     { count: number; total: number };
     conversionRate:  number;
     topTreatment:    string;
+    newPatientList:  PatientListItem[];
     patientRows:     PatientRow[];
 }
 
@@ -54,51 +60,95 @@ function monthLabel(monthStr: string): string {
         .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 }
 
-// ─── Summary Card ─────────────────────────────────────────────────────────────
+// ─── Summary Card with optional patient dropdown ──────────────────────────────
 
 interface SummaryCardProps {
-    label:          string;
-    primaryValue:   string;
+    label:           string;
+    primaryValue:    string;
     secondaryValue?: string;
-    icon:           React.ElementType;
-    colorClass:     string;
-    shadowClass:    string;
-    featured?:      boolean;
-    loading?:       boolean;
+    icon:            React.ElementType;
+    colorClass:      string;
+    shadowClass:     string;
+    featured?:       boolean;
+    loading?:        boolean;
+    patientList?:    PatientListItem[];
 }
 
 const SummaryCard: React.FC<SummaryCardProps> = ({
     label, primaryValue, secondaryValue,
-    icon: Icon, colorClass, shadowClass, featured, loading,
-}) => (
-    <div className={`bg-white p-8 rounded-[2rem] border transition-shadow
-        ${featured
-            ? 'border-indigo-100 shadow-md hover:shadow-lg ring-2 ring-indigo-100'
-            : 'border-slate-100 shadow-sm hover:shadow-md'
-        }`}>
-        <div className="flex justify-between items-start mb-5">
-            <div className={`p-4 rounded-2xl ${colorClass} text-white ${shadowClass}`}>
-                <Icon size={24} />
-            </div>
-        </div>
-        {loading ? (
-            <>
-                <div className="h-10 w-3/4 bg-slate-100 rounded-xl animate-pulse mb-2" />
-                <div className="h-4 w-1/2 bg-slate-100 rounded-lg animate-pulse" />
-            </>
-        ) : (
-            <>
-                <p className={`font-black text-slate-900 mb-1 ${featured ? 'text-5xl' : 'text-4xl'}`}>
-                    {primaryValue}
-                </p>
-                {secondaryValue && (
-                    <p className="text-sm font-semibold text-slate-500">{secondaryValue}</p>
+    icon: Icon, colorClass, shadowClass, featured, loading, patientList,
+}) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    const hasList = patientList && patientList.length > 0;
+
+    useEffect(() => {
+        if (!open) return;
+        const handler = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [open]);
+
+    return (
+        <div
+            ref={ref}
+            className={`bg-white rounded-[2rem] border transition-shadow relative
+                ${featured
+                    ? 'border-indigo-100 shadow-md hover:shadow-lg ring-2 ring-indigo-100'
+                    : 'border-slate-100 shadow-sm hover:shadow-md'
+                }`}
+        >
+            <div className="p-8">
+                <div className="flex justify-between items-start mb-5">
+                    <div className={`p-4 rounded-2xl ${colorClass} text-white ${shadowClass}`}>
+                        <Icon size={24} />
+                    </div>
+                </div>
+                {loading ? (
+                    <>
+                        <div className="h-10 w-3/4 bg-slate-100 rounded-xl animate-pulse mb-2" />
+                        <div className="h-4 w-1/2 bg-slate-100 rounded-lg animate-pulse" />
+                    </>
+                ) : (
+                    <>
+                        <button
+                            onClick={() => hasList && setOpen(v => !v)}
+                            className={`flex items-center gap-2 group text-left w-full ${hasList ? 'cursor-pointer' : 'cursor-default'}`}
+                        >
+                            <p className={`font-black text-slate-900 ${featured ? 'text-5xl' : 'text-4xl'}`}>
+                                {primaryValue}
+                            </p>
+                            {hasList && (
+                                <span className="text-slate-300 group-hover:text-slate-500 transition-colors mt-2">
+                                    {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                                </span>
+                            )}
+                        </button>
+                        {secondaryValue && (
+                            <p className="text-sm font-semibold text-slate-500 mt-1">{secondaryValue}</p>
+                        )}
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{label}</p>
+                    </>
                 )}
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{label}</p>
-            </>
-        )}
-    </div>
-);
+            </div>
+
+            {open && hasList && (
+                <div className="border-t border-slate-100 px-5 pb-4 max-h-56 overflow-y-auto">
+                    <ul className="divide-y divide-slate-50 mt-1">
+                        {patientList.map((p, i) => (
+                            <li key={i} className="py-2 flex items-center gap-3">
+                                <span className="font-mono text-[11px] text-slate-400 w-16 shrink-0">{p.nhc}</span>
+                                <span className="text-sm font-semibold text-slate-700 truncate">{p.name}</span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+        </div>
+    );
+};
 
 // ─── Bar Chart ────────────────────────────────────────────────────────────────
 
@@ -150,10 +200,10 @@ const ComparisonBarChart: React.FC<{
 
 const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
     const map: Record<string, { label: string; className: string }> = {
-        ACCEPTED: { label: 'ACEPTADO',   className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-        DRAFT:    { label: 'BORRADOR',   className: 'bg-slate-50   text-slate-500   border-slate-200'   },
-        REJECTED: { label: 'RECHAZADO',  className: 'bg-rose-50    text-rose-700    border-rose-200'    },
-        PENDING:  { label: 'PENDIENTE',  className: 'bg-amber-50   text-amber-700   border-amber-200'   },
+        ACCEPTED: { label: 'ACEPTADO',  className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+        DRAFT:    { label: 'BORRADOR',  className: 'bg-slate-50   text-slate-500   border-slate-200'   },
+        REJECTED: { label: 'RECHAZADO', className: 'bg-rose-50    text-rose-700    border-rose-200'    },
+        PENDING:  { label: 'PENDIENTE', className: 'bg-amber-50   text-amber-700   border-amber-200'   },
     };
     const config = map[status] ?? { label: status, className: 'bg-blue-50 text-blue-700 border-blue-200' };
     return (
@@ -186,7 +236,7 @@ const PatientTable: React.FC<{ rows: PatientRow[] }> = ({ rows }) => {
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="bg-slate-50 border-y border-slate-100">
-                            {['NHC', 'Fecha', 'Nombre y Apellido', 'Primera Visita',
+                            {['NHC', 'Fecha', 'Nombre y Apellido', '1ª Visita',
                               'Presupuesto', 'Estado', 'Importe Pres.', 'Importe Cerrado', 'Tratamiento'
                             ].map(col => (
                                 <th key={col} className="px-5 py-3 text-left text-[11px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">
@@ -209,11 +259,13 @@ const PatientTable: React.FC<{ rows: PatientRow[] }> = ({ rows }) => {
                                 </td>
                                 <td className="px-5 py-3.5 text-center">
                                     {row.isFirstVisit ? (
-                                        <span className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-black bg-blue-50 text-blue-700 border border-blue-200">
-                                            Sí
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                            ✅ Sí
                                         </span>
                                     ) : (
-                                        <span className="text-slate-300 font-bold">—</span>
+                                        <span className="inline-block px-2 py-0.5 rounded-lg text-[11px] font-black bg-slate-50 text-slate-400 border border-slate-200">
+                                            No
+                                        </span>
                                     )}
                                 </td>
                                 <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap text-xs">
@@ -259,6 +311,11 @@ const Analytics: React.FC = () => {
         staleTime: 1000 * 60 * 5,
     });
 
+    const budgetCreatedList: PatientListItem[] = data?.patientRows.map(r => ({ nhc: r.nhc, name: r.name })) ?? [];
+    const budgetAcceptedList: PatientListItem[] = data?.patientRows
+        .filter(r => r.budgetStatus === 'ACCEPTED')
+        .map(r => ({ nhc: r.nhc, name: r.name })) ?? [];
+
     return (
         <div className="p-10 h-full overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="max-w-7xl mx-auto space-y-8">
@@ -274,7 +331,6 @@ const Analytics: React.FC = () => {
                             {monthLabel(selectedMonth)}
                         </p>
                     </div>
-
                     <div className="flex items-center gap-3">
                         <label htmlFor="month-picker" className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                             Mes
@@ -307,6 +363,7 @@ const Analytics: React.FC = () => {
                         colorClass="bg-blue-500"
                         shadowClass="shadow-lg shadow-blue-500/30"
                         loading={isLoading}
+                        patientList={data?.newPatientList}
                     />
                     <SummaryCard
                         label="Presupuestos Entregados"
@@ -316,6 +373,7 @@ const Analytics: React.FC = () => {
                         colorClass="bg-violet-500"
                         shadowClass="shadow-lg shadow-violet-500/30"
                         loading={isLoading}
+                        patientList={budgetCreatedList}
                     />
                     <SummaryCard
                         label="Presupuestos Aceptados"
@@ -325,6 +383,7 @@ const Analytics: React.FC = () => {
                         colorClass="bg-emerald-500"
                         shadowClass="shadow-lg shadow-emerald-500/30"
                         loading={isLoading}
+                        patientList={budgetAcceptedList}
                     />
                     <SummaryCard
                         label="Ingresos Reales"
@@ -350,7 +409,6 @@ const Analytics: React.FC = () => {
                 {/* ── Top Treatment + Chart ────────────────────────────────── */}
                 {!isLoading && !isError && data && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                        {/* Top treatment badge */}
                         <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
                             <div className="flex items-center gap-2 mb-4">
                                 <Award size={18} className="text-amber-500" />
@@ -359,16 +417,12 @@ const Analytics: React.FC = () => {
                                 </h3>
                             </div>
                             <div>
-                                <p className="text-2xl font-black text-slate-900 mb-1">
-                                    {data.topTreatment}
-                                </p>
+                                <p className="text-2xl font-black text-slate-900 mb-1">{data.topTreatment}</p>
                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                                     Tratamiento más demandado
                                 </p>
                             </div>
                         </div>
-
-                        {/* Bar chart — spans 2 cols */}
                         <div className="lg:col-span-2">
                             <ComparisonBarChart
                                 budgetsTotal={data.budgetsCreated.total}
@@ -379,7 +433,6 @@ const Analytics: React.FC = () => {
                     </div>
                 )}
 
-                {/* Loading skeleton for chart area */}
                 {isLoading && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                         {[1, 2].map((i) => (
@@ -397,11 +450,8 @@ const Analytics: React.FC = () => {
                 )}
 
                 {/* ── Patient Detail Table ─────────────────────────────────── */}
-                {!isLoading && !isError && data && (
-                    <PatientTable rows={data.patientRows} />
-                )}
+                {!isLoading && !isError && data && <PatientTable rows={data.patientRows} />}
 
-                {/* Loading skeleton for table */}
                 {isLoading && (
                     <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8 space-y-3">
                         <div className="h-5 w-48 bg-slate-100 rounded-lg animate-pulse" />
