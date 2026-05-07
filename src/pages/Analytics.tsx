@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
     UserPlus, FileText, CheckCircle, DollarSign,
-    BarChart2, TrendingUp, Percent, Award, ChevronDown, ChevronUp,
+    BarChart2, TrendingUp, Percent, Award, ChevronDown, X,
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -60,7 +61,72 @@ function monthLabel(monthStr: string): string {
         .toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 }
 
-// ─── Summary Card with optional patient dropdown ──────────────────────────────
+// ─── Patient List Modal ───────────────────────────────────────────────────────
+
+interface PatientModalProps {
+    title:    string;
+    patients: PatientListItem[];
+    onClose:  () => void;
+}
+
+const PatientModal: React.FC<PatientModalProps> = ({ title, patients, onClose }) => {
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+    }, [onClose]);
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            aria-modal="true"
+            role="dialog"
+        >
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+                onClick={onClose}
+            />
+            {/* Panel */}
+            <div className="relative bg-white rounded-[2rem] shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+                {/* Header */}
+                <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-slate-100 shrink-0">
+                    <div>
+                        <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-0.5">
+                            {patients.length} registro{patients.length !== 1 ? 's' : ''}
+                        </p>
+                        <h3 className="text-xl font-black text-slate-900">{title}</h3>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
+                        aria-label="Cerrar"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                {/* List */}
+                <ul className="overflow-y-auto divide-y divide-slate-50 px-6 py-2">
+                    {patients.map((p, i) => (
+                        <li key={i} className="py-3 flex items-center gap-4">
+                            <span className="font-mono text-xs font-bold text-slate-400 w-16 shrink-0">
+                                {p.nhc}
+                            </span>
+                            <span className="text-base font-semibold text-slate-800 leading-snug">
+                                {p.name}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+                {/* Footer padding */}
+                <div className="h-4 shrink-0" />
+            </div>
+        </div>,
+        document.body,
+    );
+};
+
+// ─── Summary Card ─────────────────────────────────────────────────────────────
 
 interface SummaryCardProps {
     label:           string;
@@ -79,74 +145,60 @@ const SummaryCard: React.FC<SummaryCardProps> = ({
     icon: Icon, colorClass, shadowClass, featured, loading, patientList,
 }) => {
     const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
     const hasList = patientList && patientList.length > 0;
 
-    useEffect(() => {
-        if (!open) return;
-        const handler = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [open]);
-
     return (
-        <div
-            ref={ref}
-            className={`bg-white rounded-[2rem] border transition-shadow relative
-                ${featured
-                    ? 'border-indigo-100 shadow-md hover:shadow-lg ring-2 ring-indigo-100'
-                    : 'border-slate-100 shadow-sm hover:shadow-md'
-                }`}
-        >
-            <div className="p-8">
-                <div className="flex justify-between items-start mb-5">
-                    <div className={`p-4 rounded-2xl ${colorClass} text-white ${shadowClass}`}>
-                        <Icon size={24} />
+        <>
+            <div
+                className={`bg-white rounded-[2rem] border transition-shadow relative
+                    ${featured
+                        ? 'border-indigo-100 shadow-md hover:shadow-lg ring-2 ring-indigo-100'
+                        : 'border-slate-100 shadow-sm hover:shadow-md'
+                    }`}
+            >
+                <div className="p-8">
+                    <div className="flex justify-between items-start mb-5">
+                        <div className={`p-4 rounded-2xl ${colorClass} text-white ${shadowClass}`}>
+                            <Icon size={24} />
+                        </div>
                     </div>
-                </div>
-                {loading ? (
-                    <>
-                        <div className="h-10 w-3/4 bg-slate-100 rounded-xl animate-pulse mb-2" />
-                        <div className="h-4 w-1/2 bg-slate-100 rounded-lg animate-pulse" />
-                    </>
-                ) : (
-                    <>
-                        <button
-                            onClick={() => hasList && setOpen(v => !v)}
-                            className={`flex items-center gap-2 group text-left w-full ${hasList ? 'cursor-pointer' : 'cursor-default'}`}
-                        >
-                            <p className={`font-black text-slate-900 ${featured ? 'text-5xl' : 'text-4xl'}`}>
-                                {primaryValue}
-                            </p>
-                            {hasList && (
-                                <span className="text-slate-300 group-hover:text-slate-500 transition-colors mt-2">
-                                    {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                                </span>
+                    {loading ? (
+                        <>
+                            <div className="h-10 w-3/4 bg-slate-100 rounded-xl animate-pulse mb-2" />
+                            <div className="h-4 w-1/2 bg-slate-100 rounded-lg animate-pulse" />
+                        </>
+                    ) : (
+                        <>
+                            <button
+                                onClick={() => hasList && setOpen(true)}
+                                className={`flex items-center gap-2 group text-left w-full ${hasList ? 'cursor-pointer' : 'cursor-default'}`}
+                            >
+                                <p className={`font-black text-slate-900 ${featured ? 'text-5xl' : 'text-4xl'}`}>
+                                    {primaryValue}
+                                </p>
+                                {hasList && (
+                                    <span className="text-slate-300 group-hover:text-slate-500 transition-colors mt-2">
+                                        <ChevronDown size={18} />
+                                    </span>
+                                )}
+                            </button>
+                            {secondaryValue && (
+                                <p className="text-sm font-semibold text-slate-500 mt-1">{secondaryValue}</p>
                             )}
-                        </button>
-                        {secondaryValue && (
-                            <p className="text-sm font-semibold text-slate-500 mt-1">{secondaryValue}</p>
-                        )}
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{label}</p>
-                    </>
-                )}
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{label}</p>
+                        </>
+                    )}
+                </div>
             </div>
 
             {open && hasList && (
-                <div className="border-t border-slate-100 px-5 pb-4 max-h-56 overflow-y-auto">
-                    <ul className="divide-y divide-slate-50 mt-1">
-                        {patientList.map((p, i) => (
-                            <li key={i} className="py-2 flex items-center gap-3">
-                                <span className="font-mono text-[11px] text-slate-400 w-16 shrink-0">{p.nhc}</span>
-                                <span className="text-sm font-semibold text-slate-700 truncate">{p.name}</span>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
+                <PatientModal
+                    title={label}
+                    patients={patientList!}
+                    onClose={() => setOpen(false)}
+                />
             )}
-        </div>
+        </>
     );
 };
 
