@@ -148,7 +148,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             return;
         }
 
-        if (isDirectPayment && !appointment && !selectedDoctorId) {
+        if (isDirectPayment && !appointment?.doctorId && !selectedDoctorId) {
             alert('Por favor, selecciona el doctor responsable para registrar la comisión correctamente.');
             return;
         }
@@ -283,7 +283,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             onPaymentComplete(payment, response);
 
-        alert(`✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`);
+        const successMsg = `✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`;
+        const warningMsg = response?.liquidationWarning
+            ? `\n\n⚠️ AVISO: ${response.liquidationWarning}`
+            : '';
+        alert(successMsg + warningMsg);
 
             // Usar la URL efímera pública de Quipu si viene en la respuesta,
             // si no, pedirla al endpoint de descarga local
@@ -582,8 +586,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Doctor Selection (Only for direct payments with no appointment linked) */}
-                    {isDirectPayment && !appointment && doctors.length > 0 && (
+                    {/* Doctor Selection: shown when no appointment, or when the appointment has no doctor assigned */}
+                    {isDirectPayment && !appointment?.doctorId && doctors.length > 0 && (
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
                                 Doctor Responsable (para comisiones)

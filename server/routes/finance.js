@@ -165,26 +165,34 @@ router.get('/liquidations/summary', async (req, res) => {
             let supabase;
             try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-            const startISO = new Date(dateFrom).toISOString();
-            const endDate  = new Date(dateTo); endDate.setHours(23, 59, 59, 999);
-            const endISO   = endDate.toISOString();
-
-            // Query Liquidation table directly: correctly scoped per-doctor (including split payments),
-            // no contamination from ADVANCE_PAYMENT/TRANSFER types.
+            // Query ALL liquidations for this doctor (no date filter on the query itself).
+            // We then filter in JS by appointment.date when available, falling back to
+            // createdAt — this ensures payments processed late (e.g. in May for April
+            // appointments) still appear in the correct month's report.
             const { data: liquidations, error: liqError } = await supabase
                 .from('Liquidation')
-                .select('*, appointment:Appointment(patientId, patient:Patient(historyNumber, isODA))')
+                .select('*, appointment:Appointment(date, patientId, patient:Patient(historyNumber, isODA))')
                 .eq('doctorId', doctorId)
-                .gte('createdAt', startISO)
-                .lte('createdAt', endISO)
                 .order('createdAt', { ascending: true });
             if (liqError) throw liqError;
 
-            const records = (liquidations || []).map(liq => {
+            const startDate = new Date(dateFrom);
+            const endDateFilter = new Date(dateTo); endDateFilter.setHours(23, 59, 59, 999);
+
+            const filtered = (liquidations || []).filter(liq => {
+                const refDate = liq.appointment?.date
+                    ? new Date(liq.appointment.date)
+                    : new Date(liq.createdAt);
+                return refDate >= startDate && refDate <= endDateFilter;
+            });
+
+            const records = filtered.map(liq => {
                 const apptPatient = liq.appointment?.patient || {};
+                // Use appointment date as the display date so the PDF matches the real visit date
+                const displayDate = liq.appointment?.date || liq.createdAt;
                 return {
                     id: liq.id,
-                    fecha: liq.createdAt,
+                    fecha: displayDate,
                     concepto: liq.treatmentName || 'Tratamiento',
                     importeCobrado: liq.grossAmount || 0,
                     baseAmount: liq.baseAmount ?? liq.grossAmount ?? 0,
@@ -229,10 +237,31 @@ router.get('/liquidations/summary', async (req, res) => {
 
         let liquidations = [];
         try {
-            liquidations = await prisma.liquidation.findMany({
-                where: { doctorId, createdAt: { gte: startDate, lte: endDate } },
-                orderBy: { createdAt: 'asc' }
-            });
+            // Fetch all liquidations for this doctor and filter by appointment date
+            // (not createdAt) so that payments processed in a later month still appear
+            // in the correct period. Falls back to createdAt when appointmentId is null.
+            let supabase2;
+            try { supabase2 = getSupabase(); } catch (_) { supabase2 = null; }
+
+            if (supabase2) {
+                const { data: liqRows } = await supabase2
+                    .from('Liquidation')
+                    .select('*, appointment:Appointment(date)')
+                    .eq('doctorId', doctorId)
+                    .order('createdAt', { ascending: true });
+
+                liquidations = (liqRows || []).filter(l => {
+                    const refDate = l.appointment?.date
+                        ? new Date(l.appointment.date)
+                        : new Date(l.createdAt);
+                    return refDate >= startDate && refDate <= endDate;
+                });
+            } else {
+                liquidations = await prisma.liquidation.findMany({
+                    where: { doctorId, createdAt: { gte: startDate, lte: endDate } },
+                    orderBy: { createdAt: 'asc' }
+                });
+            }
         } catch (_) {}
 
         const totals = { totalGross: 0, totalLabCost: 0, totalCommission: 0, totalToPay: 0 };
@@ -432,7 +461,18 @@ router.post('/payments/create', async (req, res) => {
         if (!patient) return res.status(404).json({ error: 'Patient not found' });
 
         let doctor = null;
-        const doctorId = req.body.doctorId;
+        let doctorId = req.body.doctorId;
+
+        // If no doctorId was sent (or empty string), fall back to the appointment's doctorId
+        if ((!doctorId || doctorId === '') && appointmentId) {
+            const { data: apptRow } = await supabase
+                .from('Appointment')
+                .select('doctorId')
+                .eq('id', appointmentId)
+                .single();
+            if (apptRow?.doctorId) doctorId = apptRow.doctorId;
+        }
+
         if (doctorId) {
             const { data: d } = await supabase.from('Doctor').select('*').eq('id', doctorId).single();
             doctor = d;
@@ -657,8 +697,18 @@ router.post('/payments/create', async (req, res) => {
             }
 
             let liquidation = null;
+            let liquidationWarning = null;
             // Create liquidation for real payments (DIRECT_CHARGE) that are the final instalment.
             // Partial payments do NOT trigger liquidation — only the final payment does.
+            if (!doctor && type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
+                // Doctor could not be resolved — Liquidation will NOT be created.
+                // This should not happen in normal flow (fallback from Appointment is already applied above),
+                // but we record a warning so the frontend can alert the user and the admin can fix it.
+                liquidationWarning = `Liquidación no creada: no se pudo resolver el doctor para el pago de ${patient?.name || patientId}. Comprueba la sección de Reconciliación.`;
+                console.warn('[finance] Liquidation skipped — doctor is null.', {
+                    patientId, appointmentId, type, amount: numericAmount
+                });
+            }
             if (doctor && type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
@@ -710,6 +760,7 @@ router.post('/payments/create', async (req, res) => {
                 payment,
                 invoice,
                 payroll: liquidation,
+                liquidationWarning,
                 pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
                 previewUrl: quipuResult.success ? quipuResult.preview_url : null,
                 isPartial: isPartialPayment,
@@ -1592,6 +1643,150 @@ router.get('/referral-commissions', async (req, res) => {
         res.json({ groups: result, grandTotal });
     } catch (e) {
         console.error('Error fetching referral commissions:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECONCILIATION — detect paid appointments with no Liquidation record
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/finance/reconciliation
+ * Returns all paid appointments that have no corresponding Liquidation.
+ * Query params (all optional):
+ *   month   — e.g. 4
+ *   year    — e.g. 2026
+ *   doctorId — filter by doctor
+ */
+router.get('/reconciliation', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { month, year, doctorId } = req.query;
+
+        let query = supabase
+            .from('Appointment')
+            .select('id, date, amount, treatmentName, doctorId, doctor:Doctor(id, name), patient:Patient(id, name, historyNumber)')
+            .eq('paid', true)
+            .is('deleted_at', null)
+            .gt('amount', 0);
+
+        if (doctorId) query = query.eq('doctorId', doctorId);
+
+        if (month && year) {
+            const m = parseInt(month, 10);
+            const y = parseInt(year, 10);
+            const from = new Date(y, m - 1, 1).toISOString().substring(0, 10);
+            const to   = new Date(y, m, 0).toISOString().substring(0, 10);
+            query = query.gte('date', from).lte('date', to);
+        }
+
+        const { data: appointments, error } = await query.order('date', { ascending: false });
+        if (error) throw error;
+
+        if (!appointments || appointments.length === 0) {
+            return res.json({ gaps: [] });
+        }
+
+        // Find which ones have no Liquidation
+        const apptIds = appointments.map(a => a.id);
+        const { data: existingLiqs } = await supabase
+            .from('Liquidation')
+            .select('appointmentId')
+            .in('appointmentId', apptIds);
+
+        const coveredIds = new Set((existingLiqs || []).map(l => l.appointmentId));
+        const gaps = appointments
+            .filter(a => !coveredIds.has(a.id))
+            .map(a => ({
+                appointmentId: a.id,
+                date: a.date,
+                amount: a.amount,
+                treatmentName: a.treatmentName || 'Sin concepto',
+                doctorId: a.doctorId,
+                doctorName: a.doctor?.name || 'Sin doctor',
+                patientName: a.patient?.name || 'Desconocido',
+                historyNumber: a.patient?.historyNumber || '-'
+            }));
+
+        res.json({ gaps, total: gaps.length });
+    } catch (e) {
+        console.error('Error in reconciliation:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/finance/reconciliation/fix
+ * Creates a missing Liquidation for a given appointmentId.
+ * Body: { appointmentId }
+ */
+router.post('/reconciliation/fix', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { appointmentId } = req.body;
+        if (!appointmentId) return res.status(400).json({ error: 'appointmentId is required' });
+
+        // Load appointment + doctor + patient
+        const { data: appt, error: apptErr } = await supabase
+            .from('Appointment')
+            .select('*, doctor:Doctor(*), patient:Patient(*)')
+            .eq('id', appointmentId)
+            .single();
+        if (apptErr || !appt) return res.status(404).json({ error: 'Appointment not found' });
+        if (!appt.doctorId) return res.status(400).json({ error: 'Appointment has no doctorId — assign a doctor first' });
+        if (!appt.paid || !appt.amount) return res.status(400).json({ error: 'Appointment is not paid or has no amount' });
+
+        // Guard: don't create if one already exists
+        const { data: existing } = await supabase
+            .from('Liquidation')
+            .select('id')
+            .eq('appointmentId', appointmentId)
+            .single();
+        if (existing) return res.status(409).json({ error: 'Liquidation already exists for this appointment', liquidationId: existing.id });
+
+        const doctor = appt.doctor;
+        const patient = appt.patient;
+        const commissionRate = doctor?.commissionPercentage || 30;
+        const grossAmount = parseFloat(appt.amount);
+        const finalAmount = grossAmount * (commissionRate / 100);
+
+        // Get paymentMethod from invoice if available
+        const { data: inv } = await supabase
+            .from('Invoice')
+            .select('paymentMethod')
+            .eq('appointmentId', appointmentId)
+            .single();
+
+        const { data: newLiq, error: liqErr } = await supabase
+            .from('Liquidation')
+            .insert({
+                id: crypto.randomUUID(),
+                doctorId: appt.doctorId,
+                appointmentId,
+                grossAmount,
+                baseAmount: grossAmount,
+                labCost: 0,
+                commissionRate,
+                finalAmount,
+                treatmentName: appt.treatmentName || 'Tratamiento',
+                patientName: patient?.name || 'Desconocido',
+                paymentMethod: inv?.paymentMethod || 'cash',
+                status: 'PENDING',
+                createdAt: new Date(appt.date).toISOString().replace('T00:00:00.000Z', 'T12:00:00.000Z')
+            })
+            .select()
+            .single();
+
+        if (liqErr) throw liqErr;
+
+        res.json({ success: true, liquidation: newLiq });
+    } catch (e) {
+        console.error('Error in reconciliation/fix:', e);
         res.status(500).json({ error: e.message });
     }
 });

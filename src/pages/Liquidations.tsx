@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check, Pencil, X, Building2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check, Pencil, X, Building2, AlertTriangle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
 
@@ -45,6 +45,17 @@ export const Liquidations: React.FC = () => {
     const [groupByDay, setGroupByDay] = useState<boolean>(false);
     const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
+    // Reconciliation tab
+    const [activeTab, setActiveTab] = useState<'liquidaciones' | 'reconciliacion'>('liquidaciones');
+    const [recoGaps, setRecoGaps] = useState<Array<{ appointmentId: string; date: string; amount: number; treatmentName: string; doctorId: string; doctorName: string; patientName: string; historyNumber: string }>>([]);
+    const [recoLoading, setRecoLoading] = useState(false);
+    const [recoError, setRecoError] = useState<string | null>(null);
+    const [fixingId, setFixingId] = useState<string | null>(null);
+    const [recoMonth, setRecoMonth] = useState<string>(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    });
+
     // Load doctors on mount
     useEffect(() => {
         loadDoctors();
@@ -72,6 +83,32 @@ export const Liquidations: React.FC = () => {
             setDoctors(data || []);
         } catch (err) {
             console.error('Error loading doctors:', err);
+        }
+    };
+
+    const loadReconciliation = useCallback(async () => {
+        setRecoLoading(true);
+        setRecoError(null);
+        try {
+            const [y, m] = recoMonth.split('-');
+            const data = await api.liquidations.getReconciliation({ month: parseInt(m), year: parseInt(y) });
+            setRecoGaps(data.gaps || []);
+        } catch (err: any) {
+            setRecoError(err.message || 'Error al cargar la reconciliación');
+        } finally {
+            setRecoLoading(false);
+        }
+    }, [recoMonth, api]);
+
+    const handleFixLiquidation = async (appointmentId: string) => {
+        setFixingId(appointmentId);
+        try {
+            await api.liquidations.fixMissingLiquidation(appointmentId);
+            setRecoGaps(prev => prev.filter(g => g.appointmentId !== appointmentId));
+        } catch (err: any) {
+            alert('❌ ' + (err.message || 'Error al crear la liquidación'));
+        } finally {
+            setFixingId(null);
         }
     };
 
@@ -304,6 +341,126 @@ export const Liquidations: React.FC = () => {
                         </div>
                     )}
                 </div>
+
+                {/* Tab switcher */}
+                <div className="flex gap-2 border-b border-slate-200 pb-0">
+                    <button
+                        onClick={() => setActiveTab('liquidaciones')}
+                        className={`px-5 py-3 font-black text-sm rounded-t-xl border-b-2 transition-colors ${activeTab === 'liquidaciones' ? 'border-emerald-500 text-emerald-600 bg-emerald-50' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        Liquidaciones
+                    </button>
+                    <button
+                        onClick={() => { setActiveTab('reconciliacion'); loadReconciliation(); }}
+                        className={`px-5 py-3 font-black text-sm rounded-t-xl border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'reconciliacion' ? 'border-amber-500 text-amber-600 bg-amber-50' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                    >
+                        <AlertTriangle size={15} />
+                        Reconciliación
+                        {recoGaps.length > 0 && (
+                            <span className="bg-amber-500 text-white text-xs font-black rounded-full px-2 py-0.5">{recoGaps.length}</span>
+                        )}
+                    </button>
+                </div>
+
+                {/* ── RECONCILIATION PANEL ─────────────────────────────── */}
+                {activeTab === 'reconciliacion' && (
+                    <div className="space-y-6">
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6">
+                            <div className="flex items-center gap-3 mb-1">
+                                <AlertTriangle size={20} className="text-amber-600" />
+                                <h2 className="text-lg font-black text-amber-800">Citas cobradas sin liquidación</h2>
+                            </div>
+                            <p className="text-sm text-amber-700">Estas citas están marcadas como pagadas pero no tienen registro de liquidación. Créalas aquí con un clic antes de generar los informes mensuales.</p>
+                        </div>
+
+                        {/* Month picker + refresh */}
+                        <div className="flex items-center gap-4">
+                            <div>
+                                <label className="text-xs font-bold uppercase text-slate-500 tracking-wider mb-1 block">Mes</label>
+                                <input
+                                    type="month"
+                                    value={recoMonth}
+                                    onChange={e => setRecoMonth(e.target.value)}
+                                    className="bg-white border border-slate-300 text-slate-900 px-4 py-2 rounded-lg font-bold text-sm outline-none focus:ring-2 focus:ring-amber-400"
+                                />
+                            </div>
+                            <button
+                                onClick={loadReconciliation}
+                                disabled={recoLoading}
+                                className="mt-5 flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-black text-sm transition-colors"
+                            >
+                                <RefreshCw size={14} className={recoLoading ? 'animate-spin' : ''} />
+                                {recoLoading ? 'Cargando...' : 'Buscar huecos'}
+                            </button>
+                        </div>
+
+                        {recoError && (
+                            <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-sm font-semibold">
+                                ⚠️ {recoError}
+                            </div>
+                        )}
+
+                        {!recoLoading && recoGaps.length === 0 && (
+                            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-6 rounded-2xl text-center font-black">
+                                ✅ Todo cuadra — no hay citas sin liquidación para este mes
+                            </div>
+                        )}
+
+                        {recoGaps.length > 0 && (
+                            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-slate-50 border-b border-slate-200">
+                                        <tr>
+                                            <th className="text-left px-4 py-3 font-black text-slate-600 text-xs uppercase tracking-wider">Fecha</th>
+                                            <th className="text-left px-4 py-3 font-black text-slate-600 text-xs uppercase tracking-wider">Paciente</th>
+                                            <th className="text-left px-4 py-3 font-black text-slate-600 text-xs uppercase tracking-wider">HC</th>
+                                            <th className="text-left px-4 py-3 font-black text-slate-600 text-xs uppercase tracking-wider">Doctor</th>
+                                            <th className="text-left px-4 py-3 font-black text-slate-600 text-xs uppercase tracking-wider">Concepto</th>
+                                            <th className="text-right px-4 py-3 font-black text-slate-600 text-xs uppercase tracking-wider">Importe</th>
+                                            <th className="px-4 py-3"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {recoGaps.map(gap => (
+                                            <tr key={gap.appointmentId} className="hover:bg-amber-50 transition-colors">
+                                                <td className="px-4 py-3 font-semibold text-slate-700">
+                                                    {new Date(gap.date).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                                </td>
+                                                <td className="px-4 py-3 font-bold text-slate-900">{gap.patientName}</td>
+                                                <td className="px-4 py-3 text-slate-500 font-semibold">{gap.historyNumber}</td>
+                                                <td className="px-4 py-3 text-slate-700 font-semibold">{gap.doctorName}</td>
+                                                <td className="px-4 py-3 text-slate-600 font-medium max-w-[200px] truncate" title={gap.treatmentName}>{gap.treatmentName}</td>
+                                                <td className="px-4 py-3 text-right font-black text-emerald-600">{gap.amount.toFixed(2)}€</td>
+                                                <td className="px-4 py-3 text-right">
+                                                    <button
+                                                        onClick={() => handleFixLiquidation(gap.appointmentId)}
+                                                        disabled={fixingId === gap.appointmentId}
+                                                        className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg font-black text-xs flex items-center gap-1 ml-auto transition-colors"
+                                                    >
+                                                        {fixingId === gap.appointmentId ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
+                                                        Crear liquidación
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="bg-slate-50 border-t border-slate-200">
+                                        <tr>
+                                            <td colSpan={5} className="px-4 py-3 font-black text-slate-600 text-xs uppercase">{recoGaps.length} citas sin liquidación</td>
+                                            <td className="px-4 py-3 text-right font-black text-slate-900">
+                                                {recoGaps.reduce((s, g) => s + g.amount, 0).toFixed(2)}€
+                                            </td>
+                                            <td />
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ── LIQUIDACIONES PANEL (existing content) ───────────── */}
+                {activeTab === 'liquidaciones' && <>
 
                 {/* Filters */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4">
@@ -723,6 +880,7 @@ export const Liquidations: React.FC = () => {
                         </p>
                     </div>
                 )}
+                </> /* end liquidaciones tab */}
             </div>
         </div>
     );

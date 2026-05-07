@@ -1413,6 +1413,27 @@ export const api = {
                 throw new Error(err.error || 'Failed to update liquidation');
             }
             return res.json();
+        },
+        getReconciliation: async (params: { month?: number; year?: number; doctorId?: string } = {}) => {
+            const q = new URLSearchParams();
+            if (params.month)    q.set('month',    String(params.month));
+            if (params.year)     q.set('year',     String(params.year));
+            if (params.doctorId) q.set('doctorId', params.doctorId);
+            const res = await fetch(`${API_URL}/finance/reconciliation?${q.toString()}`, { headers });
+            if (!res.ok) throw new Error('Failed to fetch reconciliation data');
+            return res.json() as Promise<{ gaps: Array<{ appointmentId: string; date: string; amount: number; treatmentName: string; doctorId: string; doctorName: string; patientName: string; historyNumber: string }>; total: number }>;
+        },
+        fixMissingLiquidation: async (appointmentId: string) => {
+            const res = await fetch(`${API_URL}/finance/reconciliation/fix`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ appointmentId })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to fix liquidation');
+            }
+            return res.json();
         }
     },
 
