@@ -110,11 +110,17 @@ router.post('/', async (req, res) => {
         let created;
         if (!data.historyNumber) {
             created = await prisma.$transaction(async (tx) => {
-                // Use COUNT(*) + 1 so the sequence follows the total number of
-                // patients and can never jump due to outlier history numbers.
+                // Use MAX(numeric value) + 1 for robustness against deletions.
+                // COUNT(*) would drift if any patient is ever removed.
                 // The transaction lock prevents race conditions between concurrent inserts.
-                const count = await tx.patient.count();
-                data.historyNumber = `HC-${count + 1}`;
+                const result = await tx.$queryRaw`
+                    SELECT COALESCE(
+                        MAX(CAST(REGEXP_REPLACE("historyNumber", '^HC-', '') AS INTEGER)), 0
+                    ) + 1 AS next
+                    FROM "Patient"
+                    WHERE "historyNumber" ~ '^HC-[0-9]+$'
+                `;
+                data.historyNumber = `HC-${result[0].next}`;
                 return tx.patient.create({ data });
             });
         } else {
