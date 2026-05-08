@@ -4,7 +4,7 @@ import {
     Search, Plus, Filter, UserCheck, ShieldCheck, Mail, CheckCircle2, Edit, Check, Edit3, Trash2,
     ArrowUp, Activity, FileText, ClipboardCheck, Layers, DollarSign, PenTool, Smile, Calculator,
     Phone, Settings, Download, Zap, TrendingUp, CreditCard, Clock, FileText as FileTextIcon, // Alias for conflict
-    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight, Bell
+    QrCode, Wallet, AlertTriangle, Printer, Pill, Eye, X, ChevronLeft, ChevronRight, Bell, ExternalLink
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { pdfService } from '../services/pdfService';
@@ -886,6 +886,18 @@ const Patients: React.FC = () => {
 
     // Consentments State (BLOQUE 4.1)
     const [isConsentmentModalOpen, setIsConsentmentModalOpen] = useState(false);
+    const [patientConsents, setPatientConsents] = useState<any[]>([]);
+    const [consentsLoading, setConsentsLoading] = useState(false);
+
+    // Fetch consents when patient changes or docs tab is opened
+    useEffect(() => {
+        if (!selectedPatient?.id) return;
+        setConsentsLoading(true);
+        api.consents.getAll(selectedPatient.id)
+            .then(data => setPatientConsents(Array.isArray(data) ? data : []))
+            .catch(() => setPatientConsents([]))
+            .finally(() => setConsentsLoading(false));
+    }, [selectedPatient?.id]);
 
     // Documents State (BLOQUE 4.2)
     const [isDocumentsModalOpen, setIsDocumentsModalOpen] = useState(false);
@@ -3422,12 +3434,11 @@ const Patients: React.FC = () => {
                     patientDni={selectedPatient.dni}
                     patientDob={selectedPatient.birthDate}
                     doctorName={selectedPatient.assignedDoctorId ? doctors?.find((d: any) => d.id === selectedPatient.assignedDoctorId)?.name : undefined}
-                    onSaveConsent={async (patientId, templateId, isSigned) => {
-                        try {
-                            await api.consents.create(patientId, templateId, isSigned);
-                        } catch (e) {
-                            throw e;
-                        }
+                    currentConsents={patientConsents}
+                    onConsentSigned={() => {
+                        api.consents.getAll(selectedPatient.id)
+                            .then(data => setPatientConsents(Array.isArray(data) ? data : []))
+                            .catch(() => {});
                     }}
                 />
             )}

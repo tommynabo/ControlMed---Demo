@@ -24,7 +24,7 @@ interface ConsentmentModalProps {
     patientDob?: string;
     doctorName?: string;
     currentConsents?: ConsentRecord[];
-    onSaveConsent?: (consentId: string, templateId: string, signed: boolean) => Promise<void>;
+    onConsentSigned?: () => void;
 }
 
 function generatePDFOrPrint(
@@ -106,7 +106,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     patientDob,
     doctorName,
     currentConsents = [],
-    onSaveConsent
+    onConsentSigned
 }) => {
     const [selectedTemplate, setSelectedTemplate] = useState<ConsentTemplate | null>(null);
     const [filter, setFilter] = useState<'Todos' | 'Médico' | 'Privacidad' | 'Financiero'>('Todos');
@@ -198,17 +198,6 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     const filteredTemplates = filter === 'Todos' ? CONSENT_TEMPLATES : CONSENT_TEMPLATES.filter(t => t.category === filter);
     const isSigned = (templateId: string) => localConsents.some(c => c.templateId === templateId && c.isSigned);
 
-    const handleSignConsent = async (template: ConsentTemplate) => {
-        if (onSaveConsent) {
-            try {
-                await onSaveConsent(overridePatient?.id || patientId, template.id, true);
-                alert('OK');
-            } catch (e) {
-                alert('Error: ' + (e as any).message);
-            }
-        }
-    };
-
     const handleSendToTablet = async (template: ConsentTemplate) => {
         const targetPatientId = overridePatient?.id || patientId;
         const existing = localConsents.find(c => c.templateId === template.id);
@@ -257,6 +246,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                         setLocalConsents(prev => prev.map(c => c.id === consentId ? { ...c, ...updated } : c));
                         setTabletModal(null);
                         clearInterval(tabletPollRef.current!);
+                        onConsentSigned?.();
                     }
                 } catch { /* non-critical */ }
             }, 5000);
@@ -360,7 +350,6 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                                         : <><Tablet size={13} /> Tablet</>}
                                                 </button>
                                             )}
-                                            {!signed && <button onClick={() => handleSignConsent(t)} className="flex-1 bg-green-50 text-green-600 text-xs py-2 rounded"><Check size={14} /> Firmar</button>}
                                         </div>
                                     </div>;
                                 })}
@@ -376,7 +365,14 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                 <div className="flex gap-3">
                                     <button onClick={() => requestAction(selectedTemplate, 'pdf')} className="flex-1 bg-orange-500 text-white px-6 py-3 rounded-xl font-bold text-sm"><Download size={18} /> PDF</button>
                                     <button onClick={() => requestAction(selectedTemplate, 'print')} className="flex-1 bg-slate-400 text-white px-6 py-3 rounded-xl font-bold text-sm"><Printer size={18} /> Imprimir</button>
-                                    {!isSigned(selectedTemplate.id) && <button onClick={() => { handleSignConsent(selectedTemplate); setSelectedTemplate(null); }} className="flex-1 bg-green-500 text-white px-6 py-3 rounded-xl font-bold text-sm"><Check size={18} /> Registrar</button>}
+                                    {!isSigned(selectedTemplate.id) && (
+                                        <button
+                                            onClick={() => { handleSendToTablet(selectedTemplate); setSelectedTemplate(null); }}
+                                            className="flex-1 bg-purple-500 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
+                                        >
+                                            <Tablet size={18} /> Enviar a Tablet
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>
