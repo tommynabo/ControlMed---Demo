@@ -1277,46 +1277,35 @@ router.post('/pay-with-wallet', async (req, res) => {
         // Mark matched BudgetLineItems as paid so they disappear from the budget view
         await markBudgetLineItemsPaid(supabase, { budgetId, treatmentIds, treatmentName, appointmentId });
 
-        // ── Create Liquidation for the doctor ────────────────────────────────
-        // Wallet payments previously skipped this step, causing appointments paid
-        // via wallet to be invisible in doctor liquidation reports.
+        // ── Create Liquidation for the doctor via ensureLiquidation ─────────
+        // Uses the central service for idempotent upsert — no duplicates possible.
         if (appointmentId) {
             try {
                 const { data: apptRow } = await supabase
                     .from('Appointment')
-                    .select('doctorId, doctor:Doctor(commissionPercentage, name), patient:Patient(name)')
+                    .select('doctorId, date, patient:Patient(name)')
                     .eq('id', appointmentId)
                     .single();
 
                 if (apptRow?.doctorId) {
-                    const existingLiq = await prisma.liquidation.findFirst({ where: { appointmentId } });
-                    if (!existingLiq) {
-                        const rawRate = apptRow.doctor?.commissionPercentage || 30;
-                        const labCost = 0;
-                        const finalAmount = (numericAmount - labCost) * (rawRate / 100);
-                        await prisma.liquidation.create({
-                            data: {
-                                id: crypto.randomUUID(),
-                                doctorId: apptRow.doctorId,
-                                appointmentId,
-                                grossAmount: numericAmount,
-                                baseAmount: numericAmount,
-                                labCost,
-                                commissionRate: rawRate,
-                                finalAmount,
-                                referralCommission: 0,
-                                referralEntityName: null,
-                                treatmentName: treatmentName || 'Pago con saldo',
-                                patientName: apptRow.patient?.name || 'Paciente',
-                                paymentMethod: 'wallet',
-                                status: 'PENDING',
-                                createdAt: new Date().toISOString()
-                            }
-                        });
-                    }
+                    const { ensureLiquidation } = require('../services/liquidationService');
+                    await ensureLiquidation(supabase, {
+                        paymentId:     result.id,
+                        appointmentId,
+                        doctorId:      apptRow.doctorId,
+                        grossAmount:   numericAmount,
+                        labCost:       0,
+                        treatmentName: treatmentName || 'Pago con saldo',
+                        patientName:   apptRow.patient?.name || 'Paciente',
+                        paymentMethod: 'wallet',
+                        // Use appointment date so the row lands in the correct month
+                        createdAt: apptRow.date
+                            ? new Date(apptRow.date).toISOString().replace('T00:00:00.000Z', 'T12:00:00.000Z')
+                            : new Date().toISOString(),
+                    });
                 }
             } catch (liqErr) {
-                // Non-fatal: log but don't fail the payment response
+                // Non-fatal: wallet payment already processed; log for reconciliation
                 console.error('⚠️  pay-with-wallet: could not create liquidation:', liqErr.message);
             }
         }
@@ -1850,6 +1839,26 @@ router.post('/reconciliation/fix', async (req, res) => {
         res.json({ success: true, liquidation: newLiq });
     } catch (e) {
         console.error('Error in reconciliation/fix:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── ADMIN: Manual reconciliation trigger ─────────────────────────────────────
+// POST /api/finance/admin/reconcile-liquidations
+// Requires JWT role = admin or manager.
+// Body (optional): { lookbackDays: 180 }
+router.post('/admin/reconcile-liquidations', async (req, res) => {
+    try {
+        const role = req.user?.role;
+        if (role !== 'admin' && role !== 'manager') {
+            return res.status(403).json({ error: 'Acceso denegado: se requiere rol admin o manager' });
+        }
+        const { runReconciliation } = require('../jobs/reconcileLiquidations');
+        const lookbackDays = req.body?.lookbackDays ? parseInt(req.body.lookbackDays, 10) : 180;
+        const result = await runReconciliation({ lookbackDays });
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error('[ADMIN reconcile] Error:', e.message);
         res.status(500).json({ error: e.message });
     }
 });

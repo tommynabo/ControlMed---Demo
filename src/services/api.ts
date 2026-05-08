@@ -1446,6 +1446,18 @@ export const api = {
                 throw new Error(err.error || 'Failed to fix liquidation');
             }
             return res.json();
+        },
+        runReconciliation: async (lookbackDays = 180) => {
+            const res = await fetch(`${API_URL}/finance/admin/reconcile-liquidations`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ lookbackDays })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to run reconciliation');
+            }
+            return res.json() as Promise<{ success: boolean; created: number; skipped: number; errors: Array<{ id: string; error: string }> }>;
         }
     },
 

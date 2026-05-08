@@ -16,6 +16,7 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 // Init DB & Services
 const { prisma } = require('./lib/db');
 const whatsappService = require('./services/whatsappService');
+const cron = require('node-cron');
 
 // Import Routes
 const authRouter = require('./routes/auth');
@@ -130,6 +131,20 @@ app.use('/api', templatesRouter);
 
 // --- Initialization ---
 whatsappService.initialize();
+
+// --- Nightly Liquidation Reconciliation (02:30 Europe/Madrid) ----------------
+// Automatically repairs any appointments that were paid but missed a Liquidation
+// row (e.g. doctor was null at payment time, wallet payment, network failure).
+cron.schedule('30 2 * * *', async () => {
+    try {
+        const { runReconciliation } = require('./jobs/reconcileLiquidations');
+        console.log('[CRON] Nightly liquidation reconciliation starting…');
+        const result = await runReconciliation({ lookbackDays: 60 });
+        console.log(`[CRON] Reconciliation done — created: ${result.created}, errors: ${result.errors.length}`);
+    } catch (e) {
+        console.error('[CRON] Reconciliation failed:', e.message);
+    }
+}, { timezone: 'Europe/Madrid' });
 
 // --- Error Handler ---
 app.use(errorHandler);

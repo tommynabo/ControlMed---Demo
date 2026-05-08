@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw, Building2 } from 'lucide-react';
+import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw, Building2, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Expense, Doctor, Specialization } from '../../types';
 
@@ -18,6 +18,8 @@ const Payroll: React.FC = () => {
     const [referralDateFrom, setReferralDateFrom] = useState('');
     const [referralDateTo, setReferralDateTo] = useState('');
     const [isLoadingReferral, setIsLoadingReferral] = useState(false);
+    const [isReconciling, setIsReconciling] = useState(false);
+    const [reconcileResult, setReconcileResult] = useState<{ created: number; skipped: number; errors: Array<{ id: string; error: string }> } | null>(null);
 
     // Fetch Liquidations when filters change
     useEffect(() => {
@@ -100,6 +102,24 @@ const Payroll: React.FC = () => {
             console.error('Error fetching referral commissions', e);
         } finally {
             setIsLoadingReferral(false);
+        }
+    };
+
+    const handleRunReconciliation = async () => {
+        setIsReconciling(true);
+        setReconcileResult(null);
+        try {
+            const result = await api.liquidations.runReconciliation(180);
+            setReconcileResult(result);
+            // Reload liquidations to reflect any newly created rows
+            if (result.created > 0 && selectedDoctorId) {
+                const updated = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                setLiquidations(updated);
+            }
+        } catch (e: any) {
+            setReconcileResult({ created: -1, skipped: 0, errors: [{ id: 'general', error: e.message }] });
+        } finally {
+            setIsReconciling(false);
         }
     };
 
@@ -279,8 +299,38 @@ const Payroll: React.FC = () => {
                         >
                             <Download size={14} /> Exportar PDF
                         </button>
+                        <button
+                            onClick={handleRunReconciliation}
+                            disabled={isReconciling}
+                            title="Detecta y crea liquidaciones que faltan en los últimos 180 días"
+                            className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg font-bold text-xs uppercase transition disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap"
+                        >
+                            <ShieldCheck size={14} />
+                            {isReconciling ? 'Verificando…' : 'Verificar integridad'}
+                        </button>
                     </div>
                 </div>
+
+                {/* Reconciliation result banner */}
+                {reconcileResult && (
+                    <div className={`flex items-start gap-3 p-3 rounded-xl text-sm font-medium border ${reconcileResult.created === -1 ? 'bg-red-50 border-red-300 text-red-800' : reconcileResult.errors.length > 0 ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-green-50 border-green-300 text-green-800'}`}>
+                        {reconcileResult.created === -1
+                            ? <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                            : <ShieldCheck size={16} className="shrink-0 mt-0.5" />}
+                        <div className="flex-1">
+                            {reconcileResult.created === -1
+                                ? `Error en verificación: ${reconcileResult.errors[0]?.error}`
+                                : <>
+                                    Verificación completada — <b>{reconcileResult.created}</b> liquidación{reconcileResult.created !== 1 ? 'es' : ''} creada{reconcileResult.created !== 1 ? 's' : ''}, {reconcileResult.skipped} omitida{reconcileResult.skipped !== 1 ? 's' : ''}.
+                                    {reconcileResult.errors.length > 0 && <span className="ml-1 text-amber-700">({reconcileResult.errors.length} error{reconcileResult.errors.length !== 1 ? 'es' : ''})</span>}
+                                </>
+                            }
+                        </div>
+                        <button onClick={() => setReconcileResult(null)} className="shrink-0 opacity-60 hover:opacity-100 transition" aria-label="Cerrar">
+                            <X size={14} />
+                        </button>
+                    </div>
+                )}
 
                 {/* Summary Card */}
                 {liquidations && (
