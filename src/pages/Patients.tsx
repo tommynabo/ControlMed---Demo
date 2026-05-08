@@ -20,6 +20,7 @@ import { FinanceModal } from '../../components/FinanceModal';
 import { BudgetModal } from '../components/BudgetModal';
 import { PrescriptionModal } from '../components/PrescriptionModal';
 import { ConsentmentModal } from '../components/ConsentmentModal';
+import { CONSENT_TEMPLATES } from '../components/consentTemplates';
 import { DocumentsManager } from '../components/DocumentsManager';
 import { PatientBalance } from '../components/PatientBalance';
 import { BalanceBadge } from '../components/BalanceBadge';
@@ -888,6 +889,7 @@ const Patients: React.FC = () => {
     const [isConsentmentModalOpen, setIsConsentmentModalOpen] = useState(false);
     const [patientConsents, setPatientConsents] = useState<any[]>([]);
     const [consentsLoading, setConsentsLoading] = useState(false);
+    const [viewingConsent, setViewingConsent] = useState<any>(null);
 
     // Fetch consents when patient changes or docs tab is opened
     useEffect(() => {
@@ -2532,11 +2534,61 @@ const Patients: React.FC = () => {
                                             </button>
                                         ))}
                                     </div>
+
+                                    {/* CONSENTIMIENTOS FIRMADOS */}
+                                    <div className="mt-8 space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <ShieldCheck size={20} className="text-green-600" />
+                                            <h4 className="text-lg font-black text-slate-900">Consentimientos Firmados</h4>
+                                        </div>
+
+                                        {consentsLoading ? (
+                                            <div className="flex items-center gap-3 py-6 text-slate-400">
+                                                <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+                                                <span className="text-sm">Cargando consentimientos…</span>
+                                            </div>
+                                        ) : patientConsents.filter((c: any) => c.isSigned).length === 0 ? (
+                                            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-8 text-center">
+                                                <ShieldCheck size={32} className="text-slate-300 mx-auto mb-3" />
+                                                <p className="text-sm font-semibold text-slate-400">Aún no hay consentimientos firmados</p>
+                                                <p className="text-xs text-slate-300 mt-1">Usa el botón «Consentimientos» para enviar uno a la tablet</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {patientConsents
+                                                    .filter((c: any) => c.isSigned)
+                                                    .sort((a: any, b: any) => new Date(b.signedDate || b.createdAt).getTime() - new Date(a.signedDate || a.createdAt).getTime())
+                                                    .map((c: any) => (
+                                                        <div key={c.id} className="bg-white border border-slate-100 rounded-2xl p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
+                                                            <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
+                                                                <ShieldCheck size={20} className="text-green-600" />
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-bold text-slate-800 text-sm truncate">{c.title || 'Consentimiento'}</p>
+                                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                                    Firmado el{' '}
+                                                                    {c.signedDate
+                                                                        ? new Date(c.signedDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
+                                                                        : '—'}
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 flex-shrink-0">
+                                                                <button
+                                                                    onClick={() => setViewingConsent(c)}
+                                                                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors"
+                                                                >
+                                                                    <Eye size={13} />
+                                                                    Ver documento
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )
                         }
-
-                        {/* BUDGET TAB OVERRIDE if 'budget' */}
                         {
                             patientTab === 'budget' && (
                                 <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
@@ -3461,6 +3513,105 @@ const Patients: React.FC = () => {
                     patient={selectedPatient}
                 />
             )}
+
+            {/* Signed Consent Viewer Modal */}
+            {viewingConsent && (() => {
+                const template = CONSENT_TEMPLATES.find(t => t.id === viewingConsent.templateId);
+                const resolvedContent = template
+                    ? template.content
+                        .split('{{PATIENT_NAME}}').join(selectedPatient?.name || '')
+                        .split('{{PATIENT_DNI}}').join(selectedPatient?.dni || 'DNI')
+                        .split('{{PATIENT_DOB}}').join(selectedPatient?.birthDate ? new Date(selectedPatient.birthDate).toLocaleDateString('es-ES') : 'Fecha')
+                        .split('{{TODAY}}').join(viewingConsent.signedDate ? new Date(viewingConsent.signedDate).toLocaleDateString('es-ES') : new Date().toLocaleDateString('es-ES'))
+                        .split('{{CLINIC_NAME}}').join('CHC')
+                        .split('{{DOCTOR_NAME}}').join(doctors?.find((d: any) => d.id === selectedPatient?.assignedDoctorId)?.name || 'Dr.')
+                    : viewingConsent.title || 'Consentimiento';
+                return (
+                    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[120] flex items-center justify-center p-6 animate-in fade-in">
+                        <div className="bg-white max-w-2xl w-full rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 flex items-start justify-between">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <ShieldCheck size={20} className="text-white" />
+                                        <h2 className="text-xl font-black text-white">Documento Firmado</h2>
+                                    </div>
+                                    <p className="text-green-100 text-sm font-medium">{viewingConsent.title || 'Consentimiento'}</p>
+                                    {viewingConsent.signedDate && (
+                                        <p className="text-green-200 text-xs mt-1">
+                                            Firmado el {new Date(viewingConsent.signedDate).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {viewingConsent.signedPdfUrl && (
+                                        <a
+                                            href={viewingConsent.signedPdfUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
+                                        >
+                                            <ExternalLink size={13} /> PDF original
+                                        </a>
+                                    )}
+                                    <button onClick={() => setViewingConsent(null)} className="text-white/80 hover:text-white p-2">
+                                        <X size={22} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+                                {/* Consent text */}
+                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
+                                    <pre className="whitespace-pre-wrap text-sm text-slate-700 font-sans leading-relaxed">{resolvedContent}</pre>
+                                </div>
+
+                                {/* Signature section */}
+                                <div className="border-2 border-dashed border-slate-200 rounded-xl p-6">
+                                    <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">Firma del paciente</p>
+                                    {viewingConsent.signatureImageUrl ? (
+                                        <img
+                                            src={viewingConsent.signatureImageUrl}
+                                            alt="Firma del paciente"
+                                            className="max-h-32 border border-slate-100 rounded-lg bg-white p-2"
+                                        />
+                                    ) : (
+                                        <div className="flex items-center gap-2 text-slate-400">
+                                            <CheckCircle2 size={16} className="text-green-500" />
+                                            <span className="text-sm">Firma registrada digitalmente</span>
+                                        </div>
+                                    )}
+                                    {viewingConsent.signedDate && (
+                                        <p className="text-xs text-slate-400 mt-2">
+                                            {new Date(viewingConsent.signedDate).toLocaleString('es-ES', {
+                                                day: '2-digit', month: '2-digit', year: 'numeric',
+                                                hour: '2-digit', minute: '2-digit'
+                                            })}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="border-t border-slate-100 p-5 flex justify-end gap-3">
+                                <button
+                                    onClick={() => window.print()}
+                                    className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
+                                >
+                                    <Printer size={15} /> Imprimir
+                                </button>
+                                <button
+                                    onClick={() => setViewingConsent(null)}
+                                    className="bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold px-5 py-2.5 rounded-xl transition-colors"
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 };
