@@ -1492,6 +1492,17 @@ export const api = {
                 headers
             });
             if (!res.ok) throw new Error('Failed to delete consent');
+        },
+        createSignToken: async (patientId: string, consentId: string): Promise<{ token: string; signUrl: string; expiresAt: string; expiresInMinutes: number }> => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/consents/${consentId}/create-sign-token`, {
+                method: 'POST',
+                headers
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to create sign token');
+            }
+            return res.json();
         }
     },
 

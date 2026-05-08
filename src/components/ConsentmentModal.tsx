@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, Download, Check, Printer, Search, User } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, FileText, Download, Check, Printer, Search, User, Tablet, Copy, ExternalLink } from 'lucide-react';
 import { pdfService } from '../services/pdfService';
 import { api } from '../services/api';
 import { CONSENT_TEMPLATES, ConsentTemplate } from './consentTemplates';
@@ -11,6 +11,8 @@ interface ConsentRecord {
     title: string;
     signedDate?: string;
     isSigned: boolean;
+    signedPdfUrl?: string;
+    signatureImageUrl?: string;
 }
 
 interface ConsentmentModalProps {
@@ -121,6 +123,22 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     const [showDropdown, setShowDropdown] = useState(false);
     const searchRef = useRef<any>(null);
 
+    // Tablet signing state
+    const [tabletModal, setTabletModal] = useState<{
+        open: boolean;
+        consentId: string;
+        signUrl: string;
+        expiresAt: string;
+        qrDataUrl: string;
+        timeLeft: string;
+    } | null>(null);
+    const [tabletLoading, setTabletLoading] = useState<string | null>(null); // consentId being processed
+    const [localConsents, setLocalConsents] = useState<ConsentRecord[]>(currentConsents);
+    const tabletPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // Keep localConsents in sync if parent updates
+    useEffect(() => { setLocalConsents(currentConsents); }, [currentConsents]);
+
     const activePatient = pickerPatient || overridePatient;
     const resolvedName = activePatient?.name || patientName;
     const resolvedDni = activePatient?.dni || patientDni || 'DNI';
@@ -178,7 +196,7 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
     if (!isOpen) return null;
 
     const filteredTemplates = filter === 'Todos' ? CONSENT_TEMPLATES : CONSENT_TEMPLATES.filter(t => t.category === filter);
-    const isSigned = (templateId: string) => currentConsents.some(c => c.templateId === templateId && c.isSigned);
+    const isSigned = (templateId: string) => localConsents.some(c => c.templateId === templateId && c.isSigned);
 
     const handleSignConsent = async (template: ConsentTemplate) => {
         if (onSaveConsent) {
@@ -189,6 +207,69 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                 alert('Error: ' + (e as any).message);
             }
         }
+    };
+
+    const handleSendToTablet = async (template: ConsentTemplate) => {
+        const targetPatientId = overridePatient?.id || patientId;
+        const existing = localConsents.find(c => c.templateId === template.id);
+        let consentId = existing?.id;
+
+        setTabletLoading(template.id);
+        try {
+            if (!consentId) {
+                const created = await api.consents.create(targetPatientId, template.id, false);
+                consentId = created.id;
+                setLocalConsents(prev => [...prev, created]);
+            }
+
+            const { signUrl, expiresAt } = await api.consents.createSignToken(targetPatientId, consentId!);
+
+            const QRCode = await import('qrcode');
+            const qrDataUrl = await (QRCode.default as any).toDataURL(signUrl, {
+                width: 220, margin: 1, color: { dark: '#1e293b', light: '#ffffff' }
+            });
+
+            const calcTimeLeft = () => {
+                const diff = new Date(expiresAt).getTime() - Date.now();
+                if (diff <= 0) return '0:00';
+                const m = Math.floor(diff / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                return `${m}:${String(s).padStart(2, '0')}`;
+            };
+
+            setTabletModal({ open: true, consentId: consentId!, signUrl, expiresAt, qrDataUrl, timeLeft: calcTimeLeft() });
+
+            if (tabletPollRef.current) clearInterval(tabletPollRef.current);
+            tabletPollRef.current = setInterval(async () => {
+                setTabletModal(prev => {
+                    if (!prev) return null;
+                    const tl = calcTimeLeft();
+                    if (tl === '0:00') {
+                        clearInterval(tabletPollRef.current!);
+                        return { ...prev, timeLeft: '0:00' };
+                    }
+                    return { ...prev, timeLeft: tl };
+                });
+                try {
+                    const consents = await api.consents.getAll(targetPatientId);
+                    const updated = consents.find((c: ConsentRecord) => c.id === consentId);
+                    if (updated?.isSigned) {
+                        setLocalConsents(prev => prev.map(c => c.id === consentId ? { ...c, ...updated } : c));
+                        setTabletModal(null);
+                        clearInterval(tabletPollRef.current!);
+                    }
+                } catch { /* non-critical */ }
+            }, 5000);
+        } catch (e) {
+            alert('Error al generar el enlace de firma: ' + (e as any).message);
+        } finally {
+            setTabletLoading(null);
+        }
+    };
+
+    const closeTabletModal = () => {
+        setTabletModal(null);
+        if (tabletPollRef.current) clearInterval(tabletPollRef.current);
     };
 
     const requestAction = (template: ConsentTemplate, mode: any) => {
@@ -247,15 +328,38 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {filteredTemplates.map(t => {
                                     const signed = isSigned(t.id);
+                                    const signedRecord = localConsents.find(c => c.templateId === t.id && c.isSigned);
                                     return <div key={t.id} className="border-2 border-slate-200 rounded-xl p-6">
                                         <div className="flex items-start justify-between mb-4">
                                             <div><div className="flex items-center gap-2"><FileText size={18} className="text-blue-600" /><h3 className="text-sm font-black">{t.title}</h3></div><p className="text-xs text-slate-500 mt-1">{t.category}</p></div>
-                                            {signed && <Check size={16} className="text-green-600" />}
+                                            {signed && (
+                                                <div className="flex items-center gap-1 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                                                    <Check size={11} className="text-green-600" />
+                                                    <span className="text-xs text-green-700 font-semibold">Firmado</span>
+                                                </div>
+                                            )}
                                         </div>
                                         <p className="text-xs text-slate-600 mb-4">{t.content.substring(0, 100)}</p>
+                                        {signed && signedRecord?.signedPdfUrl && (
+                                            <a href={signedRecord.signedPdfUrl} target="_blank" rel="noopener noreferrer"
+                                               className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 mb-3 font-semibold">
+                                                <ExternalLink size={12} /> Ver PDF firmado
+                                            </a>
+                                        )}
                                         <div className="flex gap-2">
                                             <button onClick={() => setSelectedTemplate(t)} className="flex-1 bg-blue-50 text-blue-600 text-xs py-2 rounded"><FileText size={14} /> Ver</button>
                                             <button onClick={() => requestAction(t, 'pdf')} className="flex-1 bg-orange-50 text-orange-600 text-xs py-2 rounded"><Download size={14} /> PDF</button>
+                                            {!signed && (
+                                                <button
+                                                    onClick={() => handleSendToTablet(t)}
+                                                    disabled={tabletLoading === t.id}
+                                                    className="flex-1 bg-purple-50 text-purple-600 text-xs py-2 rounded disabled:opacity-50 flex items-center justify-center gap-1"
+                                                >
+                                                    {tabletLoading === t.id
+                                                        ? <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                                                        : <><Tablet size={13} /> Tablet</>}
+                                                </button>
+                                            )}
                                             {!signed && <button onClick={() => handleSignConsent(t)} className="flex-1 bg-green-50 text-green-600 text-xs py-2 rounded"><Check size={14} /> Firmar</button>}
                                         </div>
                                     </div>;
@@ -280,9 +384,51 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                 </div>
             </div>
 
-            {pickerTemplate && <div className="absolute inset-0 bg-slate-900/70 z-[200] flex items-center justify-center p-6">
-                <div className="bg-white rounded-2xl w-full max-w-md p-8 space-y-5">
-                    <div className="flex justify-between items-center">
+            {/* Tablet QR Modal */}
+            {tabletModal?.open && (
+                <div className="absolute inset-0 bg-slate-900/75 z-[200] flex items-center justify-center p-6">
+                    <div className="bg-white rounded-2xl w-full max-w-sm p-7 space-y-5 text-center shadow-2xl">
+                        <div className="flex justify-between items-start">
+                            <div className="text-left">
+                                <h3 className="text-lg font-black text-slate-800">Firma en tablet</h3>
+                                <p className="text-xs text-slate-500 mt-0.5">El paciente escanea el código con la cámara de la tablet</p>
+                            </div>
+                            <button onClick={closeTabletModal} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                        </div>
+
+                        {tabletModal.qrDataUrl && (
+                            <div className="flex justify-center">
+                                <div className="p-3 border-2 border-slate-200 rounded-xl inline-block">
+                                    <img src={tabletModal.qrDataUrl} alt="QR de firma" className="w-44 h-44" />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-2">
+                            <span className="text-xs text-slate-500 truncate flex-1 font-mono">{tabletModal.signUrl}</span>
+                            <button
+                                onClick={() => navigator.clipboard.writeText(tabletModal.signUrl)}
+                                className="text-blue-600 hover:text-blue-800 flex-shrink-0"
+                                title="Copiar URL"
+                            >
+                                <Copy size={15} />
+                            </button>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-2 text-sm">
+                            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                            <span className="text-slate-600">Esperando firma…</span>
+                            <span className="font-mono text-amber-600 font-bold">{tabletModal.timeLeft}</span>
+                        </div>
+
+                        <button onClick={closeTabletModal} className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {pickerTemplate && <div className="absolute inset-0 bg-slate-900/70 z-[200] flex items-center justify-center p-6">                <div className="bg-white rounded-2xl w-full max-w-md p-8 space-y-5">                    <div className="flex justify-between items-center">
                         <h3 className="text-lg font-black">Paciente</h3>
                         <button onClick={() => setPickerTemplate(null)}><X size={20} /></button>
                     </div>

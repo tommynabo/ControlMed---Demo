@@ -26,6 +26,7 @@ const Gastos = lazy(() => import('./src/pages/Gastos'));
 const Liquidations = lazy(() => import('./src/pages/Liquidations').then(m => ({ default: m.Liquidations })));
 const Analytics = lazy(() => import('./src/pages/Analytics'));
 const AppointmentDetails = lazy(() => import('./src/pages/AppointmentDetails').then(m => ({ default: m.AppointmentDetails })));
+const SignConsent = lazy(() => import('./src/pages/SignConsent'));
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,8 @@ const App: React.FC = () => {
           }>
             <Routes>
               <Route path="/login" element={<Login />} />
+              {/* Public tablet signing page — no auth required */}
+              <Route path="/sign/:token" element={<SignConsent />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<ProtectedRoute pageId="dashboard"><Dashboard /></ProtectedRoute>} />

@@ -113,17 +113,23 @@ model Patient {
 }
 
 model Consent {
-  id          String    @id @default(uuid())
-  patientId   String
-  patient     Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  templateId  String
-  title       String
-  isSigned    Boolean   @default(false)
-  signedDate  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                   String    @id @default(uuid())
+  patientId            String
+  patient              Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  templateId           String
+  title                String
+  isSigned             Boolean   @default(false)
+  signedDate           DateTime?
+  // Digital signature fields
+  signToken            String?
+  signTokenExpiresAt   DateTime?
+  signatureImageUrl    String?
+  signedPdfUrl         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([patientId])
+  @@index([signToken])
 }
 
 model Specialty {

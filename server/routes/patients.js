@@ -380,6 +380,37 @@ router.delete('/:patientId/consents/:consentId', async (req, res) => {
     }
 });
 
+// Generate a temporary sign token for tablet signature flow
+router.post('/:patientId/consents/:consentId/create-sign-token', async (req, res) => {
+    try {
+        const { consentId } = req.params;
+        const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+        const TOKEN_MINUTES = 30;
+
+        const existing = await prisma.consent.findUnique({ where: { id: consentId } });
+        if (!existing) return res.status(404).json({ error: 'Consentimiento no encontrado' });
+        if (existing.isSigned) return res.status(400).json({ error: 'Este consentimiento ya ha sido firmado' });
+
+        const token = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + TOKEN_MINUTES * 60 * 1000);
+
+        await prisma.consent.update({
+            where: { id: consentId },
+            data: { signToken: token, signTokenExpiresAt: expiresAt }
+        });
+
+        res.json({
+            token,
+            signUrl: `${FRONTEND_URL}/sign/${token}`,
+            expiresAt: expiresAt.toISOString(),
+            expiresInMinutes: TOKEN_MINUTES
+        });
+    } catch (e) {
+        console.error('Error creating sign token:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ─── DOCUMENTS ────────────────────────────────────────────────────────────────
 router.get('/:patientId/documents', async (req, res) => {
     try {

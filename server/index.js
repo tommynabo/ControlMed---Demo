@@ -38,6 +38,7 @@ const prescriptionsRouter = require('./routes/prescriptions');
 const templatesRouter = require('./routes/templates');
 const { scheduleRouter, durationsRouter } = require('./routes/schedule');
 const analyticsRouter = require('./routes/analytics');
+const signRouter = require('./routes/sign');
 
 const { errorHandler } = require('./lib/errors');
 
@@ -81,6 +82,7 @@ app.use((req, res, next) => {
 app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 app.use('/api/cron', cronRouter); // Cron handles its own CRON_SECRET auth
 app.use('/api/auth/login', loginLimiter); // Rate limiting for login
+app.use('/api/sign', signRouter); // Public — no auth required for tablet signing
 
 // --- Auth Middleware ---
 const authMiddleware = (req, res, next) => {
