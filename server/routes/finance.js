@@ -472,9 +472,22 @@ router.post('/payments/create', async (req, res) => {
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         const { patientId, amount, method, type, notes, appointmentId, budgetId } = req.body;
+        const idempotencyKey = req.body.idempotencyKey || null;
 
         if (!patientId || !amount || !method) {
             return res.status(400).json({ error: 'patientId, amount, and method are required' });
+        }
+
+        // ── Idempotency: if the same key was already processed, return the existing result ──
+        if (idempotencyKey) {
+            const existing = await prisma.payment.findUnique({ where: { idempotencyKey } });
+            if (existing) {
+                const existingInvoice = existing.invoiceId
+                    ? await prisma.invoice.findUnique({ where: { id: existing.invoiceId } })
+                    : null;
+                console.log(`[finance] Idempotent replay for key ${idempotencyKey}`);
+                return res.status(200).json({ success: true, payment: existing, invoice: existingInvoice, isPartial: false, isFinal: true, remainingBalance: 0 });
+            }
         }
 
         const numericAmount = parseFloat(amount);
@@ -660,6 +673,7 @@ router.post('/payments/create', async (req, res) => {
                     doctorId: doctor?.id || null,
                     referralCommission: referralCommission || 0,
                     referralEntityName: referralEntityName || null,
+                    idempotencyKey: idempotencyKey || null,
                     createdAt: new Date().toISOString()
                 }
             });
@@ -744,20 +758,18 @@ router.post('/payments/create', async (req, res) => {
                 await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
             }
 
+            // ── Mandatory Liquidation creation ─────────────────────────────────────────────
+            // For DIRECT_CHARGE final payments a Liquidation MUST exist.
+            // If the doctor cannot be resolved, throw — this rolls back the entire tx so no
+            // orphaned Payment or Invoice is ever left behind without a Liquidation.
             let liquidation = null;
-            let liquidationWarning = null;
-            // Create liquidation for real payments (DIRECT_CHARGE) that are the final instalment.
-            // Partial payments do NOT trigger liquidation — only the final payment does.
-            if (!doctor && type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
-                // Doctor could not be resolved — Liquidation will NOT be created.
-                // This should not happen in normal flow (fallback from Appointment is already applied above),
-                // but we record a warning so the frontend can alert the user and the admin can fix it.
-                liquidationWarning = `Liquidación no creada: no se pudo resolver el doctor para el pago de ${patient?.name || patientId}. Comprueba la sección de Reconciliación.`;
-                console.warn('[finance] Liquidation skipped — doctor is null.', {
-                    patientId, appointmentId, type, amount: numericAmount
-                });
-            }
-            if (doctor && type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
+            if (type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
+                if (!doctor) {
+                    throw new Error(
+                        `No se puede crear el pago: doctor no encontrado para la cita/pago ` +
+                        `(paciente: ${patient?.name || patientId}). Asegúrate de que la cita tiene un doctor asignado.`
+                    );
+                }
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
                 // Use the full appointment amount as gross for accurate commission on consolidated payments
@@ -766,13 +778,14 @@ router.post('/payments/create', async (req, res) => {
 
                 if (appointmentId) {
                     const existingLiquidation = await tx.liquidation.findFirst({
-                        where: { appointmentId }
+                        where: { appointmentId, doctorId: doctor.id }
                     });
 
                     if (existingLiquidation) {
                         liquidation = await tx.liquidation.update({
                             where: { id: existingLiquidation.id },
                             data: {
+                                paymentId: payment.id,
                                 doctorId: doctor.id,
                                 grossAmount: grossForLiquidation,
                                 baseAmount: doctorBaseAmount,
@@ -789,12 +802,12 @@ router.post('/payments/create', async (req, res) => {
                         });
                     } else {
                         liquidation = await tx.liquidation.create({
-                            data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                            data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                         });
                     }
                 } else {
                     liquidation = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), doctorId: doctor.id, appointmentId: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                     });
                 }
             }
@@ -804,11 +817,44 @@ router.post('/payments/create', async (req, res) => {
                 await tx.patient.update({ where: { id: patientId }, data: { wallet: { increment: balanceAdjustment } } });
             }
 
+            // ── Post-payment side effects INSIDE the transaction ──────────────────────────
+            // PatientTreatment and BudgetLineItem updates are now atomic with Payment+Liquidation.
+            if (!isPartialPayment) {
+                const supabaseTx = getSupabase();
+                const treatmentIdsFromBody = req.body.treatmentIds;
+                if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
+                    await supabaseTx
+                        .from('PatientTreatment')
+                        .update({ status: 'COMPLETADO' })
+                        .in('id', treatmentIdsFromBody)
+                        .eq('patientId', patientId);
+                } else if (appointmentId) {
+                    const { data: appt } = await supabaseTx
+                        .from('Appointment')
+                        .select('treatmentId')
+                        .eq('id', appointmentId)
+                        .single();
+                    if (appt?.treatmentId) {
+                        await supabaseTx
+                            .from('PatientTreatment')
+                            .update({ status: 'COMPLETADO' })
+                            .eq('serviceId', appt.treatmentId)
+                            .eq('patientId', patientId)
+                            .not('status', 'in', '("COMPLETADO","PAGADO")');
+                    }
+                }
+                await markBudgetLineItemsPaid(supabaseTx, {
+                    budgetId: budgetId || req.body.budgetId,
+                    treatmentIds: req.body.treatmentIds,
+                    treatmentName: solvedTreatmentName,
+                    appointmentId
+                });
+            }
+
             return {
                 payment,
                 invoice,
                 payroll: liquidation,
-                liquidationWarning,
                 pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
                 previewUrl: quipuResult.success ? quipuResult.preview_url : null,
                 isPartial: isPartialPayment,
@@ -820,47 +866,6 @@ router.post('/payments/create', async (req, res) => {
         });
 
         res.status(200).json({ success: true, ...result });
-
-        // Mark PatientTreatment rows as COMPLETADO after a full (non-partial) payment
-        if (!result.isPartial) {
-            const supabasePost = getSupabase();
-            try {
-                const treatmentIdsFromBody = req.body.treatmentIds;
-                if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
-                    // Explicit list of PatientTreatment IDs provided by the frontend
-                    await supabasePost
-                        .from('PatientTreatment')
-                        .update({ status: 'COMPLETADO' })
-                        .in('id', treatmentIdsFromBody)
-                        .eq('patientId', patientId);
-                } else if (appointmentId) {
-                    // Fallback: look up the appointment's serviceId and update matching treatments
-                    const { data: appt } = await supabasePost
-                        .from('Appointment')
-                        .select('treatmentId')
-                        .eq('id', appointmentId)
-                        .single();
-                    if (appt?.treatmentId) {
-                        await supabasePost
-                            .from('PatientTreatment')
-                            .update({ status: 'COMPLETADO' })
-                            .eq('serviceId', appt.treatmentId)
-                            .eq('patientId', patientId)
-                            .not('status', 'in', '("COMPLETADO","PAGADO")');
-                    }
-                }
-
-                // Mark matched BudgetLineItems as paid
-                await markBudgetLineItemsPaid(supabasePost, {
-                    budgetId: budgetId || req.body.budgetId,
-                    treatmentIds: req.body.treatmentIds,
-                    treatmentName: solvedTreatmentName,
-                    appointmentId
-                });
-            } catch (treatErr) {
-                console.error('⚠️ Error actualizando estado de tratamientos/presupuesto (no crítico):', treatErr.message);
-            }
-        }
 
         // Gmail invoice email (fire-and-forget, never blocks the response)
         if (patient.email && result.invoice) {
@@ -931,6 +936,7 @@ router.post('/payments/create-split', async (req, res) => {
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         const { patientId, totalAmount, method, appointmentId, budgetId, concept, notes, splits } = req.body;
+        const idempotencyKey = req.body.idempotencyKey || null;
 
         if (!patientId || !totalAmount || !method || !splits || !Array.isArray(splits) || splits.length === 0) {
             return res.status(400).json({ error: 'patientId, totalAmount, method, and splits[] are required' });
@@ -939,6 +945,15 @@ router.post('/payments/create-split', async (req, res) => {
         const numericTotal = parseFloat(totalAmount);
         if (isNaN(numericTotal) || numericTotal <= 0) {
             return res.status(400).json({ error: 'Invalid totalAmount' });
+        }
+
+        // ── Idempotency check ──────────────────────────────────────────────────
+        if (idempotencyKey) {
+            const existing = await prisma.payment.findUnique({ where: { idempotencyKey } });
+            if (existing) {
+                console.log(`[finance] Idempotent replay (split) for key ${idempotencyKey}`);
+                return res.status(200).json({ success: true, payment: existing });
+            }
         }
 
         const { data: patient } = await supabase.from('Patient').select('*').eq('id', patientId).single();
@@ -1014,6 +1029,7 @@ router.post('/payments/create-split', async (req, res) => {
                     doctorId: resolvedSplits[0]?.doctor?.id || null,
                     referralCommission: splitReferralTotal || 0,
                     referralEntityName: splitReferralEntity || null,
+                    idempotencyKey: idempotencyKey || null,
                     createdAt: new Date().toISOString()
                 }
             });
@@ -1066,10 +1082,15 @@ router.post('/payments/create-split', async (req, res) => {
 
             await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
 
-            // One Liquidation per doctor split
+            // One Liquidation per doctor split — mandatory, throws if any split has no doctor
             const liquidations = [];
             for (const s of resolvedSplits) {
-                if (!s.doctor) continue;
+                if (!s.doctor) {
+                    throw new Error(
+                        `No se puede crear el pago: uno de los splits no tiene doctor asignado ` +
+                        `(doctorId: ${s.doctorId || 'null'}). Comprueba los datos e inténtalo de nuevo.`
+                    );
+                }
                 const rawRate = s.doctor.commissionPercentage || 30;
                 const labCost = s.labCost || 0;
                 // Doctor is paid on base price (without referral markup)
@@ -1087,15 +1108,46 @@ router.post('/payments/create-split', async (req, res) => {
                 if (existingLiq) {
                     liq = await tx.liquidation.update({
                         where: { id: existingLiq.id },
-                        data: { grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                        data: { paymentId: payment.id, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
                     });
                 } else {
                     liq = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), doctorId: s.doctor.id, appointmentId: appointmentId || null, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: s.doctor.id, appointmentId: appointmentId || null, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                     });
                 }
                 liquidations.push(liq);
             }
+
+            // ── Post-payment side effects INSIDE the transaction ─────────────────────────
+            const supabaseTx = getSupabase();
+            const treatmentIdsFromBody = req.body.treatmentIds;
+            if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
+                await supabaseTx
+                    .from('PatientTreatment')
+                    .update({ status: 'COMPLETADO' })
+                    .in('id', treatmentIdsFromBody)
+                    .eq('patientId', patientId);
+            } else if (appointmentId) {
+                const { data: appt } = await supabaseTx
+                    .from('Appointment')
+                    .select('treatmentId')
+                    .eq('id', appointmentId)
+                    .single();
+                if (appt?.treatmentId) {
+                    await supabaseTx
+                        .from('PatientTreatment')
+                        .update({ status: 'COMPLETADO' })
+                        .eq('serviceId', appt.treatmentId)
+                        .eq('patientId', patientId)
+                        .not('status', 'in', '("COMPLETADO","PAGADO")');
+                }
+            }
+            await markBudgetLineItemsPaid(supabaseTx, {
+                budgetId,
+                treatmentIds: req.body.treatmentIds,
+                treatmentName: concept,
+                appointmentId
+            });
 
             return {
                 payment, invoice, liquidations,
@@ -1105,43 +1157,6 @@ router.post('/payments/create-split', async (req, res) => {
         });
 
         res.status(200).json({ success: true, ...result });
-
-        // Mark PatientTreatment rows as COMPLETADO after a split payment
-        try {
-            const supabasePost = getSupabase();
-            const treatmentIdsFromBody = req.body.treatmentIds;
-            if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
-                await supabasePost
-                    .from('PatientTreatment')
-                    .update({ status: 'COMPLETADO' })
-                    .in('id', treatmentIdsFromBody)
-                    .eq('patientId', patientId);
-            } else if (appointmentId) {
-                const { data: appt } = await supabasePost
-                    .from('Appointment')
-                    .select('treatmentId')
-                    .eq('id', appointmentId)
-                    .single();
-                if (appt?.treatmentId) {
-                    await supabasePost
-                        .from('PatientTreatment')
-                        .update({ status: 'COMPLETADO' })
-                        .eq('serviceId', appt.treatmentId)
-                        .eq('patientId', patientId)
-                        .not('status', 'in', '("COMPLETADO","PAGADO")');
-                }
-            }
-        } catch (treatErr) {
-            console.error('⚠️ Error actualizando estado de tratamientos en split (no crítico):', treatErr.message);
-        }
-
-        // Mark matched BudgetLineItems as paid
-        await markBudgetLineItemsPaid(supabase, {
-            budgetId,
-            treatmentIds: req.body.treatmentIds,
-            treatmentName: concept,
-            appointmentId
-        });
 
         try {
             logAudit(supabase, { userId: req.user?.id, userRole: req.user?.role, action: 'CREATE', resourceType: 'payments_split', resourceId: result.payment?.id, newValues: { patientId, totalAmount: numericTotal, method, splits: splits.length }, ipAddress: req.ip, userAgent: req.headers['user-agent'] });

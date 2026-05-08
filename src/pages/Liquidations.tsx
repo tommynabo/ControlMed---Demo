@@ -63,6 +63,8 @@ export const Liquidations: React.FC = () => {
         const now = new Date();
         setDateFrom(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`);
         setDateTo(now.toISOString().split('T')[0]);
+        // Auto-load reconciliation gaps on mount so the badge count shows immediately
+        loadReconciliation();
     }, []);
 
     // Close doctor dropdown on outside click

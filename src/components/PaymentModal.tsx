@@ -63,6 +63,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const [pinBlocked, setPinBlocked] = useState(false);
     const [pinError, setPinError] = useState('');
 
+    // Idempotency key — generated once when modal opens, prevents duplicate payments on retry
+    const [idempotencyKey, setIdempotencyKey] = useState<string>('');
+
     const availableWallet = patient.wallet || 0;
 
     // ── Shared treatment split detection ─────────────────────────────────────
@@ -107,6 +110,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             setPinBlocked(false);
             setPinError('');
 
+            // Fresh idempotency key each time the modal opens — ensures retries
+            // within the same modal session are deduplicated, but a new opening gets a fresh key.
+            setIdempotencyKey(crypto.randomUUID());
             // Fetch doctors if no appointment is linked to allow attribution
             if (!appointment) {
                 api.getDoctors().then(setDoctors).catch(console.error);
@@ -246,6 +252,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     budgetId: (appointment as any)?.budgetId || undefined,
                     concept,
                     notes: notes || undefined,
+                    idempotencyKey,
                     splits: scaledSplits
                 });
             } else {
@@ -261,6 +268,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     notes: notes || undefined,
                     isPartial: isPartialPayment,
                     originalAmount: isPartialPayment ? originalAmount : undefined,
+                    idempotencyKey,
                 };
                 response = await api.payments.create(paymentData);
             }
@@ -284,10 +292,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             onPaymentComplete(payment, response);
 
         const successMsg = `✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`;
-        const warningMsg = response?.liquidationWarning
-            ? `\n\n⚠️ AVISO: ${response.liquidationWarning}`
-            : '';
-        alert(successMsg + warningMsg);
+        alert(successMsg);
 
             // Usar la URL efímera pública de Quipu si viene en la respuesta,
             // si no, pedirla al endpoint de descarga local

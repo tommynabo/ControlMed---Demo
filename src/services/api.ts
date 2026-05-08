@@ -225,6 +225,7 @@ export const api = {
             doctorId?: string;
             treatmentName?: string;
             notes?: string;
+            idempotencyKey?: string;
         }) => {
             const res = await fetch(`${API_URL}/finance/payments/create`, {
                 method: 'POST',
@@ -283,6 +284,7 @@ export const api = {
             budgetId?: string;
             concept?: string;
             notes?: string;
+            idempotencyKey?: string;
             splits: Array<{ doctorId: string; amount: number; treatmentName: string; labCost?: number }>;
         }) => {
             const res = await fetch(`${API_URL}/finance/payments/create-split`, {

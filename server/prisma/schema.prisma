@@ -251,7 +251,7 @@ model Appointment {
   budgetItemIds     String?
   amount            Float?
   serviceBreakdown  Json?    @map("service_breakdown")
-  liquidation Liquidation?
+  liquidations Liquidation[]
   invoice     Invoice?
   whatsappSent Boolean   @default(false) @map("whatsapp_sent")
   isRevision   Boolean   @default(false) @map("is_revision")
@@ -264,8 +264,10 @@ model Liquidation {
   id                  String      @id @default(uuid())
   doctorId            String
   doctor              Doctor      @relation(fields: [doctorId], references: [id])
-  appointmentId       String?     @unique
+  appointmentId       String?
   appointment         Appointment? @relation(fields: [appointmentId], references: [id])
+  paymentId           String?     @unique
+  payment             Payment?    @relation(fields: [paymentId], references: [id])
   grossAmount         Float
   baseAmount          Float?
   labCost             Float
@@ -280,6 +282,8 @@ model Liquidation {
   doctorInvoiceUrl    String?
   paidDate            DateTime?
   createdAt           DateTime    @default(now())
+
+  @@unique([appointmentId, doctorId])
 }
 
 model Payment {
@@ -301,6 +305,8 @@ model Payment {
   notes              String?
   referralCommission Float?   @default(0)
   referralEntityName String?
+  idempotencyKey     String?  @unique
+  liquidation        Liquidation?
 
   @@index([patientId])
   @@index([appointmentId])
