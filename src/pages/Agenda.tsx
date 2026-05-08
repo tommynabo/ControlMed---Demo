@@ -569,7 +569,7 @@ const Agenda: React.FC = () => {
         }
 
         // Fucsia/Morado: No vino
-        if (lower === 'noshow' || lower === 'no vino') {
+        if (lower === 'noshow' || lower === 'no-show' || lower === 'no vino') {
             return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
         }
 
@@ -774,7 +774,7 @@ const Agenda: React.FC = () => {
         return appointments.some(a => {
             if (a.id === excludeApptId) return false;
             if (!a.time || !a.date) return false;
-            if (a.status === 'Cancelled' || a.status === 'Anulada') return false;
+            if (a.status === 'Cancelled' || a.status === 'Canceled' || a.status === 'Anulada' || a.status === 'No-show' || a.status === 'NoShow' || a.status === 'noshow') return false;
             if (a.doctorId !== doctorId) return false;
             
             const [h1, m1] = (a.time || '00:00').split(':').map(Number);
@@ -1077,7 +1077,7 @@ const Agenda: React.FC = () => {
     const isVisibleFilter = (a: Appointment) => {
         if (!a.date) return false;
         const s = (a.status || '').toLowerCase();
-        return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada' && s !== 'noshow' && s !== 'no vino';
+        return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada' && s !== 'noshow' && s !== 'no-show' && s !== 'no vino';
     };
     const knownDoctorIds = new Set(doctors.map(d => d.id));
     // Citas anuladas o no presentadas del día actual (para el panel separado)
@@ -1085,7 +1085,7 @@ const Agenda: React.FC = () => {
     const cancelledApptsToday = viewMode === 'daily' ? appointments.filter(a => {
         if (!a.date || !a.time) return false;
         const s = (a.status || '').toLowerCase();
-        const isCancelledOrNoShow = s === 'cancelled' || s === 'canceled' || s === 'anulada' || s === 'noshow' || s === 'no vino';
+        const isCancelledOrNoShow = s === 'cancelled' || s === 'canceled' || s === 'anulada' || s === 'noshow' || s === 'no-show' || s === 'no vino';
         const matchesDoctor = selectedDoctorId === 'all' || a.doctorId === selectedDoctorId;
         return isCancelledOrNoShow && apptDateStrFilter(a) === todayDateStr && matchesDoctor;
     }) : [];
@@ -1895,7 +1895,7 @@ const Agenda: React.FC = () => {
                                             const isVisible = (a: Appointment) => {
                                                 if (!a.date || !a.time) return false; // Cannot render without date+time
                                                 const s = (a.status || '').toLowerCase();
-                                                return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada' && s !== 'noshow' && s !== 'no vino';
+                                                return s !== 'cancelled' && s !== 'canceled' && s !== 'anulada' && s !== 'noshow' && s !== 'no-show' && s !== 'no vino';
                                             };
 
                                             // Build columns
@@ -2670,15 +2670,15 @@ const Agenda: React.FC = () => {
                                         {[
                                             { status: 'Scheduled', label: 'Pendiente', color: 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200' },
                                             { status: 'Completed', label: '✓ Realizada', color: 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100' },
-                                            { status: 'NoShow', label: '⚠ No Vino', color: 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100' },
-                                            { status: 'Canceled', label: '✕ Anular', color: 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100' },
+                                            { status: 'No-show', label: '⚠ No Vino', color: 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100' },
+                                            { status: 'Cancelled', label: '✕ Anular', color: 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100' },
                                         ].map(({ status, label, color }) => {
                                             const currentStatus = (selectedAppt.status || '').toLowerCase();
                                             const isActive = currentStatus === status.toLowerCase() ||
                                                 (status === 'Scheduled' && (currentStatus === 'scheduled' || currentStatus === 'pendiente')) ||
                                                 (status === 'Completed' && (currentStatus === 'completed' || currentStatus === 'realizada')) ||
-                                                (status === 'NoShow' && (currentStatus === 'noshow' || currentStatus === 'no vino')) ||
-                                                (status === 'Canceled' && (currentStatus === 'canceled' || currentStatus === 'cancelled' || currentStatus === 'anulada'));
+                                                (status === 'No-show' && (currentStatus === 'noshow' || currentStatus === 'no-show' || currentStatus === 'no vino')) ||
+                                                (status === 'Cancelled' && (currentStatus === 'canceled' || currentStatus === 'cancelled' || currentStatus === 'anulada'));
                                             return (
                                                 <button
                                                     key={status}

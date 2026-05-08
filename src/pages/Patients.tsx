@@ -781,23 +781,35 @@ const Patients: React.FC = () => {
         setEditingVisitId(visit.id);
         const d = new Date(visit.date);
         const dateStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+        // Normalize DB canonical status to dropdown option values
+        const statusToDropdown = (s: string) => {
+            if (s === 'No-show' || s === 'NoShow') return 'noshow';
+            if (s === 'Canceled') return 'Cancelled';
+            return s;
+        };
         setEditVisitForm({
             date: dateStr,
             time: visit.time,
             doctorId: visit.doctorId || '',
-            status: visit.status || 'Scheduled',
+            status: statusToDropdown(visit.status || 'Scheduled'),
             observations: visit.observations || '',
         });
     };
 
     const handleSaveVisitEdit = async (visitId: string) => {
         setIsSavingVisit(true);
+        // Normalize dropdown value to canonical DB status
+        const canonicalStatus = (s: string) => {
+            if (s === 'noshow') return 'No-show';
+            if (s === 'Canceled') return 'Cancelled';
+            return s;
+        };
         try {
             const updated = await api.appointments.update(visitId, {
                 date: `${editVisitForm.date}T00:00:00.000Z`,
                 time: editVisitForm.time,
                 doctorId: editVisitForm.doctorId || undefined,
-                status: editVisitForm.status,
+                status: canonicalStatus(editVisitForm.status),
                 observations: editVisitForm.observations || undefined,
             });
             const enriched = { ...updated, updated_by_name: updated.updated_by_name || (currentUser as any)?.name || null };
@@ -813,9 +825,11 @@ const Patients: React.FC = () => {
     };
 
     const handleUpdateVisitStatus = async (visitId: string, newStatus: string) => {
+        // Normalize to canonical DB status value
+        const canonical = newStatus === 'noshow' ? 'No-show' : newStatus === 'Canceled' ? 'Cancelled' : newStatus;
         try {
-            const updated = await api.appointments.update(visitId, { status: newStatus });
-            setPatientAppointments(prev => prev.map(a => a.id === visitId ? { ...a, status: newStatus } : a));
+            const updated = await api.appointments.update(visitId, { status: canonical });
+            setPatientAppointments(prev => prev.map(a => a.id === visitId ? { ...a, status: canonical } : a));
             await refreshAppointments();
             toast.success('Estado actualizado');
         } catch (e: any) {
@@ -1577,13 +1591,13 @@ const Patients: React.FC = () => {
                                     </div>
                                     <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center">
                                         <p className="text-3xl font-black text-emerald-600">
-                                            {patientAppointments.filter(a => a.status === 'COMPLETADO' || a.status === 'Completed').length}
+                                            {patientAppointments.filter(a => ['Completed', 'COMPLETADO', 'COMPLETED'].includes(a.status)).length}
                                         </p>
                                         <p className="text-[10px] font-bold uppercase text-slate-400 mt-1">Realizadas</p>
                                     </div>
                                     <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center">
                                         <p className="text-3xl font-black text-blue-600">
-                                            {patientAppointments.filter(a => a.status === 'Scheduled' || a.status === 'PENDIENTE').length}
+                                            {patientAppointments.filter(a => ['Scheduled', 'PENDIENTE', 'EN_PROCESO'].includes(a.status)).length}
                                         </p>
                                         <p className="text-[10px] font-bold uppercase text-slate-400 mt-1">Programadas</p>
                                     </div>
@@ -1904,14 +1918,14 @@ const Patients: React.FC = () => {
                                         )}
 
                                         {/* Past / Completed visits */}
-                                        {patientAppointments.filter(a => a.status === 'COMPLETADO' || a.status === 'Completed').length > 0 && (
+                                        {patientAppointments.filter(a => ['Completed', 'COMPLETADO', 'COMPLETED'].includes(a.status)).length > 0 && (
                                             <div>
                                                 <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider mb-3 flex items-center gap-2">
                                                     <CheckCircle2 size={12} /> Historial de Visitas
                                                 </h4>
                                                 <div className="space-y-3">
                                                     {patientAppointments
-                                                        .filter(a => a.status === 'COMPLETADO' || a.status === 'Completed')
+                                                        .filter(a => ['Completed', 'COMPLETADO', 'COMPLETED'].includes(a.status))
                                                         .sort((a, b) => new Date(normalizeDateStr(b.date)).getTime() - new Date(normalizeDateStr(a.date)).getTime())
                                                         .map(visit => {
                                                             const visitDoctor = doctors.find(d => d.id === visit.doctorId);
@@ -1980,6 +1994,91 @@ const Patients: React.FC = () => {
                                                                                 <button onClick={() => handleUpdateVisitStatus(visit.id, 'Completed')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors uppercase">✓ Vino</button>
                                                                                 <button onClick={() => handleUpdateVisitStatus(visit.id, 'noshow')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200 transition-colors uppercase">✗ No Vino</button>
                                                                                 <button onClick={() => handleUpdateVisitStatus(visit.id, 'Cancelled')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-red-100 text-red-700 hover:bg-red-200 transition-colors uppercase">Anular</button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Cancelled / No-show visits */}
+                                        {patientAppointments.filter(a => ['No-show', 'Cancelled', 'Canceled', 'NoShow', 'noshow'].includes(a.status)).length > 0 && (
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase text-rose-400 tracking-wider mb-3 flex items-center gap-2">
+                                                    <X size={12} /> Anuladas / No Presentadas
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {patientAppointments
+                                                        .filter(a => ['No-show', 'Cancelled', 'Canceled', 'NoShow', 'noshow'].includes(a.status))
+                                                        .sort((a, b) => new Date(normalizeDateStr(b.date)).getTime() - new Date(normalizeDateStr(a.date)).getTime())
+                                                        .map(visit => {
+                                                            const visitDoctor = doctors.find(d => d.id === visit.doctorId);
+                                                            const isEditing = editingVisitId === visit.id;
+                                                            const isNoShow = ['No-show', 'NoShow', 'noshow'].includes(visit.status);
+                                                            return (
+                                                                <div key={visit.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden opacity-80">
+                                                                    <div className="p-4 flex items-center justify-between">
+                                                                        <div className="flex items-center gap-4">
+                                                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm flex-shrink-0 ${isNoShow ? 'bg-fuchsia-100 text-fuchsia-500' : 'bg-red-100 text-red-500'}`}>
+                                                                                {new Date(normalizeDateStr(visit.date)).getUTCDate()}
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="text-sm font-black text-slate-700">{(visit as any).treatmentName || visit.treatment || visit.observations || 'Visita'}</p>
+                                                                                <p className="text-xs text-slate-400 font-medium">{new Date(normalizeDateStr(visit.date)).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} · {visit.time}</p>
+                                                                                {visitDoctor && <p className={`text-[10px] font-bold uppercase mt-0.5 ${isNoShow ? 'text-fuchsia-400' : 'text-rose-400'}`}>Dr. {visitDoctor.name}</p>}
+                                                                                {(visit as any).updated_by_name && <p className="text-[10px] text-slate-400 mt-0.5">✎ {(visit as any).updated_by_name}</p>}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                                                                            {visit.amount && <span className="text-sm font-black text-slate-400">{visit.amount}€</span>}
+                                                                            <span className={`px-2 py-1 text-[10px] font-black uppercase rounded-lg ${isNoShow ? 'bg-fuchsia-100 text-fuchsia-700' : 'bg-red-100 text-red-700'}`}>{isNoShow ? 'No vino' : 'Anulada'}</span>
+                                                                            <button onClick={() => handleEditVisit(visit)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Editar"><Edit3 size={14} /></button>
+                                                                        </div>
+                                                                    </div>
+                                                                    {isEditing && (
+                                                                        <div className="border-t border-slate-100 bg-slate-50 p-4 space-y-3 animate-in slide-in-from-top-2">
+                                                                            <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Editar Cita</p>
+                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Fecha</label>
+                                                                                    <input type="date" value={editVisitForm.date} onChange={e => setEditVisitForm(p => ({ ...p, date: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Hora</label>
+                                                                                    <input type="time" value={editVisitForm.time} onChange={e => setEditVisitForm(p => ({ ...p, time: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Doctor</label>
+                                                                                    <select value={editVisitForm.doctorId} onChange={e => setEditVisitForm(p => ({ ...p, doctorId: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="">Sin asignar</option>
+                                                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Estado</label>
+                                                                                    <select value={editVisitForm.status} onChange={e => setEditVisitForm(p => ({ ...p, status: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100">
+                                                                                        <option value="Scheduled">Programada</option>
+                                                                                        <option value="Completed">Completada</option>
+                                                                                        <option value="noshow">No Vino</option>
+                                                                                        <option value="Cancelled">Cancelada</option>
+                                                                                    </select>
+                                                                                </div>
+                                                                                <div className="col-span-2">
+                                                                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Observaciones</label>
+                                                                                    <input type="text" value={editVisitForm.observations} onChange={e => setEditVisitForm(p => ({ ...p, observations: e.target.value }))} className="w-full bg-white border border-slate-200 rounded-xl p-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="Notas..." />
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex gap-2 mt-2">
+                                                                                <button onClick={() => setEditingVisitId(null)} className="flex-1 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl border border-slate-200">Cancelar</button>
+                                                                                <button onClick={() => handleSaveVisitEdit(visit.id)} disabled={isSavingVisit} className="flex-1 py-2 text-sm font-black text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">{isSavingVisit ? 'Guardando...' : 'Guardar'}</button>
+                                                                            </div>
+                                                                            <div className="flex gap-2 pt-2 border-t border-slate-200">
+                                                                                <p className="text-[10px] font-black uppercase text-slate-400 self-center mr-1">Reasignar:</p>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Scheduled')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors uppercase">↺ Reprogramar</button>
+                                                                                <button onClick={() => handleUpdateVisitStatus(visit.id, 'Completed')} className="flex-1 py-1.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors uppercase">✓ Realizada</button>
                                                                             </div>
                                                                         </div>
                                                                     )}
