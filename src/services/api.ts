@@ -1503,6 +1503,15 @@ export const api = {
                 throw new Error(err.error || 'Failed to create sign token');
             }
             return res.json();
+        },
+        openPdf: async (patientId: string, consentId: string): Promise<void> => {
+            const res = await fetch(`${API_URL}/patients/${patientId}/consents/${consentId}/pdf`, { headers });
+            if (!res.ok) throw new Error('No se pudo cargar el PDF');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            // Revoke after a short delay to free memory
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
         }
     },
 

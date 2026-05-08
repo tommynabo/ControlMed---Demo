@@ -3545,14 +3545,18 @@ const Patients: React.FC = () => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     {viewingConsent.signedPdfUrl && (
-                                        <a
-                                            href={viewingConsent.signedPdfUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    await api.consents.openPdf(viewingConsent.patientId || selectedPatient!.id, viewingConsent.id);
+                                                } catch {
+                                                    alert('No se pudo cargar el PDF. Inténtalo de nuevo.');
+                                                }
+                                            }}
                                             className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
                                         >
                                             <ExternalLink size={13} /> PDF original
-                                        </a>
+                                        </button>
                                     )}
                                     <button onClick={() => setViewingConsent(null)} className="text-white/80 hover:text-white p-2">
                                         <X size={22} />

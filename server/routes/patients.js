@@ -411,6 +411,38 @@ router.post('/:patientId/consents/:consentId/create-sign-token', async (req, res
     }
 });
 
+// ─── PDF PROXY ── Authenticated endpoint that downloads from Supabase and serves with correct headers
+router.get('/:patientId/consents/:consentId/pdf', async (req, res) => {
+    try {
+        const { consentId } = req.params;
+        const consent = await prisma.consent.findFirst({
+            where: { id: consentId, isSigned: true }
+        });
+        if (!consent) return res.status(404).json({ error: 'Consentimiento no encontrado' });
+        if (!consent.signedPdfUrl) return res.status(404).json({ error: 'PDF no disponible' });
+
+        const supabase = getSupabase();
+        const { data, error } = await supabase.storage
+            .from('consent-files')
+            .download(`pdfs/${consentId}.pdf`);
+
+        if (error || !data) {
+            console.error('[pdf-proxy] Supabase download error:', error?.message);
+            return res.status(404).json({ error: 'Archivo no encontrado en almacenamiento' });
+        }
+
+        const buffer = Buffer.from(await data.arrayBuffer());
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="consentimiento-${consentId}.pdf"`);
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        res.send(buffer);
+    } catch (e) {
+        console.error('[pdf-proxy] Error:', e);
+        res.status(500).json({ error: 'Error al obtener el PDF' });
+    }
+});
+
 // ─── DOCUMENTS ────────────────────────────────────────────────────────────────
 router.get('/:patientId/documents', async (req, res) => {
     try {

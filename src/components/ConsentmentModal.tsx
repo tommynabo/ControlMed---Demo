@@ -331,10 +331,18 @@ export const ConsentmentModal: React.FC<ConsentmentModalProps> = ({
                                         </div>
                                         <p className="text-xs text-slate-600 mb-4">{t.content.substring(0, 100)}</p>
                                         {signed && signedRecord?.signedPdfUrl && (
-                                            <a href={signedRecord.signedPdfUrl} target="_blank" rel="noopener noreferrer"
-                                               className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 mb-3 font-semibold">
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        await api.consents.openPdf(overridePatient?.id || patientId, signedRecord.id);
+                                                    } catch {
+                                                        alert('No se pudo cargar el PDF.');
+                                                    }
+                                                }}
+                                                className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 mb-3 font-semibold"
+                                            >
                                                 <ExternalLink size={12} /> Ver PDF firmado
-                                            </a>
+                                            </button>
                                         )}
                                         <div className="flex gap-2">
                                             <button onClick={() => setSelectedTemplate(t)} className="flex-1 bg-blue-50 text-blue-600 text-xs py-2 rounded"><FileText size={14} /> Ver</button>
