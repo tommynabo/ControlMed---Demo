@@ -70,7 +70,7 @@ router.post('/', async (req, res) => {
     try {
         const { email, full_name, role, is_active, password, doctorId, isDoctor, secondary_role } = req.body;
 
-        const ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
+        const ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'AUXILIAR', 'AUXILIAR': 'AUXILIAR' };
         const prismaRole = ROLE_MAP[role] || 'DOCTOR';
         const isDoctorFlag = isDoctor === true || prismaRole === 'DOCTOR';
 
@@ -137,7 +137,7 @@ router.put('/:id', async (req, res) => {
         const { id } = req.params;
         const { email, full_name, role, is_active, doctorId, isDoctor, secondary_role } = req.body;
 
-        const SU_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'RECEPTION', 'AUXILIAR': 'RECEPTION' };
+        const SU_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'AUXILIAR', 'AUXILIAR': 'AUXILIAR' };
         const prismaRole = role ? (SU_ROLE_MAP[role] || role) : undefined;
         const isDoctorFlag = isDoctor !== undefined
             ? isDoctor === true

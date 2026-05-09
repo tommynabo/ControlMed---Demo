@@ -7,7 +7,6 @@ import { api } from '../services/api';
 import ClinicInfo from '../components/ClinicInfo';
 import ScheduleAvailability from '../components/ScheduleAvailability';
 import Vacations from '../components/Vacations';
-import Users from '../components/Users';
 import GmailSettings from '../components/GmailSettings';
 import TemplateEditorModal from '../components/TemplateEditorModal';
 
@@ -35,7 +34,7 @@ const Settings: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const tabFromUrl = searchParams.get('tab') as any;
 
-    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'gmail' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'users' | 'audit' | 'pagos'>(tabFromUrl || 'templates');
+    const [settingsTab, setSettingsTab] = useState<'templates' | 'stock' | 'whatsapp' | 'gmail' | 'services' | 'clinic' | 'schedule' | 'vacations' | 'audit' | 'pagos'>(tabFromUrl || 'templates');
 
     // PIN management state
     const [pinInput, setPinInput] = useState('');
@@ -387,9 +386,6 @@ const Settings: React.FC = () => {
                     </button>
                     <button onClick={() => setSettingsTab('vacations')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'vacations' ? 'bg-orange-50 text-orange-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <Calendar size={14} /> Vacaciones
-                    </button>
-                    <button onClick={() => setSettingsTab('users')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'users' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-400 hover:bg-slate-50'}`}>
-                        <UsersIcon size={14} /> Usuarios
                     </button>
                     <button onClick={() => setSettingsTab('audit')} className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${settingsTab === 'audit' ? 'bg-rose-50 text-rose-600' : 'text-slate-400 hover:bg-slate-50'}`}>
                         <ShieldCheck size={14} /> Auditoría
@@ -1094,9 +1090,6 @@ const Settings: React.FC = () => {
 
                 {/* VACATIONS SECTION */}
                 {settingsTab === 'vacations' && !isReception && <Vacations />}
-
-                {/* USERS SECTION */}
-                {settingsTab === 'users' && !isReception && <Users />}
 
                 {/* ─── PAGOS / PIN SECTION ─────────────────────────────────────────── */}
                 {settingsTab === 'pagos' && (

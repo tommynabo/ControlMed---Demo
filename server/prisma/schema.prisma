@@ -12,6 +12,7 @@ datasource db {
 enum Role {
   ADMIN
   RECEPTION
+  AUXILIAR
   DOCTOR
 }
 

@@ -24,7 +24,7 @@ export const ROLE_ALLOWED_PAGES: Record<UserRole, string[]> = {
         'stock', 'ai', 'liquidations', 'payroll', 'settings', 'users', 'attendance', 'analytics',
     ],
     RECEPTION: [
-        'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'billing', 'stock', 'payroll', 'attendance', 'settings', 'analytics',
+        'dashboard', 'patients', 'agenda', 'caja', 'gastos', 'stock', 'payroll', 'attendance', 'settings',
     ],
     AUXILIAR: [
         'dashboard', 'patients', 'agenda', 'attendance',
