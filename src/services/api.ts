@@ -1429,6 +1429,14 @@ export const api = {
             }
             return res.json();
         },
+        split: async (id: string) => {
+            const res = await fetch(`${API_URL}/finance/liquidations/${id}/split`, { method: 'POST', headers });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'No se pudo dividir la liquidación');
+            }
+            return res.json();
+        },
         getReconciliation: async (params: { month?: number; year?: number; doctorId?: string } = {}) => {
             const q = new URLSearchParams();
             if (params.month)    q.set('month',    String(params.month));

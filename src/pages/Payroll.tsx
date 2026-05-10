@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw, Building2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw, Building2, ShieldCheck, AlertTriangle, Scissors } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Expense, Doctor, Specialization } from '../../types';
 
@@ -20,6 +20,22 @@ const Payroll: React.FC = () => {
     const [isLoadingReferral, setIsLoadingReferral] = useState(false);
     const [isReconciling, setIsReconciling] = useState(false);
     const [reconcileResult, setReconcileResult] = useState<{ created: number; skipped: number; errors: Array<{ id: string; error: string }> } | null>(null);
+    const [splittingRowId, setSplittingRowId] = useState<string | null>(null);
+
+    const handleSplitRow = async (rowId: string) => {
+        setSplittingRowId(rowId);
+        try {
+            await (api.liquidations as any).split(rowId);
+            // Reload full summary to reflect the new rows
+            const updated = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+            setLiquidations(updated);
+            setEditedRecords({});
+        } catch (err: any) {
+            alert(err.message || 'Error al dividir la liquidación');
+        } finally {
+            setSplittingRowId(null);
+        }
+    };
 
     // Fetch Liquidations when filters change
     useEffect(() => {
@@ -506,6 +522,19 @@ const Payroll: React.FC = () => {
                                                                     title="Guardar importes"
                                                                 >
                                                                     {savingRowId === r.id ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+                                                                </button>
+                                                            )}
+                                                            {/* Split button — only for unsplit rows with appointment */}
+                                                            {r.itemIndex === null && r.appointmentId && Object.keys(editedRecords[r.id] || {}).length === 0 && (
+                                                                <button
+                                                                    onClick={() => handleSplitRow(r.id)}
+                                                                    disabled={splittingRowId === r.id}
+                                                                    className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                                    title="Dividir en un concepto por tratamiento"
+                                                                >
+                                                                    {splittingRowId === r.id
+                                                                        ? <RefreshCw size={13} className="animate-spin" />
+                                                                        : <Scissors size={13} />}
                                                                 </button>
                                                             )}
                                                         </div>

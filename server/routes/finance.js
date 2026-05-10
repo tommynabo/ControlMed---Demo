@@ -156,6 +156,71 @@ router.put('/liquidations/:id', async (req, res) => {
     }
 });
 
+// POST /finance/liquidations/:id/split
+// Divide una liquidación única (itemIndex=null) en N filas — una por BudgetLineItem
+router.post('/liquidations/:id/split', async (req, res) => {
+    try {
+        const { id } = req.params;
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const existing = await prisma.liquidation.findUnique({ where: { id } });
+        if (!existing) return res.status(404).json({ error: 'Liquidación no encontrada' });
+        if (existing.itemIndex !== null)
+            return res.status(400).json({ error: 'Esta liquidación ya está dividida' });
+        if (!existing.appointmentId)
+            return res.status(400).json({ error: 'La liquidación no tiene cita vinculada; no se puede dividir automáticamente' });
+
+        const { data: appt } = await supabase
+            .from('Appointment').select('id, budgetId').eq('id', existing.appointmentId).single();
+        if (!appt?.budgetId)
+            return res.status(400).json({ error: 'La cita no tiene presupuesto vinculado; asigna un presupuesto primero' });
+
+        const { data: items } = await supabase
+            .from('BudgetLineItem').select('id, name, price, quantity, discount')
+            .eq('budgetId', appt.budgetId).gt('price', 0).order('id', { ascending: true });
+        if (!items || items.length < 2)
+            return res.status(400).json({ error: `El presupuesto tiene ${items?.length ?? 0} línea(s) — necesitas al menos 2 para dividir` });
+
+        const rate = existing.commissionRate || 30;
+        const newRows = await prisma.$transaction(async (tx) => {
+            const created = [];
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                const itemGross = Number(item.price) * (Number(item.quantity) || 1) * (1 - (Number(item.discount) || 0) / 100);
+                created.push(await tx.liquidation.create({
+                    data: {
+                        id: crypto.randomUUID(),
+                        doctorId:           existing.doctorId,
+                        appointmentId:      existing.appointmentId,
+                        paymentId:          existing.paymentId,
+                        itemIndex:          i,
+                        grossAmount:        itemGross,
+                        baseAmount:         itemGross,
+                        labCost:            0,
+                        commissionRate:     rate,
+                        finalAmount:        itemGross * (rate / 100),
+                        referralCommission: existing.referralCommission || 0,
+                        referralEntityName: existing.referralEntityName || null,
+                        treatmentName:      item.name || `Tratamiento ${i + 1}`,
+                        patientName:        existing.patientName,
+                        paymentMethod:      existing.paymentMethod,
+                        status:             existing.status || 'PENDING',
+                        createdAt:          existing.createdAt,
+                    }
+                }));
+            }
+            await tx.liquidation.delete({ where: { id } });
+            return created;
+        });
+
+        res.json({ split: newRows.length, rows: newRows });
+    } catch (e) {
+        console.error('Error splitting liquidation:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.get('/liquidations/summary', async (req, res) => {
     try {
         const { doctorId, month, year, dateFrom, dateTo, groupByDay } = req.query;

@@ -262,7 +262,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     method: mainMethod,
                     type: isDirectPayment ? ('DIRECT_CHARGE' as const) : ('ADVANCE_PAYMENT' as const),
                     appointmentId: appointment?.id,
-                    budgetId: selectedBudgetId || (appointment as any)?.budgetId || undefined,
+                    budgetId: selectedBudgetId || (appointment as any)?.budgetId || (appointment as any)?.budget?.id || undefined,
                     doctorId: appointment?.doctorId || selectedDoctorId,
                     treatmentName: concept,
                     notes: notes || undefined,
