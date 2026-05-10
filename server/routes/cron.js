@@ -387,4 +387,24 @@ router.post('/process-whatsapp-queue', async (req, res) => {
     }
 });
 
+// ─── RECONCILIATION: Liquidaciones faltantes ─────────────────────────────────
+// POST /api/cron/reconcile-liquidations
+//   Called automatically every night by node-cron (server/index.js).
+//   Also callable manually with CRON_SECRET from admin tools.
+//
+// Optional body: { lookbackDays: 180 }
+router.post('/reconcile-liquidations', async (req, res) => {
+    if (!validateCronSecret(req, res)) return;
+
+    try {
+        const { runReconciliation } = require('../jobs/reconcileLiquidations');
+        const lookbackDays = req.body?.lookbackDays ? parseInt(req.body.lookbackDays, 10) : 180;
+        const result = await runReconciliation({ lookbackDays });
+        return res.json({ success: true, ...result });
+    } catch (e) {
+        console.error('[RECONCILIATION] Error:', e.message);
+        return res.status(500).json({ error: e.message });
+    }
+});
+
 module.exports = router;
