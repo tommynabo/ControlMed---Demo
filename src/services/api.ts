@@ -1271,7 +1271,10 @@ export const api = {
                     headers,
                     body: JSON.stringify(userData)
                 });
-                if (!res.ok) throw new Error('Failed to update user');
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.error || 'Failed to update user');
+                }
                 return await res.json();
             } catch (error) {
                 console.error('Error updating system user:', error);

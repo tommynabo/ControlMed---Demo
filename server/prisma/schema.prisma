@@ -275,6 +275,8 @@ model Liquidation {
   appointment         Appointment? @relation(fields: [appointmentId], references: [id])
   paymentId           String?     @unique
   payment             Payment?    @relation(fields: [paymentId], references: [id])
+  // itemIndex: NULL = single-concept row (legacy), 0/1/2... = per-item row for multi-concept appointments
+  itemIndex           Int?
   grossAmount         Float
   baseAmount          Float?
   labCost             Float
@@ -290,7 +292,10 @@ model Liquidation {
   paidDate            DateTime?
   createdAt           DateTime    @default(now())
 
-  @@unique([appointmentId, doctorId])
+  // Uniqueness is enforced via two partial SQL indexes (see add_liquidation_item_index.sql):
+  //   - (appointmentId, doctorId) WHERE itemIndex IS NULL   → single-concept rows
+  //   - (appointmentId, doctorId, itemIndex) WHERE itemIndex IS NOT NULL → per-item rows
+  @@index([appointmentId, doctorId])
 }
 
 model Payment {

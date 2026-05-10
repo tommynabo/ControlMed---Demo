@@ -135,7 +135,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, full_name, role, is_active, doctorId, isDoctor, secondary_role } = req.body;
+        const { email, full_name, role, is_active, doctorId, isDoctor, secondary_role, password } = req.body;
 
         const SU_ROLE_MAP = { 'ADMIN': 'ADMIN', 'DOCTOR': 'DOCTOR', 'RECEPTIONIST': 'RECEPTION', 'RECEPTION': 'RECEPTION', 'ASSISTANT': 'AUXILIAR', 'AUXILIAR': 'AUXILIAR' };
         const prismaRole = role ? (SU_ROLE_MAP[role] || role) : undefined;
@@ -150,7 +150,8 @@ router.put('/:id', async (req, res) => {
             ...(is_active !== undefined && { isActive: is_active }),
             ...(isDoctorFlag !== undefined && { isDoctor: isDoctorFlag }),
             ...(doctorId !== undefined && { doctorId: doctorId || null }),
-            ...(secondary_role !== undefined && { secondaryRole: secondary_role ? (SU_ROLE_MAP[secondary_role] || secondary_role) : null })
+            ...(secondary_role !== undefined && { secondaryRole: secondary_role ? (SU_ROLE_MAP[secondary_role] || secondary_role) : null }),
+            ...(password ? { password } : {})
         };
 
         const user = await prisma.$transaction(async (tx) => {
@@ -164,15 +165,19 @@ router.put('/:id', async (req, res) => {
                         data: { id, name: updated.name, specialization: 'Odontólogo', commissionPercentage: 0 }
                     });
                     await tx.user.update({ where: { id }, data: { doctorId: id } });
-                    await tx.doctorSchedule.create({
-                        data: {
-                            doctorId: id, doctorName: updated.name,
-                            monday: true, tuesday: true, wednesday: true,
-                            thursday: true, friday: true, saturday: false, sunday: false,
-                            morningStart: '09:00:00', morningEnd: '13:00:00',
-                            afternoonStart: '16:00:00', afternoonEnd: '20:00:00'
-                        }
-                    });
+                    // Guard against duplicate schedule (unique constraint on doctorId)
+                    const existingSchedule = await tx.doctorSchedule.findFirst({ where: { doctorId: id } });
+                    if (!existingSchedule) {
+                        await tx.doctorSchedule.create({
+                            data: {
+                                doctorId: id, doctorName: updated.name,
+                                monday: true, tuesday: true, wednesday: true,
+                                thursday: true, friday: true, saturday: false, sunday: false,
+                                morningStart: '09:00:00', morningEnd: '13:00:00',
+                                afternoonStart: '16:00:00', afternoonEnd: '20:00:00'
+                            }
+                        });
+                    }
                 } else if (full_name) {
                     await tx.doctor.update({ where: { id: existingDoctor.id }, data: { name: full_name } });
                 }

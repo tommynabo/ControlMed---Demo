@@ -762,6 +762,11 @@ router.post('/payments/create', async (req, res) => {
             // For DIRECT_CHARGE final payments a Liquidation MUST exist.
             // If the doctor cannot be resolved, throw — this rolls back the entire tx so no
             // orphaned Payment or Invoice is ever left behind without a Liquidation.
+            //
+            // Multi-concept support: when the appointment's budget has ≥2 line items with
+            // price > 0, one Liquidation row is created per item (itemIndex = 0, 1, 2, ...).
+            // This allows setting different commission rates per concept in the liquidation view.
+            // Single-concept appointments continue to create one row with itemIndex = null.
             let liquidation = null;
             if (type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
                 if (!doctor) {
@@ -777,37 +782,98 @@ router.post('/payments/create', async (req, res) => {
                 const finalAmount = (doctorBaseAmount - labCost) * (rawRate / 100);
 
                 if (appointmentId) {
-                    const existingLiquidation = await tx.liquidation.findFirst({
-                        where: { appointmentId, doctorId: doctor.id }
-                    });
+                    // ── Check if this appointment's budget has multiple concepts ──────────
+                    let budgetItems = [];
+                    if (budgetId) {
+                        budgetItems = await tx.budgetLineItem.findMany({
+                            where: { budgetId, price: { gt: 0 } },
+                            orderBy: { id: 'asc' }
+                        });
+                    }
 
-                    if (existingLiquidation) {
-                        liquidation = await tx.liquidation.update({
-                            where: { id: existingLiquidation.id },
-                            data: {
-                                paymentId: payment.id,
-                                doctorId: doctor.id,
-                                grossAmount: grossForLiquidation,
-                                baseAmount: doctorBaseAmount,
-                                labCost,
-                                commissionRate: rawRate,
-                                finalAmount,
-                                referralCommission: referralCommission || 0,
-                                referralEntityName: referralEntityName || null,
-                                treatmentName: solvedTreatmentName,
-                                patientName: patient?.name || 'Paciente',
-                                paymentMethod: method,
-                                status: 'PENDING'
+                    if (budgetItems.length >= 2) {
+                        // ── Multi-concept path: one Liquidation row per BudgetLineItem ───
+                        for (let i = 0; i < budgetItems.length; i++) {
+                            const item = budgetItems[i];
+                            const itemGross = item.price * (item.quantity || 1);
+                            const itemFinal = itemGross * (rawRate / 100);
+                            const existingItem = await tx.liquidation.findFirst({
+                                where: { appointmentId, doctorId: doctor.id, itemIndex: i }
+                            });
+                            if (existingItem) {
+                                await tx.liquidation.update({
+                                    where: { id: existingItem.id },
+                                    data: {
+                                        grossAmount: itemGross,
+                                        baseAmount: itemGross,
+                                        commissionRate: rawRate,
+                                        finalAmount: itemFinal,
+                                        treatmentName: item.name,
+                                        patientName: patient?.name || 'Paciente',
+                                        paymentMethod: method,
+                                        status: 'PENDING'
+                                    }
+                                });
+                            } else {
+                                await tx.liquidation.create({
+                                    data: {
+                                        id: crypto.randomUUID(),
+                                        doctorId: doctor.id,
+                                        appointmentId,
+                                        itemIndex: i,
+                                        paymentId: null,
+                                        grossAmount: itemGross,
+                                        baseAmount: itemGross,
+                                        labCost: 0,
+                                        commissionRate: rawRate,
+                                        finalAmount: itemFinal,
+                                        referralCommission: 0,
+                                        referralEntityName: null,
+                                        treatmentName: item.name,
+                                        patientName: patient?.name || 'Paciente',
+                                        paymentMethod: method,
+                                        status: 'PENDING',
+                                        createdAt: new Date().toISOString()
+                                    }
+                                });
                             }
-                        });
+                        }
+                        liquidation = true; // multi-item handled; no single row to return
+
                     } else {
-                        liquidation = await tx.liquidation.create({
-                            data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        // ── Single-concept path: one Liquidation row (existing behavior) ─
+                        const existingLiquidation = await tx.liquidation.findFirst({
+                            where: { appointmentId, doctorId: doctor.id, itemIndex: null }
                         });
+
+                        if (existingLiquidation) {
+                            liquidation = await tx.liquidation.update({
+                                where: { id: existingLiquidation.id },
+                                data: {
+                                    paymentId: payment.id,
+                                    doctorId: doctor.id,
+                                    grossAmount: grossForLiquidation,
+                                    baseAmount: doctorBaseAmount,
+                                    labCost,
+                                    commissionRate: rawRate,
+                                    finalAmount,
+                                    referralCommission: referralCommission || 0,
+                                    referralEntityName: referralEntityName || null,
+                                    treatmentName: solvedTreatmentName,
+                                    patientName: patient?.name || 'Paciente',
+                                    paymentMethod: method,
+                                    status: 'PENDING'
+                                }
+                            });
+                        } else {
+                            liquidation = await tx.liquidation.create({
+                                data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId, itemIndex: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                            });
+                        }
                     }
                 } else {
                     liquidation = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId: null, itemIndex: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
                     });
                 }
             }
