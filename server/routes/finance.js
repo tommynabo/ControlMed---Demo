@@ -272,14 +272,16 @@ router.get('/liquidations/summary', async (req, res) => {
                     return refDate >= startDate && refDate <= endDate;
                 });
 
-                // Deduplicate by appointmentId: if two Liquidation rows share the same
-                // appointment, keep only the first (oldest by createdAt). This is a
-                // safety net for the rare case where a duplicate slips through.
-                const seenApptIds = new Set();
+                // Deduplicate by composite key (appointmentId + itemIndex):
+                // Multi-concept appointments generate one row per BudgetLineItem (itemIndex 0,1,2...).
+                // We must NOT collapse those — only remove truly identical duplicate rows.
+                const seenKeys = new Set();
                 liquidations = liquidations.filter(l => {
-                    if (!l.appointmentId) return true; // rows without appointment are always kept
-                    if (seenApptIds.has(l.appointmentId)) return false;
-                    seenApptIds.add(l.appointmentId);
+                    if (!l.appointmentId) return true;
+                    // Allow multiple rows per appointment if they have different itemIndex values
+                    const key = l.itemIndex != null ? `${l.appointmentId}::${l.itemIndex}` : l.appointmentId;
+                    if (seenKeys.has(key)) return false;
+                    seenKeys.add(key);
                     return true;
                 });
             } else {

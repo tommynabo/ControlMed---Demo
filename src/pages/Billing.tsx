@@ -18,7 +18,8 @@ const Billing: React.FC = () => {
 
     // All payments (caja movements)
     const [allPayments, setAllPayments] = useState<any[]>([]);
-    const [paymentsFilterDate, setPaymentsFilterDate] = useState('');
+    const [paymentsDateFrom, setPaymentsDateFrom] = useState('');
+    const [paymentsDateTo, setPaymentsDateTo] = useState('');
     const [paymentsRefresh, setPaymentsRefresh] = useState(0);
     useEffect(() => {
         if (billingTab === 'payments') {
@@ -505,23 +506,64 @@ const Billing: React.FC = () => {
 
                 {billingTab === 'payments' && (
                     <div className="space-y-8 animate-in fade-in duration-700">
-                        {/* Date filter */}
+                        {/* Date range filter */}
                         <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/20 shadow-2xl flex flex-wrap items-center gap-6">
-                            <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-4">
                                 <div className="bg-slate-100 p-4 rounded-2xl text-slate-500"><Calendar size={24} /></div>
                                 <div className="space-y-1">
-                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Filtrar por Fecha</span>
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Desde</span>
                                     <input
                                         type="date"
-                                        value={paymentsFilterDate}
-                                        onChange={e => setPaymentsFilterDate(e.target.value)}
-                                        className="bg-transparent border-none text-xl font-bold text-slate-900 outline-none p-0 focus:ring-0"
+                                        value={paymentsDateFrom}
+                                        onChange={e => setPaymentsDateFrom(e.target.value)}
+                                        className="bg-transparent border-none text-lg font-bold text-slate-900 outline-none p-0 focus:ring-0"
                                     />
                                 </div>
-                                {paymentsFilterDate && (
-                                    <button onClick={() => setPaymentsFilterDate('')} className="text-xs font-bold text-slate-400 hover:text-slate-900 uppercase">Limpiar</button>
-                                )}
+                                <span className="text-slate-300 font-bold mt-4">—</span>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Hasta</span>
+                                    <input
+                                        type="date"
+                                        value={paymentsDateTo}
+                                        onChange={e => setPaymentsDateTo(e.target.value)}
+                                        className="bg-transparent border-none text-lg font-bold text-slate-900 outline-none p-0 focus:ring-0"
+                                    />
+                                </div>
                             </div>
+                            {/* Quick month picker */}
+                            <div className="space-y-1">
+                                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Mes rápido</span>
+                                <select
+                                    onChange={e => {
+                                        if (!e.target.value) return;
+                                        const [y, m] = e.target.value.split('-');
+                                        const lastDay = new Date(Number(y), Number(m), 0).getDate();
+                                        setPaymentsDateFrom(`${y}-${m}-01`);
+                                        setPaymentsDateTo(`${y}-${m}-${String(lastDay).padStart(2, '0')}`);
+                                        e.target.value = '';
+                                    }}
+                                    className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                                    defaultValue=""
+                                >
+                                    <option value="">Seleccionar mes...</option>
+                                    {Array.from({ length: 12 }, (_, i) => {
+                                        const d = new Date();
+                                        d.setMonth(d.getMonth() - i);
+                                        const y = d.getFullYear();
+                                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                                        const label = d.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+                                        return <option key={`${y}-${m}`} value={`${y}-${m}`}>{label}</option>;
+                                    })}
+                                </select>
+                            </div>
+                            {(paymentsDateFrom || paymentsDateTo) && (
+                                <button
+                                    onClick={() => { setPaymentsDateFrom(''); setPaymentsDateTo(''); }}
+                                    className="text-xs font-bold text-slate-400 hover:text-slate-900 uppercase border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
+                                >
+                                    Limpiar filtros
+                                </button>
+                            )}
                             <div className="ml-auto flex items-center gap-6">
                                 <button
                                     onClick={() => setPaymentsRefresh(r => r + 1)}
@@ -532,7 +574,12 @@ const Billing: React.FC = () => {
                                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Total cobros filtrados</p>
                                     <p className="text-2xl font-black text-emerald-600">
                                         {allPayments
-                                            .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
+                                            .filter(p => {
+                                                const d = p.createdAt?.split('T')[0] ?? '';
+                                                if (paymentsDateFrom && d < paymentsDateFrom) return false;
+                                                if (paymentsDateTo   && d > paymentsDateTo)   return false;
+                                                return true;
+                                            })
                                             .filter(p => p.amount > 0)
                                             .reduce((s, p) => s + (p.amount || 0), 0)
                                             .toFixed(2)}€
@@ -556,15 +603,25 @@ const Billing: React.FC = () => {
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
                                         {allPayments
-                                            .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
+                                            .filter(p => {
+                                                const d = p.createdAt?.split('T')[0] ?? '';
+                                                if (paymentsDateFrom && d < paymentsDateFrom) return false;
+                                                if (paymentsDateTo   && d > paymentsDateTo)   return false;
+                                                return true;
+                                            })
                                             .length === 0 ? (
                                             <tr><td colSpan={6} className="p-16 text-center text-slate-400 font-bold uppercase tracking-widest opacity-50">
-                                                {paymentsFilterDate ? 'No hay cobros para esta fecha' : 'No hay cobros registrados'}
+                                                {(paymentsDateFrom || paymentsDateTo) ? 'No hay cobros en este rango de fechas' : 'No hay cobros registrados'}
                                             </td></tr>
                                         ) : (
                                             allPayments
                                                 .filter((p, idx, arr) => arr.findIndex(x => x.id === p.id) === idx) // deduplicar por id
-                                                .filter(p => !paymentsFilterDate || p.createdAt?.split('T')[0] === paymentsFilterDate)
+                                                .filter(p => {
+                                                    const d = p.createdAt?.split('T')[0] ?? '';
+                                                    if (paymentsDateFrom && d < paymentsDateFrom) return false;
+                                                    if (paymentsDateTo   && d > paymentsDateTo)   return false;
+                                                    return true;
+                                                })
                                                 .map(pmt => (
                                                     <tr key={pmt.id} className="group hover:bg-blue-50/30 transition-colors duration-300">
                                                         <td className="p-6 pl-10">

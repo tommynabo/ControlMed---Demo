@@ -1781,11 +1781,24 @@ export const api = {
         }
     },
 
-    // Analytics (Analítica Mensual)
+    // Analytics (Analítica Mensual / Anual / Por Doctor)
     analytics: {
         getMonthly: async (month: string) => {
             const res = await fetch(`${API_URL}/analytics/monthly?month=${encodeURIComponent(month)}`, { headers });
             if (!res.ok) throw new Error('Error al obtener métricas mensuales');
+            return res.json();
+        },
+        getAnnual: async (year: number) => {
+            const res = await fetch(`${API_URL}/analytics/annual?year=${year}`, { headers });
+            if (!res.ok) throw new Error('Error al obtener métricas anuales');
+            return res.json();
+        },
+        getDoctors: async (params: { month?: string; year?: number }) => {
+            const qs = new URLSearchParams();
+            if (params.month) qs.set('month', params.month);
+            if (params.year)  qs.set('year', String(params.year));
+            const res = await fetch(`${API_URL}/analytics/doctors${qs.toString() ? '?' + qs.toString() : ''}`, { headers });
+            if (!res.ok) throw new Error('Error al obtener análisis por doctor');
             return res.json();
         },
     },
