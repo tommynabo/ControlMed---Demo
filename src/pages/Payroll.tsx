@@ -402,6 +402,9 @@ const Payroll: React.FC = () => {
                                                                         await api.liquidations.update(r.id, {
                                                                             treatmentName: editingRow.treatmentName,
                                                                             doctorId: editingRow.doctorId || undefined,
+                                                                            ...(edit.grossAmount    !== undefined && { grossAmount:    edit.grossAmount }),
+                                                                            ...(edit.labCost        !== undefined && { labCost:        edit.labCost }),
+                                                                            ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
                                                                         });
                                                                         if (doctorChanged) {
                                                                             setLiquidations((prev: any) => ({
@@ -413,11 +416,24 @@ const Payroll: React.FC = () => {
                                                                                 ...prev,
                                                                                 treatments: prev.treatments.map((t: any) =>
                                                                                     t.id === r.id
-                                                                                        ? { ...t, treatmentName: editingRow.treatmentName, doctorId: editingRow.doctorId }
+                                                                                        ? {
+                                                                                            ...t,
+                                                                                            treatmentName:  editingRow.treatmentName,
+                                                                                            doctorId:       editingRow.doctorId,
+                                                                                            grossAmount:    edit.grossAmount    ?? t.grossAmount,
+                                                                                            labCost:        edit.labCost        ?? t.labCost,
+                                                                                            commissionRate: edit.commissionRate ?? t.commissionRate,
+                                                                                          }
                                                                                         : t
                                                                                 )
                                                                             }));
                                                                         }
+                                                                        // Clear local overrides — now saved to DB
+                                                                        setEditedRecords(prev => {
+                                                                            const next = { ...prev };
+                                                                            delete next[r.id];
+                                                                            return next;
+                                                                        });
                                                                         setEditingRow(null);
                                                                     } catch (err) {
                                                                         console.error('Error saving liquidation:', err);
@@ -442,13 +458,57 @@ const Payroll: React.FC = () => {
                                                             </button>
                                                         </div>
                                                     ) : (
-                                                        <button
-                                                            onClick={() => setEditingRow({ id: r.id, treatmentName: r.treatmentName || '', doctorId: r.doctorId || '' })}
-                                                            className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                                            title="Editar fila"
-                                                        >
-                                                            <Pencil size={14} />
-                                                        </button>
+                                                        <div className="flex flex-col gap-1 items-center">
+                                                            <button
+                                                                onClick={() => setEditingRow({ id: r.id, treatmentName: r.treatmentName || '', doctorId: r.doctorId || '' })}
+                                                                className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                                title="Editar nombre/doctor"
+                                                            >
+                                                                <Pencil size={14} />
+                                                            </button>
+                                                            {/* Direct save for numeric-only changes */}
+                                                            {Object.keys(editedRecords[r.id] || {}).length > 0 && (
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        setSavingRowId(r.id);
+                                                                        try {
+                                                                            await api.liquidations.update(r.id, {
+                                                                                ...(edit.grossAmount    !== undefined && { grossAmount:    edit.grossAmount }),
+                                                                                ...(edit.labCost        !== undefined && { labCost:        edit.labCost }),
+                                                                                ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
+                                                                            });
+                                                                            setLiquidations((prev: any) => ({
+                                                                                ...prev,
+                                                                                treatments: prev.treatments.map((t: any) =>
+                                                                                    t.id === r.id
+                                                                                        ? {
+                                                                                            ...t,
+                                                                                            grossAmount:    edit.grossAmount    ?? t.grossAmount,
+                                                                                            labCost:        edit.labCost        ?? t.labCost,
+                                                                                            commissionRate: edit.commissionRate ?? t.commissionRate,
+                                                                                          }
+                                                                                        : t
+                                                                                )
+                                                                            }));
+                                                                            setEditedRecords(prev => {
+                                                                                const next = { ...prev };
+                                                                                delete next[r.id];
+                                                                                return next;
+                                                                            });
+                                                                        } catch (err) {
+                                                                            alert('Error al guardar los importes');
+                                                                        } finally {
+                                                                            setSavingRowId(null);
+                                                                        }
+                                                                    }}
+                                                                    disabled={savingRowId === r.id}
+                                                                    className="p-1.5 rounded-md bg-emerald-100 hover:bg-emerald-500 hover:text-white text-emerald-600 transition-colors"
+                                                                    title="Guardar importes"
+                                                                >
+                                                                    {savingRowId === r.id ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 font-bold text-slate-900">{r.patientName || '-'}</td>
