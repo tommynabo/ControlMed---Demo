@@ -184,6 +184,9 @@ router.post('/liquidations/:id/split', async (req, res) => {
 
         const rate = existing.commissionRate || 30;
         const newRows = await prisma.$transaction(async (tx) => {
+            // Delete the original row first to free the @unique paymentId constraint,
+            // then create N replacement rows (paymentId: null, consistent with auto-creation path).
+            await tx.liquidation.delete({ where: { id } });
             const created = [];
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
@@ -193,7 +196,7 @@ router.post('/liquidations/:id/split', async (req, res) => {
                         id: crypto.randomUUID(),
                         doctorId:           existing.doctorId,
                         appointmentId:      existing.appointmentId,
-                        paymentId:          existing.paymentId,
+                        paymentId:          null,   // paymentId is @unique — can't share across N rows
                         itemIndex:          i,
                         grossAmount:        itemGross,
                         baseAmount:         itemGross,
@@ -210,7 +213,6 @@ router.post('/liquidations/:id/split', async (req, res) => {
                     }
                 }));
             }
-            await tx.liquidation.delete({ where: { id } });
             return created;
         });
 
