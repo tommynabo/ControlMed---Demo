@@ -36,15 +36,12 @@ WHERE bli."budgetId" = '<budgetId>'
 ORDER BY bli.id;
 */
 
--- PASO 3: Borrar TODAS las liquidaciones de esa cita (itemIndex y null)
--- El cobro se volverá a generar correctamente al liquidar de nuevo,
--- o puedes recrearlas manualmente con los valores correctos.
--- (sustituye <appointmentId> y <doctorId> con los valores reales)
-/*
+-- PASO 3: Borrar las 14 filas incorrectas de Altaf Ahmed
+-- appointmentId: 8d07264d-1314-4bb7-9af9-8a9de07e94d7 (usó todo el presupuesto, no solo los conceptos de esa cita)
 DELETE FROM "Liquidation"
-WHERE "appointmentId" = '<appointmentId>'
-  AND "doctorId" = '<doctorId>';
-*/
+WHERE "appointmentId" = '8d07264d-1314-4bb7-9af9-8a9de07e94d7'
+  AND "doctorId" = 'afbe7957-23fb-4e90-a7b5-d1519e514984';
+-- Verifica que borró 14 filas (itemIndex 0..13). Las otras 2 filas de Altaf son correctas (distinto appointmentId).
 
 -- PASO 4 (opcional): Si prefieres recrear las filas manualmente con los importes correctos
 -- en lugar de volver a cobrar, usa INSERT después del DELETE del paso 3.
