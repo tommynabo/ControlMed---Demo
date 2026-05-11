@@ -566,7 +566,7 @@ router.post('/payments/create', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { patientId, amount, method, type, notes, appointmentId, budgetId } = req.body;
+        const { patientId, amount, method, type, notes, appointmentId, budgetId, paymentDate } = req.body;
         const idempotencyKey = req.body.idempotencyKey || null;
 
         if (!patientId || !amount || !method) {
@@ -693,7 +693,7 @@ router.post('/payments/create', async (req, res) => {
                 };
                 const contact = await quipuService.getOrCreateContact(contactData);
                 if (contact && contact.id) {
-                    const today = new Date().toISOString().split('T')[0];
+                    const today = (paymentDate || new Date().toISOString()).split('T')[0];
                     const histSuffix = patient.historyNumber ? ` — Nº Historia: ${patient.historyNumber}` : '';
                     // For consolidated invoices use the full appointment amount; otherwise use the current payment amount
                     const invoiceAmount = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
@@ -709,50 +709,55 @@ router.post('/payments/create', async (req, res) => {
             }
         }
 
+        // ── Pre-transaction Supabase reads (moved outside to reduce tx duration) ──────
+        // Resolve budget commission so doctor is paid on the original price,
+        // and the markup goes to the referral entity separately.
+        let budgetCommissionPct = 0;
+        let referralEntityName = null;
+        if (budgetId) {
+            try {
+                const { data: bgt } = await supabase.from('Budget').select('commissionPercent, referralEntityName').eq('id', budgetId).single();
+                if (bgt) {
+                    budgetCommissionPct = Number(bgt.commissionPercent) || 0;
+                    referralEntityName = bgt.referralEntityName || null;
+                }
+            } catch (_) {}
+        }
+        // baseAmount = price without the referral markup
+        const baseAmount = budgetCommissionPct > 0
+            ? numericAmount / (1 + budgetCommissionPct / 100)
+            : numericAmount;
+        const referralCommission = numericAmount - baseAmount;
+
+        // Doctor's base = baseAmount minus items that go to the clinic (e.g. OPG).
+        // If the appointment has a service_breakdown, sum only billable services.
+        let doctorBaseAmount = baseAmount;
+        if (appointmentId) {
+            try {
+                const { data: apptRow } = await supabase
+                    .from('Appointment')
+                    .select('service_breakdown')
+                    .eq('id', appointmentId)
+                    .single();
+                if (apptRow?.service_breakdown && Array.isArray(apptRow.service_breakdown) && apptRow.service_breakdown.length > 0) {
+                    const billableTotal = apptRow.service_breakdown
+                        .filter(s => !s.excludeFromLiquidation)
+                        .reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+                    const allTotal = apptRow.service_breakdown
+                        .reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+                    // Scale proportionally to baseAmount in case there's a referral commission
+                    if (allTotal > 0) {
+                        doctorBaseAmount = baseAmount * (billableTotal / allTotal);
+                    }
+                }
+            } catch (_) {}
+        }
+
+        // Effective payment timestamp (supports back-dating past payments)
+        const effectiveDate = paymentDate ? new Date(paymentDate) : new Date();
+        const effectiveDateISO = effectiveDate.toISOString();
+
         const result = await prisma.$transaction(async (tx) => {
-
-            // Resolve budget commission so doctor is paid on the original price,
-            // and the markup goes to the referral entity separately.
-            let budgetCommissionPct = 0;
-            let referralEntityName = null;
-            if (budgetId) {
-                try {
-                    const { data: bgt } = await getSupabase().from('Budget').select('commissionPercent, referralEntityName').eq('id', budgetId).single();
-                    if (bgt) {
-                        budgetCommissionPct = Number(bgt.commissionPercent) || 0;
-                        referralEntityName = bgt.referralEntityName || null;
-                    }
-                } catch (_) {}
-            }
-            // baseAmount = price without the referral markup
-            const baseAmount = budgetCommissionPct > 0
-                ? numericAmount / (1 + budgetCommissionPct / 100)
-                : numericAmount;
-            const referralCommission = numericAmount - baseAmount;
-
-            // Doctor's base = baseAmount minus items that go to the clinic (e.g. OPG).
-            // If the appointment has a service_breakdown, sum only billable services.
-            let doctorBaseAmount = baseAmount;
-            if (appointmentId) {
-                try {
-                    const { data: apptRow } = await getSupabase()
-                        .from('Appointment')
-                        .select('service_breakdown')
-                        .eq('id', appointmentId)
-                        .single();
-                    if (apptRow?.service_breakdown && Array.isArray(apptRow.service_breakdown) && apptRow.service_breakdown.length > 0) {
-                        const billableTotal = apptRow.service_breakdown
-                            .filter(s => !s.excludeFromLiquidation)
-                            .reduce((sum, s) => sum + (Number(s.price) || 0), 0);
-                        const allTotal = apptRow.service_breakdown
-                            .reduce((sum, s) => sum + (Number(s.price) || 0), 0);
-                        // Scale proportionally to baseAmount in case there's a referral commission
-                        if (allTotal > 0) {
-                            doctorBaseAmount = baseAmount * (billableTotal / allTotal);
-                        }
-                    }
-                } catch (_) {}
-            }
 
             // Create the Payment record, now including appointmentId for traceability
             const payment = await tx.payment.create({
@@ -769,7 +774,7 @@ router.post('/payments/create', async (req, res) => {
                     referralCommission: referralCommission || 0,
                     referralEntityName: referralEntityName || null,
                     idempotencyKey: idempotencyKey || null,
-                    createdAt: new Date().toISOString()
+                    createdAt: effectiveDateISO
                 }
             });
 
@@ -831,7 +836,7 @@ router.post('/payments/create', async (req, res) => {
                         url: quipuResult.success ? quipuResult.pdf_url : null,
                         patientId,
                         amount: invoiceAmount,
-                        date: new Date(),
+                        date: effectiveDate,
                         status: 'issued',
                         paymentMethod: invoicePaymentMethod,
                         paymentBreakdown,
@@ -962,13 +967,13 @@ router.post('/payments/create', async (req, res) => {
                             });
                         } else {
                             liquidation = await tx.liquidation.create({
-                                data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId, itemIndex: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                                data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId, itemIndex: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: effectiveDateISO }
                             });
                         }
                     }
                 } else {
                     liquidation = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId: null, itemIndex: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: doctor.id, appointmentId: null, itemIndex: null, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: effectiveDateISO }
                     });
                 }
             }
@@ -976,40 +981,6 @@ router.post('/payments/create', async (req, res) => {
             if (type === 'ADVANCE_PAYMENT' || method === 'wallet') {
                 const balanceAdjustment = method === 'wallet' ? -numericAmount : numericAmount;
                 await tx.patient.update({ where: { id: patientId }, data: { wallet: { increment: balanceAdjustment } } });
-            }
-
-            // ── Post-payment side effects INSIDE the transaction ──────────────────────────
-            // PatientTreatment and BudgetLineItem updates are now atomic with Payment+Liquidation.
-            if (!isPartialPayment) {
-                const supabaseTx = getSupabase();
-                const treatmentIdsFromBody = req.body.treatmentIds;
-                if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
-                    await supabaseTx
-                        .from('PatientTreatment')
-                        .update({ status: 'COMPLETADO' })
-                        .in('id', treatmentIdsFromBody)
-                        .eq('patientId', patientId);
-                } else if (appointmentId) {
-                    const { data: appt } = await supabaseTx
-                        .from('Appointment')
-                        .select('treatmentId')
-                        .eq('id', appointmentId)
-                        .single();
-                    if (appt?.treatmentId) {
-                        await supabaseTx
-                            .from('PatientTreatment')
-                            .update({ status: 'COMPLETADO' })
-                            .eq('serviceId', appt.treatmentId)
-                            .eq('patientId', patientId)
-                            .not('status', 'in', '("COMPLETADO","PAGADO")');
-                    }
-                }
-                await markBudgetLineItemsPaid(supabaseTx, {
-                    budgetId: budgetId || req.body.budgetId,
-                    treatmentIds: req.body.treatmentIds,
-                    treatmentName: solvedTreatmentName,
-                    appointmentId
-                });
             }
 
             return {
@@ -1024,7 +995,44 @@ router.post('/payments/create', async (req, res) => {
                     ? Math.max(0, appointmentAmount - allPreviousPayments.reduce((s, p) => s + parseFloat(p.amount), 0) - numericAmount)
                     : 0
             };
-        });
+        }, { timeout: 15000 });
+
+        // ── Post-transaction Supabase side effects (moved outside to reduce tx duration) ──
+        if (!result.isPartial) {
+            try {
+                const supabasePost = getSupabase();
+                const treatmentIdsFromBody = req.body.treatmentIds;
+                if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
+                    await supabasePost
+                        .from('PatientTreatment')
+                        .update({ status: 'COMPLETADO' })
+                        .in('id', treatmentIdsFromBody)
+                        .eq('patientId', patientId);
+                } else if (appointmentId) {
+                    const { data: appt } = await supabasePost
+                        .from('Appointment')
+                        .select('treatmentId')
+                        .eq('id', appointmentId)
+                        .single();
+                    if (appt?.treatmentId) {
+                        await supabasePost
+                            .from('PatientTreatment')
+                            .update({ status: 'COMPLETADO' })
+                            .eq('serviceId', appt.treatmentId)
+                            .eq('patientId', patientId)
+                            .not('status', 'in', '("COMPLETADO","PAGADO")');
+                    }
+                }
+                await markBudgetLineItemsPaid(supabasePost, {
+                    budgetId: budgetId || req.body.budgetId,
+                    treatmentIds: req.body.treatmentIds,
+                    treatmentName: solvedTreatmentName,
+                    appointmentId
+                });
+            } catch (sideEffectErr) {
+                console.error('⚠️ Side-effect update failed (payment already saved):', sideEffectErr.message);
+            }
+        }
 
         res.status(200).json({ success: true, ...result });
 
@@ -1096,7 +1104,9 @@ router.post('/payments/create-split', async (req, res) => {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
-        const { patientId, totalAmount, method, appointmentId, budgetId, concept, notes, splits } = req.body;
+        const { patientId, totalAmount, method, appointmentId, budgetId, concept, notes, splits, paymentDate } = req.body;
+        const splitEffectiveDate = paymentDate ? new Date(paymentDate) : new Date();
+        const splitEffectiveDateISO = splitEffectiveDate.toISOString();
         const idempotencyKey = req.body.idempotencyKey || null;
 
         if (!patientId || !totalAmount || !method || !splits || !Array.isArray(splits) || splits.length === 0) {
@@ -1191,7 +1201,7 @@ router.post('/payments/create-split', async (req, res) => {
                     referralCommission: splitReferralTotal || 0,
                     referralEntityName: splitReferralEntity || null,
                     idempotencyKey: idempotencyKey || null,
-                    createdAt: new Date().toISOString()
+                    createdAt: splitEffectiveDateISO
                 }
             });
 
@@ -1203,7 +1213,7 @@ router.post('/payments/create-split', async (req, res) => {
             }
 
             // Sequential invoice number
-            const year = new Date().getFullYear();
+            const year = splitEffectiveDate.getFullYear();
             const prefix = `F-${year}-`;
             const existing = await tx.invoice.findMany({
                 where: { invoiceNumber: { startsWith: prefix } },
@@ -1226,7 +1236,7 @@ router.post('/payments/create-split', async (req, res) => {
                     url: quipuResult.success ? quipuResult.pdf_url : null,
                     patientId,
                     amount: numericTotal,
-                    date: new Date(),
+                    date: splitEffectiveDate,
                     status: 'issued',
                     paymentMethod: method,
                     concept: solvedConcept,
@@ -1273,29 +1283,37 @@ router.post('/payments/create-split', async (req, res) => {
                     });
                 } else {
                     liq = await tx.liquidation.create({
-                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: s.doctor.id, appointmentId: appointmentId || null, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: new Date().toISOString() }
+                        data: { id: crypto.randomUUID(), paymentId: payment.id, doctorId: s.doctor.id, appointmentId: appointmentId || null, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING', createdAt: splitEffectiveDateISO }
                     });
                 }
                 liquidations.push(liq);
             }
 
-            // ── Post-payment side effects INSIDE the transaction ─────────────────────────
-            const supabaseTx = getSupabase();
+            return {
+                payment, invoice, liquidations,
+                pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
+                previewUrl: quipuResult.success ? quipuResult.preview_url : null
+            };
+        }, { timeout: 15000 });
+
+        // ── Post-transaction Supabase side effects (moved outside to reduce tx duration) ──
+        try {
+            const supabasePost = getSupabase();
             const treatmentIdsFromBody = req.body.treatmentIds;
             if (Array.isArray(treatmentIdsFromBody) && treatmentIdsFromBody.length > 0) {
-                await supabaseTx
+                await supabasePost
                     .from('PatientTreatment')
                     .update({ status: 'COMPLETADO' })
                     .in('id', treatmentIdsFromBody)
                     .eq('patientId', patientId);
             } else if (appointmentId) {
-                const { data: appt } = await supabaseTx
+                const { data: appt } = await supabasePost
                     .from('Appointment')
                     .select('treatmentId')
                     .eq('id', appointmentId)
                     .single();
                 if (appt?.treatmentId) {
-                    await supabaseTx
+                    await supabasePost
                         .from('PatientTreatment')
                         .update({ status: 'COMPLETADO' })
                         .eq('serviceId', appt.treatmentId)
@@ -1303,19 +1321,15 @@ router.post('/payments/create-split', async (req, res) => {
                         .not('status', 'in', '("COMPLETADO","PAGADO")');
                 }
             }
-            await markBudgetLineItemsPaid(supabaseTx, {
+            await markBudgetLineItemsPaid(supabasePost, {
                 budgetId,
                 treatmentIds: req.body.treatmentIds,
                 treatmentName: concept,
                 appointmentId
             });
-
-            return {
-                payment, invoice, liquidations,
-                pdfUrl: quipuResult.success ? quipuResult.pdf_url : null,
-                previewUrl: quipuResult.success ? quipuResult.preview_url : null
-            };
-        });
+        } catch (sideEffectErr) {
+            console.error('⚠️ Split side-effect update failed (payment already saved):', sideEffectErr.message);
+        }
 
         res.status(200).json({ success: true, ...result });
 

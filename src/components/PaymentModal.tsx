@@ -66,6 +66,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     // Idempotency key — generated once when modal opens, prevents duplicate payments on retry
     const [idempotencyKey, setIdempotencyKey] = useState<string>('');
 
+    // Payment date — defaults to today but can be set to a past date for back-dated payments
+    const [paymentDate, setPaymentDate] = useState<string>('');
+
     const availableWallet = patient.wallet || 0;
 
     // ── Shared treatment split detection ─────────────────────────────────────
@@ -113,6 +116,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             // Fresh idempotency key each time the modal opens — ensures retries
             // within the same modal session are deduplicated, but a new opening gets a fresh key.
             setIdempotencyKey(crypto.randomUUID());
+            // Default payment date to today
+            setPaymentDate(new Date().toISOString().split('T')[0]);
             // Fetch doctors if no appointment is linked to allow attribution
             if (!appointment) {
                 api.getDoctors().then(setDoctors).catch(console.error);
@@ -253,6 +258,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     concept,
                     notes: notes || undefined,
                     idempotencyKey,
+                    paymentDate: paymentDate || undefined,
                     splits: scaledSplits
                 });
             } else {
@@ -269,6 +275,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     isPartial: isPartialPayment,
                     originalAmount: isPartialPayment ? originalAmount : undefined,
                     idempotencyKey,
+                    paymentDate: paymentDate || undefined,
                 };
                 response = await api.payments.create(paymentData);
             }
@@ -726,6 +733,22 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             placeholder="Notas internas..."
                             className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none"
                         />
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">
+                            Fecha del Pago
+                        </label>
+                        <input
+                            type="date"
+                            value={paymentDate}
+                            max={new Date().toISOString().split('T')[0]}
+                            onChange={(e) => setPaymentDate(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium outline-none"
+                        />
+                        {paymentDate !== new Date().toISOString().split('T')[0] && paymentDate && (
+                            <p className="text-[10px] text-amber-600 font-bold mt-1">⚠️ Pago con fecha pasada: {paymentDate}</p>
+                        )}
                     </div>
                     </>}
                 </div>
