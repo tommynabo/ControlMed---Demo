@@ -419,6 +419,20 @@ router.delete('/budgets/items/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+router.patch('/budgets/items/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+        const { tooth } = req.body;
+        const updateData = {};
+        if (tooth !== undefined) updateData.tooth = tooth ? String(tooth) : null;
+        if (Object.keys(updateData).length === 0) return res.status(400).json({ error: 'Nothing to update' });
+        const { data, error } = await supabase.from('BudgetLineItem').update(updateData).eq('id', req.params.id).select().single();
+        if (error) throw error;
+        res.json(data);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 router.delete('/budgets/:id', async (req, res) => {
     try {
         let supabase;

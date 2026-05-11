@@ -145,64 +145,88 @@ const CashRegister: React.FC = () => {
     const [todayPartialPayments, setTodayPartialPayments] = useState<any[]>([]);
 
     // Date edit modal
-    const [editingItem, setEditingItem] = useState<{ type: 'invoice' | 'expense'; item: any } | null>(null);
-    const [editDate, setEditDate] = useState('');
-    const [isSavingDate, setIsSavingDate] = useState(false);
+    // Invoice full edit modal (replaces separate date + method modals)
+    const [editingInvoiceFull, setEditingInvoiceFull] = useState<any | null>(null);
+    const [editFullDate, setEditFullDate] = useState('');
+    const [editFullConcept, setEditFullConcept] = useState('');
+    const [editFullPatientId, setEditFullPatientId] = useState('');
+    const [editFullAmount, setEditFullAmount] = useState('');
+    const [editFullMethod, setEditFullMethod] = useState('cash');
+    const [isSavingFull, setIsSavingFull] = useState(false);
 
-    // Payment method edit modal
-    const [editingMethodInvoice, setEditingMethodInvoice] = useState<any | null>(null);
-    const [isSavingMethod, setIsSavingMethod] = useState(false);
+    // Expense full edit modal
+    const [editingExpenseFull, setEditingExpenseFull] = useState<any | null>(null);
+    const [editExpDate, setEditExpDate] = useState('');
+    const [editExpDescription, setEditExpDescription] = useState('');
+    const [editExpCategory, setEditExpCategory] = useState('');
+    const [editExpAmount, setEditExpAmount] = useState('');
+    const [isSavingExp, setIsSavingExp] = useState(false);
 
-    const handleOpenEditDate = (type: 'invoice' | 'expense', item: any) => {
-        const currentDate = item.date ? item.date.split('T')[0] : new Date().toISOString().split('T')[0];
-        setEditDate(currentDate);
-        setEditingItem({ type, item });
+    const handleOpenEditInvoice = (inv: any) => {
+        setEditFullDate(inv.date ? inv.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+        setEditFullConcept(inv.concept || '');
+        setEditFullPatientId(inv.patientId || '');
+        setEditFullAmount(String(inv.amount ?? 0));
+        setEditFullMethod((inv.paymentMethod || 'cash').toLowerCase());
+        setEditingInvoiceFull(inv);
     };
 
-    const handleSaveDate = async () => {
-        if (!editingItem || !editDate) return;
-        setIsSavingDate(true);
+    const handleOpenEditExpense = (exp: any) => {
+        setEditExpDate(exp.date ? exp.date.split('T')[0] : new Date().toISOString().split('T')[0]);
+        setEditExpDescription(exp.description || '');
+        setEditExpCategory(exp.category || '');
+        setEditExpAmount(String(exp.amount ?? 0));
+        setEditingExpenseFull(exp);
+    };
+
+    const refreshDayData = async () => {
+        const freshInvoices = await (api as any).invoices.getAll().catch(() => []);
+        const freshExpenses = await (api as any).expenses.getAll().catch(() => []);
+        setTodayInvoices(freshInvoices.filter((i: any) =>
+            i.date && i.date.split('T')[0] === selectedDate &&
+            !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
+        ));
+        setTodayExpenses(freshExpenses.filter((e: any) =>
+            e.date && e.date.split('T')[0] === selectedDate
+        ));
+    };
+
+    const handleSaveInvoiceEdit = async () => {
+        if (!editingInvoiceFull) return;
+        setIsSavingFull(true);
         try {
-            if (editingItem.type === 'invoice') {
-                await (api as any).invoices.update(editingItem.item.id, { date: editDate });
-            } else {
-                await (api as any).expenses.update(editingItem.item.id, { ...editingItem.item, date: editDate });
-            }
-            // Refresh context data
-            await (api as any).invoices.getAll().catch(() => {});
-            // Force re-filter by triggering context refresh
-            const freshInvoices = await (api as any).invoices.getAll().catch(() => []);
-            const freshExpenses = await (api as any).expenses.getAll().catch(() => []);
-            setTodayInvoices(freshInvoices.filter((i: any) =>
-                i.date && i.date.split('T')[0] === selectedDate &&
-                !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
-            ));
-            setTodayExpenses(freshExpenses.filter((e: any) =>
-                e.date && e.date.split('T')[0] === selectedDate
-            ));
-            setEditingItem(null);
+            await (api as any).invoices.update(editingInvoiceFull.id, {
+                date: editFullDate,
+                concept: editFullConcept,
+                patientId: editFullPatientId || undefined,
+                amount: parseFloat(editFullAmount),
+                paymentMethod: editFullMethod,
+            });
+            await refreshDayData();
+            setEditingInvoiceFull(null);
         } catch (e: any) {
-            alert('❌ Error al cambiar la fecha: ' + (e.message || e));
+            alert('❌ Error al guardar: ' + (e.message || e));
         } finally {
-            setIsSavingDate(false);
+            setIsSavingFull(false);
         }
     };
 
-    const handleSaveMethod = async (newMethod: string) => {
-        if (!editingMethodInvoice) return;
-        setIsSavingMethod(true);
+    const handleSaveExpenseEdit = async () => {
+        if (!editingExpenseFull) return;
+        setIsSavingExp(true);
         try {
-            await (api as any).invoices.update(editingMethodInvoice.id, { paymentMethod: newMethod });
-            const freshInvoices = await (api as any).invoices.getAll().catch(() => []);
-            setTodayInvoices(freshInvoices.filter((i: any) =>
-                i.date && i.date.split('T')[0] === selectedDate &&
-                !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
-            ));
-            setEditingMethodInvoice(null);
+            await (api as any).expenses.update(editingExpenseFull.id, {
+                date: editExpDate,
+                description: editExpDescription,
+                category: editExpCategory,
+                amount: parseFloat(editExpAmount),
+            });
+            await refreshDayData();
+            setEditingExpenseFull(null);
         } catch (e: any) {
-            alert('❌ Error al cambiar el método de pago: ' + (e.message || e));
+            alert('❌ Error al guardar: ' + (e.message || e));
         } finally {
-            setIsSavingMethod(false);
+            setIsSavingExp(false);
         }
     };
 
@@ -776,22 +800,13 @@ const CashRegister: React.FC = () => {
                                                 +{inv.amount.toFixed(2)}€
                                             </td>
                                             <td className="p-2">
-                                                <div className="flex items-center gap-1">
-                                                    <button
-                                                        onClick={() => setEditingMethodInvoice(inv)}
-                                                        className="p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition-colors"
-                                                        title="Cambiar método de pago (efectivo/tarjeta)"
-                                                    >
-                                                        <CreditCard size={13} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleOpenEditDate('invoice', inv)}
-                                                        className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                                                        title="Cambiar fecha de esta factura"
-                                                    >
-                                                        <Pencil size={13} />
-                                                    </button>
-                                                </div>
+                                                <button
+                                                    onClick={() => handleOpenEditInvoice(inv)}
+                                                    className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    title="Editar factura"
+                                                >
+                                                    <Pencil size={13} />
+                                                </button>
                                             </td>
                                         </tr>
                                         );
@@ -819,9 +834,9 @@ const CashRegister: React.FC = () => {
                                             </td>
                                             <td className="p-2">
                                                 <button
-                                                    onClick={() => handleOpenEditDate('expense', exp)}
+                                                    onClick={() => handleOpenEditExpense(exp)}
                                                     className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                                                    title="Cambiar fecha de este gasto"
+                                                    title="Editar gasto"
                                                 >
                                                     <Pencil size={13} />
                                                 </button>
@@ -937,100 +952,116 @@ const CashRegister: React.FC = () => {
                     </div>
                 </div>
             )}
-            {/* DATE EDIT MODAL */}
-            {editingItem && (
+            {/* INVOICE FULL EDIT MODAL */}
+            {editingInvoiceFull && (
                 <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-in fade-in">
-                    <div className="bg-white max-w-sm w-full rounded-[2rem] shadow-2xl">
+                    <div className="bg-white max-w-lg w-full rounded-[2rem] shadow-2xl">
                         <div className="p-8 border-b border-slate-100 flex items-center justify-between">
                             <div>
-                                <h3 className="text-lg font-black text-slate-900">Cambiar Fecha</h3>
-                                <p className="text-xs text-slate-400 mt-1">
-                                    {editingItem.type === 'invoice'
-                                        ? `Factura ${editingItem.item.invoiceNumber}`
-                                        : editingItem.item.description}
-                                </p>
+                                <h3 className="text-lg font-black text-slate-900">Editar Factura</h3>
+                                <p className="text-xs text-slate-400 mt-1">{editingInvoiceFull.invoiceNumber}</p>
                             </div>
-                            <button onClick={() => setEditingItem(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                            <button onClick={() => setEditingInvoiceFull(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-8 space-y-6">
+                        <div className="p-8 space-y-4">
                             <div>
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Nueva Fecha</label>
-                                <input
-                                    type="date"
-                                    value={editDate}
-                                    onChange={e => setEditDate(e.target.value)}
-                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200"
-                                />
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Concepto</label>
+                                <input type="text" value={editFullConcept} onChange={e => setEditFullConcept(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
                             </div>
-                            <p className="text-xs text-slate-400">
-                                Al cambiar la fecha, este movimiento pasará a contabilizarse en la caja del día seleccionado.
-                            </p>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Paciente</label>
+                                <select value={editFullPatientId} onChange={e => setEditFullPatientId(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                                    style={{ colorScheme: 'light' }}>
+                                    <option value="">— Sin cambio —</option>
+                                    {(patients as any[]).sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '')).map((p: any) => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Importe (€)</label>
+                                    <input type="number" step="0.01" min="0" value={editFullAmount} onChange={e => setEditFullAmount(e.target.value)}
+                                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Fecha</label>
+                                    <input type="date" value={editFullDate} onChange={e => setEditFullDate(e.target.value)}
+                                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Método de Pago</label>
+                                <div className="flex gap-2">
+                                    {[{ value: 'cash', label: '💵 Efectivo' }, { value: 'card', label: '💳 Tarjeta' }, { value: 'transfer', label: '🏦 Transferencia' }].map(opt => (
+                                        <button key={opt.value} onClick={() => setEditFullMethod(opt.value)}
+                                            className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wide border-2 transition-colors ${editFullMethod === opt.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600 hover:border-slate-400'}`}>
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                         <div className="px-8 pb-8 pt-0 flex gap-3">
-                            <button
-                                onClick={() => setEditingItem(null)}
-                                className="flex-1 py-3 text-slate-500 font-bold text-sm hover:bg-slate-50 rounded-xl transition-colors"
-                            >
+                            <button onClick={() => setEditingInvoiceFull(null)} className="flex-1 py-3 text-slate-500 font-bold text-sm hover:bg-slate-50 rounded-xl transition-colors">
                                 Cancelar
                             </button>
-                            <button
-                                onClick={handleSaveDate}
-                                disabled={isSavingDate || !editDate}
-                                className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-sm uppercase shadow-lg hover:bg-slate-800 disabled:opacity-50 transition-colors"
-                            >
-                                {isSavingDate ? 'Guardando...' : '✅ Guardar'}
+                            <button onClick={handleSaveInvoiceEdit} disabled={isSavingFull}
+                                className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-sm uppercase shadow-lg hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                                {isSavingFull ? 'Guardando...' : '✅ Guardar'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-            {/* PAYMENT METHOD EDIT MODAL */}
-            {editingMethodInvoice && (
+            {/* EXPENSE FULL EDIT MODAL */}
+            {editingExpenseFull && (
                 <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[110] flex items-center justify-center p-6 animate-in fade-in">
-                    <div className="bg-white max-w-sm w-full rounded-[2rem] shadow-2xl">
+                    <div className="bg-white max-w-md w-full rounded-[2rem] shadow-2xl">
                         <div className="p-8 border-b border-slate-100 flex items-center justify-between">
                             <div>
-                                <h3 className="text-lg font-black text-slate-900">Cambiar Método de Pago</h3>
-                                <p className="text-xs text-slate-400 mt-1">
-                                    Factura {editingMethodInvoice.invoiceNumber}
-                                </p>
+                                <h3 className="text-lg font-black text-slate-900">Editar Gasto</h3>
+                                <p className="text-xs text-slate-400 mt-1">{editingExpenseFull.description}</p>
                             </div>
-                            <button onClick={() => setEditingMethodInvoice(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
+                            <button onClick={() => setEditingExpenseFull(null)} className="p-2 hover:bg-slate-100 rounded-xl text-slate-400 transition-colors">
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-8 space-y-3">
-                            {[
-                                { value: 'cash', label: '💵 Efectivo', color: 'emerald' },
-                                { value: 'card', label: '💳 Tarjeta', color: 'blue' },
-                                { value: 'transfer', label: '🏦 Transferencia', color: 'violet' },
-                            ].map(opt => {
-                                const isCurrent = (editingMethodInvoice.paymentMethod || '').toLowerCase() === opt.value;
-                                return (
-                                    <button
-                                        key={opt.value}
-                                        onClick={() => !isCurrent && handleSaveMethod(opt.value)}
-                                        disabled={isSavingMethod || isCurrent}
-                                        className={`w-full py-3 px-5 rounded-xl text-sm font-black uppercase tracking-wide transition-colors border-2
-                                            ${isCurrent
-                                                ? 'border-slate-900 bg-slate-900 text-white cursor-default'
-                                                : 'border-slate-200 text-slate-700 hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50'
-                                            }`}
-                                    >
-                                        {isSavingMethod && !isCurrent ? 'Guardando...' : opt.label}
-                                        {isCurrent && <span className="ml-2 text-[10px] font-bold opacity-70">(actual)</span>}
-                                    </button>
-                                );
-                            })}
+                        <div className="p-8 space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Descripción</label>
+                                <input type="text" value={editExpDescription} onChange={e => setEditExpDescription(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Categoría</label>
+                                <input type="text" value={editExpCategory} onChange={e => setEditExpCategory(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Importe (€)</label>
+                                    <input type="number" step="0.01" min="0" value={editExpAmount} onChange={e => setEditExpAmount(e.target.value)}
+                                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Fecha</label>
+                                    <input type="date" value={editExpDate} onChange={e => setEditExpDate(e.target.value)}
+                                        className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
+                                </div>
+                            </div>
                         </div>
-                        <div className="px-8 pb-8 pt-0">
-                            <button
-                                onClick={() => setEditingMethodInvoice(null)}
-                                className="w-full py-3 text-slate-500 font-bold text-sm hover:bg-slate-50 rounded-xl transition-colors"
-                            >
+                        <div className="px-8 pb-8 pt-0 flex gap-3">
+                            <button onClick={() => setEditingExpenseFull(null)} className="flex-1 py-3 text-slate-500 font-bold text-sm hover:bg-slate-50 rounded-xl transition-colors">
                                 Cancelar
+                            </button>
+                            <button onClick={handleSaveExpenseEdit} disabled={isSavingExp}
+                                className="flex-1 bg-slate-900 text-white py-3 rounded-xl font-black text-sm uppercase shadow-lg hover:bg-slate-800 disabled:opacity-50 transition-colors">
+                                {isSavingExp ? 'Guardando...' : '✅ Guardar'}
                             </button>
                         </div>
                     </div>

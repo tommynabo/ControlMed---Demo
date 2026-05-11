@@ -611,6 +611,13 @@ export const api = {
             if (!res.ok) throw new Error('Failed to delete item');
             return res.json();
         },
+        updateItem: async (itemId: string, data: { tooth?: string | null }) => {
+            const res = await fetch(`${API_URL}/budgets/items/${itemId}`, {
+                method: 'PATCH', headers, body: JSON.stringify(data)
+            });
+            if (!res.ok) throw new Error('Failed to update item');
+            return res.json();
+        },
         updateStatus: async (id: string, status: string) => {
             const res = await fetch(`${API_URL}/budgets/${id}/status`, {
                 method: 'PUT',

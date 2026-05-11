@@ -79,6 +79,7 @@ const Agenda: React.FC = () => {
     const [bookingBudgetId, setBookingBudgetId] = useState<string>('');
     const [bookingBudgetItemId, setBookingBudgetItemId] = useState<string>('');
     const [selectedBudgetItems, setSelectedBudgetItems] = useState<any[]>([]);
+    const [toothOverrides, setToothOverrides] = useState<Record<string, string>>({});
     const [bookingDate, setBookingDate] = useState<string>(formatDateLocal(new Date()));
     const [bookingTime, setBookingTime] = useState<string>('08:00');
 
@@ -2368,38 +2369,64 @@ const Agenda: React.FC = () => {
 
                                             return availableItems.map((item: any, idx: number) => {
                                                 const isChecked = selectedBudgetItems.some((si: any) => (si.id || idx.toString()) === (item.id || idx.toString()));
+                                                const currentTooth = toothOverrides[item.id] !== undefined ? toothOverrides[item.id] : (item.tooth || '');
                                                 return (
-                                                    <label key={idx} className={`flex items-center gap-2 cursor-pointer rounded-lg p-1 transition-colors border ${isChecked ? 'bg-green-50 border-green-200' : 'hover:bg-white border-transparent'}`}>
+                                                    <div key={idx} className={`flex items-center gap-2 rounded-lg p-1 transition-colors border ${isChecked ? 'bg-green-50 border-green-200' : 'hover:bg-white border-transparent'}`}>
+                                                        <label className="flex items-center gap-2 cursor-pointer flex-1 min-w-0">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="w-4 h-4 rounded shrink-0"
+                                                                checked={isChecked}
+                                                                onChange={() => {
+                                                                    const mergedTooth = toothOverrides[item.id] !== undefined ? toothOverrides[item.id] : item.tooth;
+                                                                    const mergedItem = { ...item, tooth: mergedTooth, _idx: idx };
+                                                                    let newSelected;
+                                                                    if (isChecked) {
+                                                                        newSelected = selectedBudgetItems.filter((si: any) => (si.id || '') !== (item.id || idx.toString()));
+                                                                    } else {
+                                                                        newSelected = [...selectedBudgetItems, mergedItem];
+                                                                    }
+                                                                    setSelectedBudgetItems(newSelected);
+                                                                    setBookingTreatment(newSelected.map((i: any) => i.name + (i.tooth ? ' - Diente ' + i.tooth : '')).join(', '));
+                                                                    setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0));
+                                                                    setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
+                                                                }}
+                                                            />
+                                                            {isChecked && <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-green-500 shrink-0" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>}
+                                                            <span className={`text-xs flex-1 truncate ${isChecked ? 'font-black text-green-700' : 'font-bold text-slate-600'}`}>{item.name}</span>
+                                                        </label>
                                                         <input
-                                                            type="checkbox"
-                                                            className="w-4 h-4 rounded"
-                                                            checked={isChecked}
-                                                            onChange={() => {
-                                                                let newSelected;
+                                                            type="text"
+                                                            value={currentTooth}
+                                                            placeholder="Pieza"
+                                                            maxLength={3}
+                                                            onClick={e => e.stopPropagation()}
+                                                            onChange={e => {
+                                                                const val = e.target.value;
+                                                                setToothOverrides(prev => ({ ...prev, [item.id]: val }));
                                                                 if (isChecked) {
-                                                                    newSelected = selectedBudgetItems.filter((si: any) => (si.id || '') !== (item.id || idx.toString()));
-                                                                } else {
-                                                                    newSelected = [...selectedBudgetItems, { ...item, _idx: idx }];
+                                                                    const updated = selectedBudgetItems.map((si: any) =>
+                                                                        (si.id || '') === (item.id || '') ? { ...si, tooth: val } : si
+                                                                    );
+                                                                    setSelectedBudgetItems(updated);
+                                                                    setBookingTreatment(updated.map((i: any) => i.name + (i.tooth ? ' - Diente ' + i.tooth : '')).join(', '));
                                                                 }
-                                                                setSelectedBudgetItems(newSelected);
-                                                                // Auto-fill treatment names and total price (with per-item discount applied)
-                                                                setBookingTreatment(newSelected.map((i: any) => i.name + (i.tooth ? ' - Diente ' + i.tooth : '')).join(', '));
-                                                                setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0));
-                                                                setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
+                                                                if (item.id) {
+                                                                    (api as any).budget.updateItem(item.id, { tooth: val || null }).catch(() => {});
+                                                                }
                                                             }}
+                                                            className="w-14 text-xs border border-slate-200 rounded px-1.5 py-1 text-center text-slate-600 font-bold outline-none focus:ring-1 focus:ring-blue-300 shrink-0"
                                                         />
-                                                        {isChecked && <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-green-500 shrink-0" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>}
-                                                        <span className={`text-xs flex-1 ${isChecked ? 'font-black text-green-700' : 'font-bold text-slate-600'}`}>{item.name}{item.tooth ? ` — Diente ${item.tooth}` : ''}</span>
                                                         {(Number(item.discount) || 0) > 0 ? (
-                                                            <span className="text-xs font-bold flex items-center gap-1">
+                                                            <span className="text-xs font-bold flex items-center gap-1 shrink-0">
                                                                 <span className="line-through text-slate-300">{Number(item.price).toFixed(2)}€</span>
                                                                 <span className="text-green-600">{(Number(item.price) * (1 - Number(item.discount) / 100)).toFixed(2)}€</span>
                                                                 <span className="text-red-500">(-{item.discount}%)</span>
                                                             </span>
                                                         ) : (
-                                                            <span className="text-xs font-bold text-slate-400">{item.price}€</span>
+                                                            <span className="text-xs font-bold text-slate-400 shrink-0">{item.price}€</span>
                                                         )}
-                                                    </label>
+                                                    </div>
                                                 );
                                             });
                                         })()}

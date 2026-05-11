@@ -398,14 +398,14 @@ router.get('/liquidations/summary', async (req, res) => {
 
 // ─── INVOICES ─────────────────────────────────────────────────────────────────
 
-// PUT /finance/invoices/:id — actualiza la fecha de una factura (para reasignar a otra caja)
+// PUT /finance/invoices/:id — actualiza datos de una factura (fecha, método, concepto, paciente, importe)
 router.put('/invoices/:id', async (req, res) => {
     try {
         let supabase;
         try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
 
         const { id } = req.params;
-        const { date, paymentMethod } = req.body;
+        const { date, paymentMethod, concept, patientId, amount } = req.body;
 
         if (!id) return res.status(400).json({ error: 'Invoice ID is required' });
 
@@ -418,6 +418,17 @@ router.put('/invoices/:id', async (req, res) => {
             const allowed = ['cash', 'card', 'transfer'];
             if (!allowed.includes(paymentMethod)) return res.status(400).json({ error: 'paymentMethod must be cash, card or transfer' });
             invoiceUpdate.paymentMethod = paymentMethod;
+        }
+        if (concept !== undefined) invoiceUpdate.concept = String(concept);
+        if (patientId) {
+            const { data: pt } = await supabase.from('Patient').select('id').eq('id', patientId).maybeSingle();
+            if (!pt) return res.status(400).json({ error: 'Paciente no encontrado' });
+            invoiceUpdate.patientId = patientId;
+        }
+        if (amount !== undefined) {
+            const numAmount = parseFloat(amount);
+            if (isNaN(numAmount) || numAmount < 0) return res.status(400).json({ error: 'Importe inválido' });
+            invoiceUpdate.amount = numAmount;
         }
         if (Object.keys(invoiceUpdate).length === 0) return res.status(400).json({ error: 'Nothing to update' });
 
@@ -436,6 +447,12 @@ router.put('/invoices/:id', async (req, res) => {
                 .from('Payment')
                 .update({ method: paymentMethod.toUpperCase() })
                 .eq('invoiceId', id);
+        }
+        // If amount changed, keep the linked Payment.amount and InvoiceItem.price in sync
+        if (amount !== undefined) {
+            const numAmount = parseFloat(amount);
+            await supabase.from('Payment').update({ amount: numAmount }).eq('invoiceId', id);
+            await supabase.from('InvoiceItem').update({ price: numAmount }).eq('invoiceId', id);
         }
 
         res.json(data);
@@ -783,14 +800,11 @@ router.post('/payments/create', async (req, res) => {
                 });
             }
 
-            // ── Invoice: only created on the FINAL payment ─────────────────────
-            // Partial payments do NOT generate an invoice — they are tracked only
-            // via the Payment record (with appointmentId). This avoids duplicate
-            // invoices and makes it impossible to "pay" an already-paid appointment.
+            // ── Invoice: created for every payment (partial → receipt 'partial', final → 'issued') ──
             let invoice = null;
             let invoiceNumber = null;
 
-            if (!isPartialPayment) {
+            {
                 // Sequential invoice number (F-YYYY-NNNN)
                 const year = new Date().getFullYear();
                 const prefix = `F-${year}-`;
@@ -823,6 +837,11 @@ router.post('/payments/create', async (req, res) => {
                     }));
                 }
 
+                // Partial payment → receipt; final payment → official invoice
+                const invoiceStatus = isPartialPayment ? 'partial' : 'issued';
+                const invoiceConceptName = isPartialPayment ? solvedTreatmentName + ' (pago parcial)' : solvedTreatmentName;
+                const invoiceLineAmount = isPartialPayment ? numericAmount : invoiceAmount;
+
                 invoice = await tx.invoice.create({
                     data: {
                         id: crypto.randomUUID(),
@@ -830,12 +849,12 @@ router.post('/payments/create', async (req, res) => {
                         externalId: quipuResult.success ? String(quipuResult.id) : null,
                         url: quipuResult.success ? quipuResult.pdf_url : null,
                         patientId,
-                        amount: invoiceAmount,
+                        amount: invoiceLineAmount,
                         date: effectiveDate,
-                        status: 'issued',
+                        status: invoiceStatus,
                         paymentMethod: invoicePaymentMethod,
-                        paymentBreakdown,
-                        concept: solvedTreatmentName,
+                        paymentBreakdown: isPartialPayment ? null : paymentBreakdown,
+                        concept: invoiceConceptName,
                         appointmentId: appointmentId || null,
                         relatedPaymentId: payment.id
                     }
@@ -845,11 +864,11 @@ router.post('/payments/create', async (req, res) => {
                     data: {
                         id: crypto.randomUUID(),
                         invoiceId: invoice.id,
-                        name: solvedTreatmentName,
-                        price: invoiceAmount
+                        name: invoiceConceptName,
+                        price: invoiceLineAmount
                     }
                 });
-                // Link invoice back to the final payment
+                // Link invoice back to the payment
                 await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id } });
             }
 
