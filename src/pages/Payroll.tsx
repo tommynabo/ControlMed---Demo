@@ -370,7 +370,7 @@ const Payroll: React.FC = () => {
                             </div>
                             <div className="bg-blue-500/30 p-4 rounded-xl">
                                 <p className="text-blue-100 text-xs font-bold uppercase">Comisión Final</p>
-                                <p className="text-3xl font-black text-white mt-1">{liquidations.totals?.totalToPay?.toFixed(2)}€</p>
+                                <p className="text-3xl font-black text-white mt-1">{getEffectiveTotal().toFixed(2)}€</p>
                             </div>
                         </div>
                     </div>
