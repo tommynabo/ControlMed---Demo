@@ -172,15 +172,36 @@ router.post('/liquidations/:id/split', async (req, res) => {
             return res.status(400).json({ error: 'La liquidación no tiene cita vinculada; no se puede dividir automáticamente' });
 
         const { data: appt } = await supabase
-            .from('Appointment').select('id, budgetId').eq('id', existing.appointmentId).single();
+            .from('Appointment').select('id, budgetId, budgetItemIds').eq('id', existing.appointmentId).single();
         if (!appt?.budgetId)
             return res.status(400).json({ error: 'La cita no tiene presupuesto vinculado; asigna un presupuesto primero' });
 
-        const { data: items } = await supabase
-            .from('BudgetLineItem').select('id, name, price, quantity, discount')
-            .eq('budgetId', appt.budgetId).gt('price', 0).order('id', { ascending: true });
+        // Use ONLY the items linked to THIS appointment (budgetItemIds), not the whole budget
+        let specificItemIds = null;
+        if (appt.budgetItemIds) {
+            try {
+                specificItemIds = typeof appt.budgetItemIds === 'string'
+                    ? JSON.parse(appt.budgetItemIds)
+                    : appt.budgetItemIds;
+                if (!Array.isArray(specificItemIds) || specificItemIds.length === 0) specificItemIds = null;
+            } catch (_) { specificItemIds = null; }
+        }
+
+        let items;
+        if (specificItemIds && specificItemIds.length >= 2) {
+            const { data } = await supabase
+                .from('BudgetLineItem').select('id, name, price, quantity, discount')
+                .in('id', specificItemIds).gt('price', 0);
+            items = specificItemIds.map(iid => data?.find(d => d.id === iid)).filter(Boolean);
+        } else {
+            // Fallback: all budget items (appointments created before budgetItemIds was stored)
+            const { data } = await supabase
+                .from('BudgetLineItem').select('id, name, price, quantity, discount')
+                .eq('budgetId', appt.budgetId).gt('price', 0).order('id', { ascending: true });
+            items = data;
+        }
         if (!items || items.length < 2)
-            return res.status(400).json({ error: `El presupuesto tiene ${items?.length ?? 0} línea(s) — necesitas al menos 2 para dividir` });
+            return res.status(400).json({ error: `Esta cita tiene ${items?.length ?? 0} concepto(s) — necesitas al menos 2 para dividir` });
 
         const rate = existing.commissionRate || 30;
         const newRows = await prisma.$transaction(async (tx) => {
