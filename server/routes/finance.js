@@ -187,21 +187,16 @@ router.post('/liquidations/:id/split', async (req, res) => {
             } catch (_) { specificItemIds = null; }
         }
 
-        let items;
-        if (specificItemIds && specificItemIds.length >= 2) {
-            const { data } = await supabase
-                .from('BudgetLineItem').select('id, name, price, quantity, discount')
-                .in('id', specificItemIds).gt('price', 0);
-            items = specificItemIds.map(iid => data?.find(d => d.id === iid)).filter(Boolean);
-        } else {
-            // Fallback: all budget items (appointments created before budgetItemIds was stored)
-            const { data } = await supabase
-                .from('BudgetLineItem').select('id, name, price, quantity, discount')
-                .eq('budgetId', appt.budgetId).gt('price', 0).order('id', { ascending: true });
-            items = data;
-        }
+        if (!specificItemIds || specificItemIds.length < 2)
+            return res.status(400).json({ error: 'Para dividir, primero edita la cita y selecciona los conceptos del presupuesto que se realizaron (necesitas marcar al menos 2).' });
+
+        const { data: itemData } = await supabase
+            .from('BudgetLineItem').select('id, name, price, quantity, discount')
+            .in('id', specificItemIds).gt('price', 0);
+        const items = specificItemIds.map(iid => itemData?.find(d => d.id === iid)).filter(Boolean);
+
         if (!items || items.length < 2)
-            return res.status(400).json({ error: `Esta cita tiene ${items?.length ?? 0} concepto(s) — necesitas al menos 2 para dividir` });
+            return res.status(400).json({ error: `Esta cita tiene ${items?.length ?? 0} concepto(s) con precio — necesitas al menos 2 para dividir` });
 
         const rate = existing.commissionRate || 30;
         const newRows = await prisma.$transaction(async (tx) => {
@@ -264,7 +259,7 @@ router.get('/liquidations/summary', async (req, res) => {
             // appointments) still appear in the correct month's report.
             const { data: liquidations, error: liqError } = await supabase
                 .from('Liquidation')
-                .select('*, appointment:Appointment(date, patientId, patient:Patient(historyNumber, isODA))')
+                .select('*, appointment:Appointment(date, patientId, patient:Patient(historyNumber, isODA, name))')
                 .eq('doctorId', doctorId)
                 .order('createdAt', { ascending: true });
             if (liqError) throw liqError;
@@ -289,7 +284,7 @@ router.get('/liquidations/summary', async (req, res) => {
                     concepto: liq.treatmentName || 'Tratamiento',
                     importeCobrado: liq.grossAmount || 0,
                     baseAmount: liq.baseAmount ?? liq.grossAmount ?? 0,
-                    nombrePaciente: liq.patientName || 'Desconocido',
+                    nombrePaciente: apptPatient.name || liq.patientName || 'Desconocido',
                     numeroHistoria: apptPatient.historyNumber || '-',
                     doctorId: liq.doctorId,
                     referralCommission: liq.referralCommission || 0,
