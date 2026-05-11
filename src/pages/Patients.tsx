@@ -356,6 +356,18 @@ const Patients: React.FC = () => {
     const handlePrintBudget = async (budget: any) => {
         const w = window.open('', '_blank');
         if (w) {
+            // Re-fetch budget items to ensure tooth/pieza data is up to date
+            // (tooth can be updated from the Agenda without refreshing the Patients view)
+            try {
+                const freshBudgets = await api.budget.getByPatient(budget.patientId || selectedPatient?.id);
+                const freshBudget = (freshBudgets || []).find((b: any) => b.id === budget.id);
+                if (freshBudget?.items) {
+                    budget = { ...budget, items: freshBudget.items };
+                }
+            } catch (err) {
+                console.warn('Could not re-fetch budget items before print, using cached data:', err);
+            }
+
             // Fetch logo as blob and convert to data URL
             let logoDataUrl = '';
             try {

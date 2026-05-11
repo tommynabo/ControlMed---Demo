@@ -882,7 +882,7 @@ router.post('/payments/create', async (req, res) => {
             // This allows setting different commission rates per concept in the liquidation view.
             // Single-concept appointments continue to create one row with itemIndex = null.
             let liquidation = null;
-            if (type !== 'ADVANCE_PAYMENT' && !isPartialPayment) {
+            if (type !== 'ADVANCE_PAYMENT') {
                 if (!doctor) {
                     throw new Error(
                         `No se puede crear el pago: doctor no encontrado para la cita/pago ` +
@@ -891,7 +891,8 @@ router.post('/payments/create', async (req, res) => {
                 }
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
-                // Use the full appointment amount as gross for accurate commission on consolidated payments
+                // For partial payments: use the amount of this payment as the gross (each partial creates its own row).
+                // For final payments: use the full appointment amount so the commission reflects the consolidated total.
                 const grossForLiquidation = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
                 const finalAmount = (doctorBaseAmount - labCost) * (rawRate / 100);
 
