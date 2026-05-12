@@ -1,35 +1,47 @@
 
 /**
  * Calculates the liquidation for a doctor when a treatment is completed.
- * Formula: (TreatmentPrice - LabCost) * CommissionPercentage
+ * Formula: (paidAmount - LabCost) * CommissionPercentage
+ *
+ * @param {object} prisma          - Prisma client (or transaction handle)
+ * @param {object} appointment     - Must include { id, doctor: { id, commissionPercentage }, treatment: { name, labCost? } }
+ * @param {number} paidAmount      - REQUIRED: the actual amount collected from the patient for this treatment
+ * @param {string} [paymentId]     - REQUIRED: the Payment.id that triggered this liquidation
  */
-async function calculateLiquidation(prisma, appointment) {
+async function calculateLiquidation(prisma, appointment, paidAmount, paymentId) {
     const { treatment, doctor } = appointment;
 
     if (!treatment || !doctor) {
         throw new Error('Missing Treatment or Doctor data');
     }
+    if (!paidAmount || paidAmount <= 0) {
+        throw new Error('calculateLiquidation: paidAmount debe ser > 0 (dinero real cobrado al paciente)');
+    }
+    if (!paymentId) {
+        throw new Error('calculateLiquidation: paymentId es obligatorio — no se puede crear una liquidación sin un pago real');
+    }
 
-    const grossAmount = treatment.price;
+    // grossAmount = lo que realmente pagó el paciente (respetando descuentos del presupuesto)
+    const grossAmount = paidAmount;
     const labCost = treatment.labCost || 0;
     const commissionRate = doctor.commissionPercentage || 0;
 
-    // Logic: Commission is applied on NET amount (Price - LabCost)
+    // Commission is applied on NET amount (paidAmount - LabCost)
     const netAmount = grossAmount - labCost;
     const finalAmount = netAmount > 0 ? netAmount * commissionRate : 0;
 
-    // Create Record
+    // Create Record — paymentId is mandatory: no ghost rows
     return await prisma.liquidation.create({
         data: {
             doctorId: doctor.id,
             appointmentId: appointment.id,
+            paymentId,
             grossAmount,
             labCost,
             commissionRate,
             finalAmount,
-
             status: 'PENDING',
-            treatmentName: treatment.name // Save treatment name explicitly
+            treatmentName: treatment.name
         }
     });
 }

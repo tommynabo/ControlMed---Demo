@@ -951,8 +951,10 @@ router.post('/payments/create', async (req, res) => {
                 const rawRate = doctor.commissionPercentage || 30;
                 const labCost = req.body.costeLab || 0;
                 // For partial payments: use the amount of this payment as the gross (each partial creates its own row).
-                // For final payments: use the full appointment amount so the commission reflects the consolidated total.
-                const grossForLiquidation = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
+                // For final payments: use the SUM of all real payments (previous + current) — never appointmentAmount
+                // which may reflect a stale catalog price instead of what was actually collected.
+                const totalRealPayments = allPreviousPayments.reduce((s, p) => s + parseFloat(p.amount), 0) + numericAmount;
+                const grossForLiquidation = isFinalPayment ? totalRealPayments : numericAmount;
                 const finalAmount = (doctorBaseAmount - labCost) * (rawRate / 100);
 
                 if (appointmentId) {
@@ -967,6 +969,10 @@ router.post('/payments/create', async (req, res) => {
 
                     if (budgetItems.length >= 2) {
                         // ── Multi-concept path: one Liquidation row per BudgetLineItem ───
+                        // Compute total catalog value (pre-discount) to allocate the real payment amount proportionally.
+                        const catalogTotal = budgetItems.reduce((s, it) =>
+                            s + it.price * (1 - (it.discount || 0) / 100) * (it.quantity || 1), 0);
+
                         for (let i = 0; i < budgetItems.length; i++) {
                             const item = budgetItems[i];
                             // Use the doctor assigned to this specific line item if set;
@@ -976,7 +982,13 @@ router.post('/payments/create', async (req, res) => {
                                 ? doctor
                                 : (await supabase.from('Doctor').select('*').eq('id', itemDoctorId).single()).data || doctor;
                             const itemRate = itemDoctor?.commissionPercentage || 30;
-                            const itemGross = item.price * (item.quantity || 1);
+                            // Discounted price for this line item
+                            const itemDiscounted = item.price * (1 - (item.discount || 0) / 100) * (item.quantity || 1);
+                            // Allocate proportionally from the real payment amount (grossForLiquidation)
+                            // so the sum of itemGross values equals what was actually collected.
+                            const itemGross = catalogTotal > 0
+                                ? (itemDiscounted / catalogTotal) * grossForLiquidation
+                                : itemDiscounted;
                             const itemFinal = itemGross * (itemRate / 100);
                             // Search for an existing row using the item's actual doctor
                             const existingItem = await tx.liquidation.findFirst({
@@ -986,6 +998,7 @@ router.post('/payments/create', async (req, res) => {
                                 await tx.liquidation.update({
                                     where: { id: existingItem.id },
                                     data: {
+                                        paymentId: payment.id,
                                         doctorId: itemDoctorId,
                                         grossAmount: itemGross,
                                         baseAmount: itemGross,
@@ -1004,7 +1017,7 @@ router.post('/payments/create', async (req, res) => {
                                         doctorId: itemDoctorId,
                                         appointmentId,
                                         itemIndex: i,
-                                        paymentId: null,
+                                        paymentId: payment.id,
                                         grossAmount: itemGross,
                                         baseAmount: itemGross,
                                         labCost: 0,
@@ -1016,7 +1029,7 @@ router.post('/payments/create', async (req, res) => {
                                         patientName: patient?.name || 'Paciente',
                                         paymentMethod: method,
                                         status: 'PENDING',
-                                        createdAt: new Date().toISOString()
+                                        createdAt: effectiveDateISO
                                     }
                                 });
                             }
@@ -1452,22 +1465,23 @@ router.post('/payments/transfer', async (req, res) => {    try {
 
         if (treatmentId) {
             const { data: treatmentData } = await supabase.from('PatientTreatment').update({ status: 'PAGADO' }).eq('id', treatmentId).select().single();
-            if (treatmentData && treatmentData.serviceId) {
+            if (treatmentData) {
                 try {
-                    const existingLiquidation = await prisma.liquidation.findFirst({
-                        where: { appointment: { patientId, treatmentId: treatmentData.serviceId }, status: 'PENDING' },
-                        orderBy: { createdAt: 'desc' }
+                    // Create/update liquidation linked to the real transfer payment — no dummy appointments.
+                    const { ensureLiquidation } = require('../services/liquidationService');
+                    const { data: docRow } = await supabase.from('Doctor').select('commissionPercentage').eq('id', doctorId).single();
+                    await ensureLiquidation(supabase, {
+                        paymentId:     transfer.id,
+                        appointmentId: null,
+                        doctorId,
+                        grossAmount:   parseFloat(amount),
+                        labCost:       0,
+                        commissionRate: docRow?.commissionPercentage ?? undefined,
+                        treatmentName: treatmentName || 'Tratamiento',
+                        patientName:   'Paciente',
+                        paymentMethod: 'wallet',
+                        createdAt:     new Date().toISOString(),
                     });
-
-                    if (existingLiquidation) {
-                        await prisma.liquidation.update({ where: { id: existingLiquidation.id }, data: { doctorId } });
-                    } else {
-                        const dummyAppt = await prisma.appointment.create({
-                            data: { date: new Date(), time: '00:00', status: 'COMPLETED', patientId, doctorId, treatmentId: treatmentData.serviceId },
-                            include: { treatment: true, doctor: true }
-                        });
-                        await financeService.calculateLiquidation(prisma, dummyAppt);
-                    }
                 } catch (liqErr) {
                     console.error('⚠️ Error syncing liquidation on transfer:', liqErr);
                 }
