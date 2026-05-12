@@ -273,7 +273,7 @@ model Liquidation {
   doctor              Doctor      @relation(fields: [doctorId], references: [id])
   appointmentId       String?
   appointment         Appointment? @relation(fields: [appointmentId], references: [id])
-  paymentId           String?     @unique
+  paymentId           String?
   payment             Payment?    @relation(fields: [paymentId], references: [id])
   // itemIndex: NULL = single-concept row (legacy), 0/1/2... = per-item row for multi-concept appointments
   itemIndex           Int?
