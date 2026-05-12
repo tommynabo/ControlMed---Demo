@@ -347,6 +347,27 @@ router.put('/:id', async (req, res) => {
             userAgent:    req.headers['user-agent'],
         });
 
+        // ── Sync Liquidation.doctorId when the appointment's doctor changes ──
+        // If the doctor on the appointment was reassigned, any PENDING liquidation rows
+        // for this appointment that still point to the old doctor are updated automatically.
+        // PAID/CLOSED liquidations are intentionally left untouched (historical accuracy).
+        if (
+            updates.doctorId &&
+            oldRecord?.doctorId &&
+            updates.doctorId !== oldRecord.doctorId
+        ) {
+            try {
+                await supabase
+                    .from('Liquidation')
+                    .update({ doctorId: updates.doctorId })
+                    .eq('appointmentId', id)
+                    .eq('doctorId', oldRecord.doctorId)
+                    .eq('status', 'PENDING');
+            } catch (_syncErr) {
+                console.warn('[appointments] No se pudo sincronizar doctorId en Liquidation:', _syncErr.message);
+            }
+        }
+
         // Enrich PUT response so Agenda local-state update shows updated_by_name immediately
         let response = data;
         try {

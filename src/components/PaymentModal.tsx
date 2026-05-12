@@ -595,6 +595,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 placeholder="Concepto del cobro"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100"
                             />
+                            {/* Warn when multiple concepts are typed without a linked budget: the
+                                payment will generate a single combined liquidation row instead of
+                                one row per treatment, making the doctor's PDF less detailed. */}
+                            {isDirectPayment && concept.includes(',') && !(appointment as any)?.budgetId && (
+                                <p className="text-[10px] text-amber-700 font-bold mt-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                                    ⚠️ Varios conceptos detectados sin presupuesto vinculado. La liquidación del doctor se registrará como una sola línea. Para desglosar por tratamiento, crea primero un presupuesto.
+                                </p>
+                            )}
                         </div>
                     </div>
 

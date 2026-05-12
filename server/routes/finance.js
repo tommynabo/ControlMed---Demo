@@ -461,6 +461,65 @@ router.put('/invoices/:id', async (req, res) => {
     }
 });
 
+// DELETE /finance/invoices/:id — elimina una factura SOLO si la cita vinculada NO está marcada como pagada
+router.delete('/invoices/:id', async (req, res) => {
+    try {
+        let supabase;
+        try { supabase = getSupabase(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+        const { id } = req.params;
+        if (!id) return res.status(400).json({ error: 'Invoice ID is required' });
+
+        const { data: invoice, error: fetchErr } = await supabase
+            .from('Invoice')
+            .select('id, invoiceNumber, appointmentId, relatedPaymentId')
+            .eq('id', id)
+            .single();
+
+        if (fetchErr || !invoice) return res.status(404).json({ error: 'Factura no encontrada' });
+
+        // Guard: do not allow deleting an invoice that belongs to a paid appointment
+        if (invoice.appointmentId) {
+            const { data: appt } = await supabase
+                .from('Appointment')
+                .select('paid')
+                .eq('id', invoice.appointmentId)
+                .single();
+            if (appt?.paid === true) {
+                return res.status(409).json({
+                    error: `No se puede eliminar la factura ${invoice.invoiceNumber}: la cita vinculada ya está marcada como pagada. Anula primero el cobro de la cita.`
+                });
+            }
+        }
+
+        // Remove InvoiceItems first (FK constraint)
+        await supabase.from('InvoiceItem').delete().eq('invoiceId', id);
+
+        // Unlink any Payment pointing to this invoice
+        if (invoice.relatedPaymentId) {
+            await supabase.from('Payment').update({ invoiceId: null }).eq('id', invoice.relatedPaymentId);
+        }
+
+        const { error: delErr } = await supabase.from('Invoice').delete().eq('id', id);
+        if (delErr) throw delErr;
+
+        logAudit(supabase, {
+            userId:       req.user?.id,
+            userRole:     req.user?.role,
+            action:       'DELETE',
+            resourceType: 'invoices',
+            resourceId:   id,
+            oldValues:    invoice,
+            ipAddress:    req.ip,
+            userAgent:    req.headers['user-agent'],
+        });
+
+        res.json({ success: true, deletedId: id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.get('/invoices', async (req, res) => {
     try {
         let supabase;
