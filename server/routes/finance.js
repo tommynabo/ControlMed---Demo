@@ -910,18 +910,27 @@ router.post('/payments/create', async (req, res) => {
                         // ── Multi-concept path: one Liquidation row per BudgetLineItem ───
                         for (let i = 0; i < budgetItems.length; i++) {
                             const item = budgetItems[i];
+                            // Use the doctor assigned to this specific line item if set;
+                            // fall back to the appointment's doctor for unassigned items.
+                            const itemDoctorId = item.doctorId || doctor.id;
+                            const itemDoctor = itemDoctorId === doctor.id
+                                ? doctor
+                                : (await supabase.from('Doctor').select('*').eq('id', itemDoctorId).single()).data || doctor;
+                            const itemRate = itemDoctor?.commissionPercentage || 30;
                             const itemGross = item.price * (item.quantity || 1);
-                            const itemFinal = itemGross * (rawRate / 100);
+                            const itemFinal = itemGross * (itemRate / 100);
+                            // Search for an existing row using the item's actual doctor
                             const existingItem = await tx.liquidation.findFirst({
-                                where: { appointmentId, doctorId: doctor.id, itemIndex: i }
+                                where: { appointmentId, doctorId: itemDoctorId, itemIndex: i }
                             });
                             if (existingItem) {
                                 await tx.liquidation.update({
                                     where: { id: existingItem.id },
                                     data: {
+                                        doctorId: itemDoctorId,
                                         grossAmount: itemGross,
                                         baseAmount: itemGross,
-                                        commissionRate: rawRate,
+                                        commissionRate: itemRate,
                                         finalAmount: itemFinal,
                                         treatmentName: item.name,
                                         patientName: patient?.name || 'Paciente',
@@ -933,14 +942,14 @@ router.post('/payments/create', async (req, res) => {
                                 await tx.liquidation.create({
                                     data: {
                                         id: crypto.randomUUID(),
-                                        doctorId: doctor.id,
+                                        doctorId: itemDoctorId,
                                         appointmentId,
                                         itemIndex: i,
                                         paymentId: null,
                                         grossAmount: itemGross,
                                         baseAmount: itemGross,
                                         labCost: 0,
-                                        commissionRate: rawRate,
+                                        commissionRate: itemRate,
                                         finalAmount: itemFinal,
                                         referralCommission: 0,
                                         referralEntityName: null,
