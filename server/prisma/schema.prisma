@@ -274,7 +274,7 @@ model Liquidation {
   appointmentId       String?
   appointment         Appointment? @relation(fields: [appointmentId], references: [id])
   paymentId           String?
-  payment             Payment?    @relation(fields: [paymentId], references: [id])
+  payment             Payment?    @relation("LiquidationPayments", fields: [paymentId], references: [id])
   // itemIndex: NULL = single-concept row (legacy), 0/1/2... = per-item row for multi-concept appointments
   itemIndex           Int?
   grossAmount         Float
@@ -318,7 +318,7 @@ model Payment {
   referralCommission Float?   @default(0)
   referralEntityName String?
   idempotencyKey     String?  @unique
-  liquidation        Liquidation?
+  liquidations       Liquidation[] @relation("LiquidationPayments")
 
   @@index([patientId])
   @@index([appointmentId])
