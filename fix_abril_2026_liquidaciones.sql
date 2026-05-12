@@ -1,0 +1,41 @@
+-- ══════════════════════════════════════════════════════════════════════════
+-- FIX: Liquidaciones Abril 2026 + desglosados (12/05/2026)
+-- ══════════════════════════════════════════════════════════════════════════
+-- Estado en DB ANTES de ejecutar este script (ya aplicado via MCP):
+--   • Rosana Reyes Arevales → doctorId ya corregido a Dr. Álvaro BABIANO ✅
+--   • Youssef Diente 14     → doctorId ya corregido a Dr. CHRABIEH ✅
+--   • Youssef 20/04 Primera Visita → invoice + payment + liquidation creados ✅
+--   • Desglosados: 10 citas multi-concepto spliteadas en rows individuales ✅
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- 1. Youssef el kabouri — 20/04/2026 — Primera Visita — Dr. Pablo ROO
+-- (Invoice F-2026-1776766509205, 60€, card, appointment 8e5f1578)
+-- ══════════════════════════════════════════════════════════════════════════
+-- YA APLICADO: Payment + Invoice F-2026-1776766509205 + InvoiceItem + 
+--              Liquidation (Pablo ROO, 30%, 18€ neto) + Appointment.paid=true
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- 2. Split multi-concepto → rows individuales (itemIndex 0,1,2...)
+--    Afecta: Dr. Álvaro BABIANO, Dr. CHRABIEH, Dra. Caroline Castay
+-- ══════════════════════════════════════════════════════════════════════════
+-- Dr. Álvaro BABIANO:
+--   Rosana Reyes    Bio-Oss 36 (180€) + Membrana 36 (180€)
+--   Rocio OCHOA     Colgajo Expl. D37 (150€) + Extraccion compleja D37 (85€)
+--
+-- Dr. CHRABIEH:
+--   ELIDA GONCALVEZ  Obturacion I D27 (60€) + Obturacion II D36 (80€)
+--   SANDRA FUENTES   Raspado P21 (100€) + Raspado P31 (100€) + Extraccion P33 (60€)
+--   TOMAS MECO       Extraccion Simple D25 (60€) + Extraccion Compleja D26 (100€)
+--   ANTONIO VIUDEZ   Locators 32/12/22 (120€×3) + Ajuste Prótesis P21 (200€)
+--   REDA BENSARI     Cortar Corona D27 (90€) + Cortar Corona D26 (90€) + CBCT D26 (80€)
+--   JAVIER SUCH      Extraccion Cordal D48 (212.5€) + Raspado D11 (85€) + Raspado D41 (85€)
+--   MAT HOOLE        Extraccion Simple (60€) + Tartrectomia (60€)  [Mayo 2026]
+--
+-- Dra. Caroline Castay:
+--   MATEO YAACOUB    Brackets D41 (382.5€) + Brackets D12 (382.5€)
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ROLLBACK (si fuese necesario):
+-- Para revertir los splits, borrar las filas con itemIndex IS NOT NULL
+-- y recrear la fila combinada. Ver datos originales en las imágenes de referencia.
+-- ══════════════════════════════════════════════════════════════════════════
