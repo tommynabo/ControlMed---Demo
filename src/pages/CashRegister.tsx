@@ -283,7 +283,8 @@ const CashRegister: React.FC = () => {
             }).catch(() => setTodayPartialPayments([]));
         });
         return () => { cancelled = true; };
-    }, [invoices, expenses, selectedDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDate]);
 
     // Load closing status for selected date + openingCash (arrastre)
     useEffect(() => {
