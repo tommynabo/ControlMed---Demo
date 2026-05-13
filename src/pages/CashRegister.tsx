@@ -375,10 +375,12 @@ const CashRegister: React.FC = () => {
         // Treat null/undefined paymentMethod as 'cash' — cash withdrawals (retiradas) may lack an explicit method
         const cashExpenses   = todayExpenses.filter(e => !e.paymentMethod || e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
         const netCash        = cashIncome - cashExpenses;
-        // expectedCash = arrastre + efectivo de hoy
+        // expectedCash = arrastre + solo efectivo de hoy (para arqueo físico)
         const expectedCash   = (openingCash ?? 0) + netCash;
+        // totalCaja = arrastre + TODOS los ingresos del día (efectivo + tarjeta + transferencia)
+        const totalCaja      = (openingCash ?? 0) + totalIncome - cashExpenses;
 
-        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, netCash, expectedCash, balance: totalIncome - totalExpense };
+        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, netCash, expectedCash, totalCaja, balance: totalIncome - totalExpense };
     }, [todayInvoices, todayPartialPayments, todayExpenses, openingCash]);
 
 
@@ -617,6 +619,18 @@ const CashRegister: React.FC = () => {
                                     <span className="text-sm text-slate-600 font-medium">+ Entradas efectivo</span>
                                     <span className="text-sm font-black text-emerald-600">+{stats.cashIncome.toFixed(2)}€</span>
                                 </div>
+                                {stats.cardIncome > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-slate-600 font-medium">+ Ingresos tarjeta</span>
+                                        <span className="text-sm font-black text-emerald-600">+{stats.cardIncome.toFixed(2)}€</span>
+                                    </div>
+                                )}
+                                {stats.transferIncome > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-sm text-slate-600 font-medium">+ Transferencias</span>
+                                        <span className="text-sm font-black text-emerald-600">+{stats.transferIncome.toFixed(2)}€</span>
+                                    </div>
+                                )}
                                 {stats.cashExpenses > 0 && (
                                     <div className="flex justify-between items-center">
                                         <span className="text-sm text-slate-600 font-medium">− Salidas efectivo</span>
@@ -640,7 +654,7 @@ const CashRegister: React.FC = () => {
                                 <div className="border-t-2 border-slate-300 pt-3 flex justify-between items-center">
                                     <span className="text-sm font-black text-slate-900 uppercase tracking-wide">Total Caja</span>
                                     <span className="text-xl font-black text-slate-900">
-                                        {arqueoCompleted ? physicalCashTotal.toFixed(2) : stats.expectedCash.toFixed(2)}€
+                                        {arqueoCompleted ? physicalCashTotal.toFixed(2) : stats.totalCaja.toFixed(2)}€
                                     </span>
                                 </div>
                                 {arqueoCompleted && (
