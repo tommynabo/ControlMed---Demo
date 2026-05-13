@@ -908,6 +908,11 @@ router.post('/payments/create', async (req, res) => {
                     : null;
 
                 if (existingInvoice) {
+                    // Unlink old payment before new one claims this invoice (Payment.invoiceId is @unique)
+                    await tx.payment.updateMany({
+                        where: { invoiceId: existingInvoice.id, NOT: { id: payment.id } },
+                        data: { invoiceId: null }
+                    });
                     invoice = await tx.invoice.update({
                         where: { id: existingInvoice.id },
                         data: {
@@ -1356,6 +1361,11 @@ router.post('/payments/create-split', async (req, res) => {
 
             let invoice;
             if (existingSplitInvoice) {
+                // Unlink old payment before new one claims this invoice (Payment.invoiceId is @unique)
+                await tx.payment.updateMany({
+                    where: { invoiceId: existingSplitInvoice.id, NOT: { id: payment.id } },
+                    data: { invoiceId: null }
+                });
                 invoice = await tx.invoice.update({
                     where: { id: existingSplitInvoice.id },
                     data: {
