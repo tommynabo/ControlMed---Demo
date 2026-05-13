@@ -160,6 +160,7 @@ const CashRegister: React.FC = () => {
     const [editExpDescription, setEditExpDescription] = useState('');
     const [editExpCategory, setEditExpCategory] = useState('');
     const [editExpAmount, setEditExpAmount] = useState('');
+    const [editExpPaymentMethod, setEditExpPaymentMethod] = useState('cash');
     const [isSavingExp, setIsSavingExp] = useState(false);
 
     const handleOpenEditInvoice = (inv: any) => {
@@ -176,6 +177,7 @@ const CashRegister: React.FC = () => {
         setEditExpDescription(exp.description || '');
         setEditExpCategory(exp.category || '');
         setEditExpAmount(String(exp.amount ?? 0));
+        setEditExpPaymentMethod(exp.paymentMethod || 'cash');
         setEditingExpenseFull(exp);
     };
 
@@ -220,6 +222,7 @@ const CashRegister: React.FC = () => {
                 description: editExpDescription,
                 category: editExpCategory,
                 amount: parseFloat(editExpAmount),
+                paymentMethod: editExpPaymentMethod,
             });
             await refreshDayData();
             setEditingExpenseFull(null);
@@ -335,7 +338,8 @@ const CashRegister: React.FC = () => {
         const totalIncome    = totalInvoiceIncome + totalPartialIncome;
 
         const totalExpense   = todayExpenses.reduce((acc, curr) => acc + curr.amount, 0);
-        const cashExpenses   = todayExpenses.filter(e => e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
+        // Treat null/undefined paymentMethod as 'cash' — cash withdrawals (retiradas) may lack an explicit method
+        const cashExpenses   = todayExpenses.filter(e => !e.paymentMethod || e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
         const netCash        = cashIncome - cashExpenses;
         // expectedCash = arrastre + efectivo de hoy
         const expectedCash   = (openingCash ?? 0) + netCash;
@@ -826,7 +830,11 @@ const CashRegister: React.FC = () => {
                                             </td>
                                             <td className="p-6 text-center">
                                                 <span className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[10px] font-bold uppercase">
-                                                    Gasto
+                                                    {(() => {
+                                                        const m = exp.paymentMethod;
+                                                        const label = m === 'card' ? 'Tarjeta' : m === 'transfer' ? 'Transfer' : m === 'domiciliacion' ? 'Domicil.' : 'Efectivo';
+                                                        return `Gasto (${label})`;
+                                                    })()}
                                                 </span>
                                             </td>
                                             <td className="p-6 text-right pr-8 font-bold text-rose-600">
@@ -1052,6 +1060,22 @@ const CashRegister: React.FC = () => {
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Fecha</label>
                                     <input type="date" value={editExpDate} onChange={e => setEditExpDate(e.target.value)}
                                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Método de Pago</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(['cash', 'card', 'transfer', 'domiciliacion'] as const).map(m => (
+                                        <button key={m} type="button"
+                                            onClick={() => setEditExpPaymentMethod(m)}
+                                            className={`py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wide border-2 transition-colors ${
+                                                editExpPaymentMethod === m
+                                                    ? 'bg-slate-900 text-white border-slate-900'
+                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                                            }`}>
+                                            {m === 'cash' ? '💵 Efectivo' : m === 'card' ? '💳 Tarjeta' : m === 'transfer' ? '🏦 Transfer' : '🏢 Domicil.'}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>
