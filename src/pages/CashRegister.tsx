@@ -234,6 +234,7 @@ const CashRegister: React.FC = () => {
     };
 
     useEffect(() => {
+        // Fast path: filter from context cache for instant render
         setTodayInvoices(invoices.filter(i =>
             i.date && i.date.split('T')[0] === selectedDate &&
             !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
@@ -241,15 +242,47 @@ const CashRegister: React.FC = () => {
         setTodayExpenses(expenses.filter(e =>
             e.date && e.date.split('T')[0] === selectedDate
         ));
-        // Fetch partial payments for the selected date (payments without an invoiceId)
-        api.payments.getAll().then((allPayments: any[]) => {
-            const partial = allPayments.filter((p: any) =>
-                !p.invoiceId &&
-                p.createdAt && p.createdAt.split('T')[0] === selectedDate &&
-                p.type !== 'ADVANCE_PAYMENT'
+
+        // Fresh API fetch — ensures backdated payments always appear, bypassing stale cache
+        let cancelled = false;
+        (api as any).invoices.getAll().then((freshInvoices: any[]) => {
+            if (cancelled) return;
+            const dayInvoices = freshInvoices.filter((i: any) =>
+                i.date && i.date.split('T')[0] === selectedDate &&
+                !['rectified', 'pending', 'refunded'].includes((i.status || '').toLowerCase())
             );
-            setTodayPartialPayments(partial);
-        }).catch(() => setTodayPartialPayments([]));
+            setTodayInvoices(dayInvoices);
+
+            // Exclude partial payments for appointments that already have a final invoice
+            // to avoid double-counting (e.g. partial 50€ cash + invoice 150€ for same appointment)
+            const apptIdsWithFinalInvoice = new Set(
+                dayInvoices
+                    .filter((i: any) => i.status === 'issued' && i.appointmentId)
+                    .map((i: any) => i.appointmentId)
+            );
+            api.payments.getAll().then((allPayments: any[]) => {
+                if (cancelled) return;
+                const partial = allPayments.filter((p: any) =>
+                    !p.invoiceId &&
+                    p.createdAt && p.createdAt.split('T')[0] === selectedDate &&
+                    p.type !== 'ADVANCE_PAYMENT' &&
+                    !(p.appointmentId && apptIdsWithFinalInvoice.has(p.appointmentId))
+                );
+                setTodayPartialPayments(partial);
+            }).catch(() => setTodayPartialPayments([]));
+        }).catch(() => {
+            // Fallback: just fetch partial payments without final-invoice filtering
+            api.payments.getAll().then((allPayments: any[]) => {
+                if (cancelled) return;
+                const partial = allPayments.filter((p: any) =>
+                    !p.invoiceId &&
+                    p.createdAt && p.createdAt.split('T')[0] === selectedDate &&
+                    p.type !== 'ADVANCE_PAYMENT'
+                );
+                setTodayPartialPayments(partial);
+            }).catch(() => setTodayPartialPayments([]));
+        });
+        return () => { cancelled = true; };
     }, [invoices, expenses, selectedDate]);
 
     // Load closing status for selected date + openingCash (arrastre)
