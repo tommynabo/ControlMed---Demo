@@ -901,23 +901,48 @@ router.post('/payments/create', async (req, res) => {
                 const invoiceConceptName = isPartialPayment ? solvedTreatmentName + ' (pago parcial)' : solvedTreatmentName;
                 const invoiceLineAmount = isPartialPayment ? numericAmount : invoiceAmount;
 
-                invoice = await tx.invoice.create({
-                    data: {
-                        id: crypto.randomUUID(),
-                        invoiceNumber,
-                        externalId: quipuResult.success ? String(quipuResult.id) : null,
-                        url: quipuResult.success ? quipuResult.pdf_url : null,
-                        patientId,
-                        amount: invoiceLineAmount,
-                        date: effectiveDate,
-                        status: invoiceStatus,
-                        paymentMethod: invoicePaymentMethod,
-                        paymentBreakdown: isPartialPayment ? null : paymentBreakdown,
-                        concept: invoiceConceptName,
-                        appointmentId: appointmentId || null,
-                        relatedPaymentId: payment.id
-                    }
-                });
+                // UPSERT: if an invoice already exists for this appointment (e.g. a prior partial
+                // payment), update it instead of creating a new one to avoid the @unique constraint on appointmentId.
+                const existingInvoice = appointmentId
+                    ? await tx.invoice.findFirst({ where: { appointmentId } })
+                    : null;
+
+                if (existingInvoice) {
+                    invoice = await tx.invoice.update({
+                        where: { id: existingInvoice.id },
+                        data: {
+                            invoiceNumber,
+                            externalId: quipuResult.success ? String(quipuResult.id) : null,
+                            url: quipuResult.success ? quipuResult.pdf_url : null,
+                            amount: invoiceLineAmount,
+                            date: effectiveDate,
+                            status: invoiceStatus,
+                            paymentMethod: invoicePaymentMethod,
+                            paymentBreakdown: isPartialPayment ? null : paymentBreakdown,
+                            concept: invoiceConceptName,
+                            relatedPaymentId: payment.id
+                        }
+                    });
+                    await tx.invoiceItem.deleteMany({ where: { invoiceId: existingInvoice.id } });
+                } else {
+                    invoice = await tx.invoice.create({
+                        data: {
+                            id: crypto.randomUUID(),
+                            invoiceNumber,
+                            externalId: quipuResult.success ? String(quipuResult.id) : null,
+                            url: quipuResult.success ? quipuResult.pdf_url : null,
+                            patientId,
+                            amount: invoiceLineAmount,
+                            date: effectiveDate,
+                            status: invoiceStatus,
+                            paymentMethod: invoicePaymentMethod,
+                            paymentBreakdown: isPartialPayment ? null : paymentBreakdown,
+                            concept: invoiceConceptName,
+                            appointmentId: appointmentId || null,
+                            relatedPaymentId: payment.id
+                        }
+                    });
+                }
 
                 await tx.invoiceItem.create({
                     data: {
@@ -1324,22 +1349,46 @@ router.post('/payments/create-split', async (req, res) => {
 
             const solvedConcept = concept || resolvedSplits.map(s => s.treatmentName).filter(Boolean).join(' + ') || 'Servicio';
 
-            const invoice = await tx.invoice.create({
-                data: {
-                    id: crypto.randomUUID(),
-                    invoiceNumber,
-                    externalId: quipuResult.success ? String(quipuResult.id) : null,
-                    url: quipuResult.success ? quipuResult.pdf_url : null,
-                    patientId,
-                    amount: numericTotal,
-                    date: splitEffectiveDate,
-                    status: 'issued',
-                    paymentMethod: method,
-                    concept: solvedConcept,
-                    appointmentId: appointmentId || null,
-                    relatedPaymentId: payment.id
-                }
-            });
+            // UPSERT: avoids unique constraint on appointmentId when appointment already has an invoice
+            const existingSplitInvoice = appointmentId
+                ? await tx.invoice.findFirst({ where: { appointmentId } })
+                : null;
+
+            let invoice;
+            if (existingSplitInvoice) {
+                invoice = await tx.invoice.update({
+                    where: { id: existingSplitInvoice.id },
+                    data: {
+                        invoiceNumber,
+                        externalId: quipuResult.success ? String(quipuResult.id) : null,
+                        url: quipuResult.success ? quipuResult.pdf_url : null,
+                        amount: numericTotal,
+                        date: splitEffectiveDate,
+                        status: 'issued',
+                        paymentMethod: method,
+                        concept: solvedConcept,
+                        relatedPaymentId: payment.id
+                    }
+                });
+                await tx.invoiceItem.deleteMany({ where: { invoiceId: existingSplitInvoice.id } });
+            } else {
+                invoice = await tx.invoice.create({
+                    data: {
+                        id: crypto.randomUUID(),
+                        invoiceNumber,
+                        externalId: quipuResult.success ? String(quipuResult.id) : null,
+                        url: quipuResult.success ? quipuResult.pdf_url : null,
+                        patientId,
+                        amount: numericTotal,
+                        date: splitEffectiveDate,
+                        status: 'issued',
+                        paymentMethod: method,
+                        concept: solvedConcept,
+                        appointmentId: appointmentId || null,
+                        relatedPaymentId: payment.id
+                    }
+                });
+            }
 
             for (const s of resolvedSplits) {
                 await tx.invoiceItem.create({
