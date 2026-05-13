@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft, Lock, AlertTriangle } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Payment, Patient, Budget } from '../../types';
 import { api } from '../services/api';
 
@@ -39,6 +40,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     defaultConcept,
     alreadyPaidAmount = 0
 }) => {
+    const queryClient = useQueryClient();
     const isDirectPayment = !!appointment || (!!defaultAmount && defaultAmount > 0);
 
     const [totalAmount, setTotalAmount] = useState('');
@@ -316,6 +318,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     // Si falla la descarga no bloqueamos el flujo
                 }
             }
+
+            // Refrescar caché de facturas y pagos para que aparezcan inmediatamente en la caja
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['payments'] });
 
             onClose();
         } catch (error: any) {
