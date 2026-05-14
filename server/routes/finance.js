@@ -1215,7 +1215,7 @@ router.post('/payments/create', async (req, res) => {
             }
         }
 
-        res.status(200).json({ success: true, ...result });
+        res.status(200).json({ success: true, ...result, emailQueued: !!(patient.email && result.invoice) });
 
         // Gmail invoice email (fire-and-forget, never blocks the response)
         if (patient.email && result.invoice) {

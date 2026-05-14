@@ -52,17 +52,19 @@ async function handleCallback(code) {
     const clinic = await getClinicRow();
 
     if (clinic) {
+        // Only overwrite gmail_refresh_token when Google returns a new one.
+        // Google omits refresh_token on re-authorisations unless the user explicitly
+        // revokes access first; writing undefined/null would wipe the stored token.
+        const updateData = { gmail_connected_email: connectedEmail };
+        if (tokens.refresh_token) updateData.gmail_refresh_token = tokens.refresh_token;
         await supabase
             .from('clinic_info')
-            .update({
-                gmail_refresh_token: tokens.refresh_token,
-                gmail_connected_email: connectedEmail,
-            })
+            .update(updateData)
             .eq('id', clinic.id);
     } else {
         // No clinic row yet — create one with just the Gmail fields
         await supabase.from('clinic_info').insert([{
-            gmail_refresh_token: tokens.refresh_token,
+            gmail_refresh_token: tokens.refresh_token || null,
             gmail_connected_email: connectedEmail,
         }]);
     }

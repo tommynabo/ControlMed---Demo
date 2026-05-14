@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft, Lock, AlertTriangle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { Payment, Patient, Budget } from '../../types';
 import { api } from '../services/api';
 
@@ -302,6 +303,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
         const successMsg = `✅ Operación realizada con éxito.${breakdown.length > 1 ? `\n\nDesglose:\n${breakdown.map(b => `  ${METHOD_LABELS[b.method]}: ${b.amount.toFixed(2)}€`).join('\n')}` : ''}`;
         alert(successMsg);
+
+            if (response?.emailQueued) {
+                toast.success('Factura enviada por email al paciente', { duration: 4000, icon: '📧' });
+            }
 
             // Usar la URL efímera pública de Quipu si viene en la respuesta,
             // si no, pedirla al endpoint de descarga local

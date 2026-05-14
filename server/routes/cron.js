@@ -2,6 +2,7 @@
 const express = require('express');
 const { prisma } = require('../lib/db');
 const whatsappService = require('../services/whatsappService');
+const gmailService = require('../services/gmailService');
 
 const router = express.Router();
 
@@ -105,6 +106,90 @@ router.post('/whatsapp-reminders', async (req, res) => {
         console.log('[MASTER CRON] ✅ Bloque 1 completado:', globalStats.reminders);
     } catch (e) {
         console.error('[MASTER CRON] ❌ Error en Bloque 1 (Recordatorios):', e.message);
+    }
+
+    // ── BLOQUE 1b: Recordatorios de citas por EMAIL (misma ventana 12h) ─────
+    // Complementa el bloque WhatsApp anterior. Usa WhatsAppLog con tipo
+    // 'EMAIL_REMINDER' como barrera anti-duplicados (evita migración de BD).
+    try {
+        console.log('[MASTER CRON] ▶️ Bloque 1b — Recordatorios por email 12h antes...');
+
+        const gmailStatus = await gmailService.getStatus();
+        if (!gmailStatus.connected) {
+            console.warn('[MASTER CRON] Gmail no conectado — saltando Bloque 1b.');
+        } else {
+            const startWindow1b = new Date(Date.now() + 11 * 60 * 60 * 1000);
+            const endWindow1b   = new Date(Date.now() + 13 * 60 * 60 * 1000);
+
+            const apptsByEmail = await prisma.appointment.findMany({
+                where: {
+                    status: { in: ['Scheduled', 'Confirmed'] },
+                    date: { gte: startWindow1b, lte: endWindow1b },
+                    deleted_at: null,
+                    patient: { email: { not: null } },
+                },
+                include: { patient: true, treatment: true },
+            });
+
+            console.log(`[MASTER CRON] Citas con email en ventana 12h: ${apptsByEmail.length}`);
+            const emailStats = { sent: 0, skipped: 0, failed: 0 };
+
+            for (const appt of apptsByEmail) {
+                if (!appt.patient?.email?.trim()) { emailStats.skipped++; continue; }
+
+                // Anti-duplicate: skip if an EMAIL_REMINDER log already exists today
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
+                const alreadySent = await prisma.whatsAppLog.findFirst({
+                    where: {
+                        patientId: appt.patientId,
+                        type: 'EMAIL_REMINDER',
+                        sentAt: { gte: startOfToday },
+                    },
+                });
+                if (alreadySent) { emailStats.skipped++; continue; }
+
+                const appointmentDate = new Date(appt.date);
+                const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Madrid' });
+                const formattedTime = appt.time ? appt.time.substring(0, 5)
+                    : appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Madrid' });
+                const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta General';
+
+                const htmlBody = `
+                    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">
+                        <h2 style="color:#1d4ed8;">Recordatorio de cita — CHC Clínica Dental</h2>
+                        <p>Hola <strong>${appt.patient.name}</strong>,</p>
+                        <p>Te recordamos que tienes una cita programada para mañana:</p>
+                        <table style="width:100%;border-collapse:collapse;margin:20px 0;background:#f8fafc;border-radius:8px;">
+                            <tr><td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Fecha:</strong></td><td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">${formattedDate}</td></tr>
+                            <tr><td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;"><strong>Hora:</strong></td><td style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">${formattedTime}</td></tr>
+                            <tr><td style="padding:12px 16px;"><strong>Tratamiento:</strong></td><td style="padding:12px 16px;">${treatmentName}</td></tr>
+                        </table>
+                        <p>Si necesitas cancelar o modificar la cita, por favor contacta con nosotros lo antes posible.</p>
+                        <p style="color:#64748b;font-size:13px;margin-top:24px;">CHC Clínica Dental<br>Si no deseas recibir estos recordatorios, responde a este correo indicándolo.</p>
+                    </div>`;
+
+                try {
+                    await gmailService.sendGmail({
+                        to: appt.patient.email.trim(),
+                        subject: `Recordatorio de cita — ${formattedDate} a las ${formattedTime}`,
+                        htmlBody,
+                    });
+                    await prisma.whatsAppLog.create({
+                        data: { patientId: appt.patientId, type: 'EMAIL_REMINDER', status: 'SENT', content: `Email recordatorio enviado a ${appt.patient.email}`, sentAt: new Date() },
+                    });
+                    emailStats.sent++;
+                    console.log(`[MASTER CRON] 📧 Email recordatorio enviado a ${appt.patient.email}`);
+                } catch (mailErr) {
+                    console.warn(`[MASTER CRON] ⚠️ Email fallido para ${appt.patient.email}:`, mailErr.message);
+                    emailStats.failed++;
+                }
+            }
+
+            console.log('[MASTER CRON] ✅ Bloque 1b completado:', emailStats);
+        }
+    } catch (e) {
+        console.error('[MASTER CRON] ❌ Error en Bloque 1b (Recordatorios email):', e.message);
     }
 
     // ── BLOQUE 2: Cumpleaños ─────────────────────────────────────────────────
