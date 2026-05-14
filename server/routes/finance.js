@@ -997,6 +997,29 @@ router.post('/payments/create', async (req, res) => {
                         });
                     }
 
+                    // ── Filter to only the budget items explicitly linked to THIS appointment ──
+                    // appointment.budgetItemIds stores the specific items selected when the
+                    // appointment was created (e.g. "Estudio Ortodóntico" only, not the whole
+                    // budget). Without this filter, a single-concept appointment linked to a
+                    // multi-item budget incorrectly triggers the multi-concept path and creates
+                    // one Liquidation row per budget item.
+                    if (budgetItems.length >= 2) {
+                        try {
+                            const apptRecord = await tx.appointment.findUnique({
+                                where: { id: appointmentId },
+                                select: { budgetItemIds: true }
+                            });
+                            if (apptRecord?.budgetItemIds) {
+                                const specificIds = JSON.parse(apptRecord.budgetItemIds);
+                                if (Array.isArray(specificIds) && specificIds.length > 0) {
+                                    budgetItems = budgetItems.filter(item => specificIds.includes(item.id));
+                                }
+                            }
+                        } catch (_) {
+                            // If parsing fails, fall through with full list (safe degradation)
+                        }
+                    }
+
                     if (budgetItems.length >= 2) {
                         // ── Multi-concept path: one Liquidation row per BudgetLineItem ───
                         // Compute total catalog value (pre-discount) to allocate the real payment amount proportionally.
