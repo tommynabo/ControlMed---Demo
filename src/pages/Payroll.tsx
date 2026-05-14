@@ -414,7 +414,6 @@ const Payroll: React.FC = () => {
                                                                     if (!editingRow) return;
                                                                     setSavingRowId(r.id);
                                                                     try {
-                                                                        const doctorChanged = editingRow.doctorId !== (r.doctorId ?? '');
                                                                         await api.liquidations.update(r.id, {
                                                                             treatmentName: editingRow.treatmentName,
                                                                             doctorId: editingRow.doctorId || undefined,
@@ -422,34 +421,10 @@ const Payroll: React.FC = () => {
                                                                             ...(edit.labCost        !== undefined && { labCost:        edit.labCost }),
                                                                             ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
                                                                         });
-                                                                        if (doctorChanged) {
-                                                                            setLiquidations((prev: any) => ({
-                                                                                ...prev,
-                                                                                treatments: prev.treatments.filter((t: any) => t.id !== r.id)
-                                                                            }));
-                                                                        } else {
-                                                                            setLiquidations((prev: any) => ({
-                                                                                ...prev,
-                                                                                treatments: prev.treatments.map((t: any) =>
-                                                                                    t.id === r.id
-                                                                                        ? {
-                                                                                            ...t,
-                                                                                            treatmentName:  editingRow.treatmentName,
-                                                                                            doctorId:       editingRow.doctorId,
-                                                                                            grossAmount:    edit.grossAmount    ?? t.grossAmount,
-                                                                                            labCost:        edit.labCost        ?? t.labCost,
-                                                                                            commissionRate: edit.commissionRate ?? t.commissionRate,
-                                                                                          }
-                                                                                        : t
-                                                                                )
-                                                                            }));
-                                                                        }
-                                                                        // Clear local overrides — now saved to DB
-                                                                        setEditedRecords(prev => {
-                                                                            const next = { ...prev };
-                                                                            delete next[r.id];
-                                                                            return next;
-                                                                        });
+                                                                        // Reload from DB to confirm the save persisted
+                                                                        const refreshed = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                                                                        setLiquidations(refreshed);
+                                                                        setEditedRecords({});
                                                                         setEditingRow(null);
                                                                     } catch (err) {
                                                                         console.error('Error saving liquidation:', err);
@@ -493,24 +468,10 @@ const Payroll: React.FC = () => {
                                                                                 ...(edit.labCost        !== undefined && { labCost:        edit.labCost }),
                                                                                 ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
                                                                             });
-                                                                            setLiquidations((prev: any) => ({
-                                                                                ...prev,
-                                                                                treatments: prev.treatments.map((t: any) =>
-                                                                                    t.id === r.id
-                                                                                        ? {
-                                                                                            ...t,
-                                                                                            grossAmount:    edit.grossAmount    ?? t.grossAmount,
-                                                                                            labCost:        edit.labCost        ?? t.labCost,
-                                                                                            commissionRate: edit.commissionRate ?? t.commissionRate,
-                                                                                          }
-                                                                                        : t
-                                                                                )
-                                                                            }));
-                                                                            setEditedRecords(prev => {
-                                                                                const next = { ...prev };
-                                                                                delete next[r.id];
-                                                                                return next;
-                                                                            });
+                                                                            // Reload from DB to confirm the save persisted
+                                                                            const refreshed = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                                                                            setLiquidations(refreshed);
+                                                                            setEditedRecords({});
                                                                         } catch (err) {
                                                                             alert('Error al guardar los importes');
                                                                         } finally {

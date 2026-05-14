@@ -136,17 +136,26 @@ router.put('/liquidations/:id', async (req, res) => {
         if (doctorId !== undefined) data.doctorId = doctorId;
         if (grossAmount !== undefined) data.grossAmount = Number(grossAmount);
         if (labCost !== undefined) data.labCost = Number(labCost);
-        if (commissionRate !== undefined) {
-            data.commissionRate = Number(commissionRate);
-        }
-        // Recalculate finalAmount if numeric fields changed
-        if (data.grossAmount !== undefined || data.labCost !== undefined || data.commissionRate !== undefined) {
+        if (commissionRate !== undefined) data.commissionRate = Number(commissionRate);
+
+        // Recalculate finalAmount if any numeric field changed
+        const hasFinancialChange = data.grossAmount !== undefined || data.labCost !== undefined || data.commissionRate !== undefined;
+        if (hasFinancialChange) {
             const existing = await prisma.liquidation.findUnique({ where: { id } });
             if (!existing) return res.status(404).json({ error: 'Liquidation not found' });
             const g = data.grossAmount !== undefined ? data.grossAmount : existing.grossAmount;
             const l = data.labCost !== undefined ? data.labCost : existing.labCost;
             const r = data.commissionRate !== undefined ? data.commissionRate : existing.commissionRate;
             data.finalAmount = (g - l) * (r / 100);
+            // Also sync baseAmount when grossAmount changes and there is no referral markup
+            // (i.e. baseAmount was equal to grossAmount before the edit, meaning no markup applied)
+            if (data.grossAmount !== undefined) {
+                const existingBase = existing.baseAmount ?? existing.grossAmount;
+                const hadNoMarkup = Math.abs(existingBase - existing.grossAmount) < 0.01;
+                if (hadNoMarkup) data.baseAmount = data.grossAmount;
+            }
+            // Mark the row as manually edited so payment flows won't overwrite these values
+            data.manuallyEdited = true;
         }
         const updated = await prisma.liquidation.update({ where: { id }, data });
         res.json(updated);
@@ -1062,20 +1071,13 @@ router.post('/payments/create', async (req, res) => {
                                 where: { appointmentId, doctorId: itemDoctorId, itemIndex: i }
                             });
                             if (existingItem) {
+                                // If an admin manually edited this row, preserve their financial values
+                                const itemUpdateData = existingItem.manuallyEdited
+                                    ? { paymentId: payment.id, treatmentName: item.name, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                                    : { paymentId: payment.id, doctorId: itemDoctorId, grossAmount: itemGross, baseAmount: itemGross, commissionRate: itemRate, finalAmount: itemFinal, treatmentName: item.name, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING' };
                                 await tx.liquidation.update({
                                     where: { id: existingItem.id },
-                                    data: {
-                                        paymentId: payment.id,
-                                        doctorId: itemDoctorId,
-                                        grossAmount: itemGross,
-                                        baseAmount: itemGross,
-                                        commissionRate: itemRate,
-                                        finalAmount: itemFinal,
-                                        treatmentName: item.name,
-                                        patientName: patient?.name || 'Paciente',
-                                        paymentMethod: method,
-                                        status: 'PENDING'
-                                    }
+                                    data: itemUpdateData
                                 });
                             } else {
                                 await tx.liquidation.create({
@@ -1110,23 +1112,13 @@ router.post('/payments/create', async (req, res) => {
                         });
 
                         if (existingLiquidation) {
+                            // If an admin manually edited this row, preserve their financial values
+                            const singleUpdateData = existingLiquidation.manuallyEdited
+                                ? { paymentId: payment.id, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                                : { paymentId: payment.id, doctorId: doctor.id, grossAmount: grossForLiquidation, baseAmount: doctorBaseAmount, labCost, commissionRate: rawRate, finalAmount, referralCommission: referralCommission || 0, referralEntityName: referralEntityName || null, treatmentName: solvedTreatmentName, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING' };
                             liquidation = await tx.liquidation.update({
                                 where: { id: existingLiquidation.id },
-                                data: {
-                                    paymentId: payment.id,
-                                    doctorId: doctor.id,
-                                    grossAmount: grossForLiquidation,
-                                    baseAmount: doctorBaseAmount,
-                                    labCost,
-                                    commissionRate: rawRate,
-                                    finalAmount,
-                                    referralCommission: referralCommission || 0,
-                                    referralEntityName: referralEntityName || null,
-                                    treatmentName: solvedTreatmentName,
-                                    patientName: patient?.name || 'Paciente',
-                                    paymentMethod: method,
-                                    status: 'PENDING'
-                                }
+                                data: singleUpdateData
                             });
                         } else {
                             liquidation = await tx.liquidation.create({
@@ -1469,9 +1461,13 @@ router.post('/payments/create-split', async (req, res) => {
 
                 let liq;
                 if (existingLiq) {
+                    // If an admin manually edited this row, preserve their financial values
+                    const splitUpdateData = existingLiq.manuallyEdited
+                        ? { paymentId: payment.id, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                        : { paymentId: payment.id, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' };
                     liq = await tx.liquidation.update({
                         where: { id: existingLiq.id },
-                        data: { paymentId: payment.id, grossAmount: s.amount, baseAmount: splitBase, labCost, commissionRate: rawRate, finalAmount, referralCommission: splitRefComm || 0, referralEntityName: splitReferralEntity || null, treatmentName: s.treatmentName || 'Tratamiento', patientName: patient.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                        data: splitUpdateData
                     });
                 } else {
                     liq = await tx.liquidation.create({

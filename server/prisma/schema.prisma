@@ -290,6 +290,7 @@ model Liquidation {
   status              String      @default("PENDING")
   doctorInvoiceUrl    String?
   paidDate            DateTime?
+  manuallyEdited      Boolean     @default(false)
   createdAt           DateTime    @default(now())
 
   // Uniqueness is enforced via two partial SQL indexes (see add_liquidation_item_index.sql):

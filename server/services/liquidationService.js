@@ -89,14 +89,17 @@ async function ensureLiquidation(supabase, {
     if (paymentId) {
         const { data: existing } = await supabase
             .from('Liquidation')
-            .select('id')
+            .select('id, manuallyEdited')
             .eq('paymentId', paymentId)
             .maybeSingle();
         if (existing) {
-            // Already exists — update amounts in case a retry sends corrected data
+            // If manually edited, only update non-financial metadata fields
+            const updatePayload = existing.manuallyEdited
+                ? { treatmentName: payload.treatmentName, patientName: payload.patientName, paymentMethod: payload.paymentMethod, status: payload.status }
+                : payload;
             const { data: updated, error: updErr } = await supabase
                 .from('Liquidation')
-                .update(payload)
+                .update(updatePayload)
                 .eq('id', existing.id)
                 .select()
                 .single();
@@ -109,16 +112,19 @@ async function ensureLiquidation(supabase, {
     if (appointmentId) {
         const { data: existing } = await supabase
             .from('Liquidation')
-            .select('id')
+            .select('id, manuallyEdited')
             .eq('appointmentId', appointmentId)
             .eq('doctorId', doctorId)
             .is('itemIndex', null)
             .maybeSingle();
         if (existing) {
-            // Link the paymentId and refresh amounts
+            // If manually edited, only update non-financial metadata fields
+            const updatePayload = existing.manuallyEdited
+                ? { paymentId: payload.paymentId, treatmentName: payload.treatmentName, patientName: payload.patientName, paymentMethod: payload.paymentMethod, status: payload.status }
+                : payload;
             const { data: updated, error: updErr } = await supabase
                 .from('Liquidation')
-                .update(payload)
+                .update(updatePayload)
                 .eq('id', existing.id)
                 .select()
                 .single();
