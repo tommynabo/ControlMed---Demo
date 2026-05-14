@@ -50,34 +50,30 @@ const CashRegister: React.FC = () => {
         setSelectedDate(d.toISOString().split('T')[0]);
     };
 
-    const recalcularArrastre = () => {
+    const recalcularArrastre = async () => {
+        setIsRecalculating(true);
         setArraystreLoadError(false);
-        if (isToday) {
-            (api as any).cashRegister.getLastClosing().then((prev: any) => {
-                if (prev && prev.physicalCash != null) {
-                    setOpeningCash(prev.physicalCash);
-                    setArraystreLoadError(false);
-                } else {
-                    console.warn('[Caja] recalcularArrastre: getLastClosing sin datos.');
-                    setArraystreLoadError(true);
-                }
-            }).catch((err: any) => {
-                console.error('[Caja] Error recalculando arrastre:', err);
+        try {
+            // Refresh invoices and expenses from server for the selected day
+            await refreshDayData();
+
+            // Reload opening cash (arrastre) from the most recent prior closing
+            const prev = isToday
+                ? await (api as any).cashRegister.getLastClosing()
+                : await (api as any).cashRegister.getLastClosingBefore(selectedDate);
+
+            if (prev && prev.physicalCash != null) {
+                setOpeningCash(prev.physicalCash);
+                setArraystreLoadError(false);
+            } else {
+                console.warn('[Caja] recalcularArrastre: no hay cierre anterior.');
                 setArraystreLoadError(true);
-            });
-        } else {
-            (api as any).cashRegister.getLastClosingBefore(selectedDate).then((prev: any) => {
-                if (prev && prev.physicalCash != null) {
-                    setOpeningCash(prev.physicalCash);
-                    setArraystreLoadError(false);
-                } else {
-                    console.warn('[Caja] recalcularArrastre: getLastClosingBefore sin datos.');
-                    setArraystreLoadError(true);
-                }
-            }).catch((err: any) => {
-                console.error('[Caja] Error recalculando arrastre:', err);
-                setArraystreLoadError(true);
-            });
+            }
+        } catch (err: any) {
+            console.error('[Caja] Error recalculando:', err);
+            setArraystreLoadError(true);
+        } finally {
+            setIsRecalculating(false);
         }
     };
 
@@ -137,6 +133,7 @@ const CashRegister: React.FC = () => {
     // Opening cash (arrastre from previous day)
     const [openingCash, setOpeningCash] = useState<number | null>(null);
     const [arrastreLoadError, setArraystreLoadError] = useState(false);
+    const [isRecalculating, setIsRecalculating] = useState(false);
 
     // Stats for SELECTED DATE
     const [todayInvoices, setTodayInvoices] = useState<any[]>([]);
@@ -599,10 +596,11 @@ const CashRegister: React.FC = () => {
                                         {!isClosed && (
                                             <button
                                                 onClick={recalcularArrastre}
-                                                title="Recalcular arrastre desde el último cierre"
-                                                className="text-[10px] text-slate-400 hover:text-amber-600 underline transition-colors leading-none"
+                                                disabled={isRecalculating}
+                                                title="Recalcular arrastre y actualizar cobros del día"
+                                                className={`text-[10px] underline transition-colors leading-none ${isRecalculating ? 'text-amber-500 opacity-60 cursor-wait' : 'text-slate-400 hover:text-amber-600'}`}
                                             >
-                                                ↺ recalcular
+                                                {isRecalculating ? '↻ actualizando...' : '↺ recalcular'}
                                             </button>
                                         )}
                                     </div>
