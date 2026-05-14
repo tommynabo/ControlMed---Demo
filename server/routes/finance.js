@@ -414,10 +414,17 @@ router.put('/invoices/:id', async (req, res) => {
             if (!/^\d{4}-\d{2}-\d{2}/.test(date)) return res.status(400).json({ error: 'Valid date is required (YYYY-MM-DD)' });
             invoiceUpdate.date = date;
         }
+        let normalizedMethod = null;
         if (paymentMethod) {
-            const allowed = ['cash', 'card', 'transfer'];
-            if (!allowed.includes(paymentMethod)) return res.status(400).json({ error: 'paymentMethod must be cash, card or transfer' });
-            invoiceUpdate.paymentMethod = paymentMethod;
+            const methodMap = {
+                'cash': 'cash', 'efectivo': 'cash',
+                'card': 'card', 'tarjeta': 'card',
+                'transfer': 'transfer', 'transferencia': 'transfer', 'talón/trasferencia': 'transfer',
+                'wallet': 'card',
+            };
+            normalizedMethod = methodMap[(paymentMethod || '').toLowerCase().trim()] || null;
+            if (!normalizedMethod) return res.status(400).json({ error: 'paymentMethod must be cash, card or transfer' });
+            invoiceUpdate.paymentMethod = normalizedMethod;
         }
         if (concept !== undefined) invoiceUpdate.concept = String(concept);
         if (patientId) {
@@ -441,11 +448,18 @@ router.put('/invoices/:id', async (req, res) => {
 
         if (error) throw error;
 
-        // If paymentMethod changed, keep the linked Payment.method in sync
-        if (paymentMethod) {
+        // If date changed, keep Payment.createdAt in sync so the cash register reflects the right day
+        if (date) {
             await supabase
                 .from('Payment')
-                .update({ method: paymentMethod.toUpperCase() })
+                .update({ createdAt: new Date(date + 'T12:00:00.000Z').toISOString() })
+                .eq('invoiceId', id);
+        }
+        // If paymentMethod changed, keep the linked Payment.method in sync
+        if (normalizedMethod) {
+            await supabase
+                .from('Payment')
+                .update({ method: normalizedMethod.toUpperCase() })
                 .eq('invoiceId', id);
         }
         // If amount changed, keep the linked Payment.amount and InvoiceItem.price in sync
