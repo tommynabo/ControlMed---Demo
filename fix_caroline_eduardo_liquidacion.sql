@@ -107,7 +107,7 @@ SELECT
     127.50,                  -- baseAmount
     0,                       -- labCost
     d."commissionPercentage",
-    ROUND(127.50 * d."commissionPercentage" / 100.0, 4),
+    ROUND((127.50 * d."commissionPercentage" / 100.0)::numeric, 4),
     0,
     NULL,
     'ESTUDIO ORTODONTICO',   -- concepto correcto
@@ -135,7 +135,7 @@ SET
     "grossAmount"    = 127.50,
     "baseAmount"     = 127.50,
     "labCost"        = 0,
-    "finalAmount"    = ROUND(127.50 * "commissionRate" / 100.0, 4),
+    "finalAmount"    = ROUND((127.50 * "commissionRate" / 100.0)::numeric, 4),
     "treatmentName"  = 'ESTUDIO ORTODONTICO',
     "paymentMethod"  = 'wallet',
     status           = 'PENDING'
