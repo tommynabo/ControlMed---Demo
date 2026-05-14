@@ -1420,11 +1420,16 @@ export const api = {
 
     // Liquidations (BLOQUE 2.1)
     liquidations: {
-        getSummary: async (doctorId: string, month: number, year: number) => {
-            const res = await fetch(
-                `${API_URL}/liquidations/summary?doctorId=${doctorId}&month=${month}&year=${year}`,
-                { headers }
-            );
+        getSummary: async (doctorId: string, month: number, year: number, dateFrom?: string, dateTo?: string) => {
+            const params = new URLSearchParams({ doctorId });
+            if (dateFrom && dateTo) {
+                params.set('dateFrom', dateFrom);
+                params.set('dateTo', dateTo);
+            } else {
+                params.set('month', String(month));
+                params.set('year', String(year));
+            }
+            const res = await fetch(`${API_URL}/liquidations/summary?${params}`, { headers });
             if (!res.ok) throw new Error('Failed to fetch liquidation summary');
             return res.json();
         },

@@ -283,45 +283,34 @@ router.get('/liquidations/summary', async (req, res) => {
                 return refDate >= startDate && refDate <= endDateFilter;
             });
 
-            const records = filtered.map(liq => {
-                const apptPatient = liq.appointment?.patient || {};
-                // Use appointment date as the display date so the PDF matches the real visit date
-                const displayDate = liq.appointment?.date || liq.createdAt;
-                return {
-                    id: liq.id,
-                    fecha: displayDate,
-                    concepto: liq.treatmentName || 'Tratamiento',
-                    importeCobrado: liq.grossAmount || 0,
-                    baseAmount: liq.baseAmount ?? liq.grossAmount ?? 0,
-                    nombrePaciente: apptPatient.name || liq.patientName || 'Desconocido',
-                    numeroHistoria: apptPatient.historyNumber || '-',
-                    doctorId: liq.doctorId,
-                    referralCommission: liq.referralCommission || 0,
-                    referralEntityName: liq.referralEntityName || null,
-                    isODA: apptPatient.isODA || false
-                };
+            // Return the same shape as month mode so the frontend can reuse the same rendering logic.
+            const treatments = filtered.map(liq => ({
+                ...liq,
+                patientName: liq.appointment?.patient?.name || liq.patientName || 'Desconocido',
+            }));
+
+            const totals = {
+                totalGross:      treatments.reduce((s, r) => s + (r.grossAmount  || 0), 0),
+                totalLabCost:    treatments.reduce((s, r) => s + (r.labCost      || 0), 0),
+                totalCommission: treatments.reduce((s, r) => s + (r.finalAmount  || 0), 0),
+                totalToPay:      treatments.reduce((s, r) => s + (r.finalAmount  || 0), 0),
+            };
+
+            const { data: doctorRow } = await supabase
+                .from('Doctor').select('id, name, specialization').eq('id', doctorId).maybeSingle();
+
+            const fromStr = new Date(dateFrom).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+            const toStr   = new Date(dateTo).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+
+            return res.json({
+                doctor: doctorRow || { id: doctorId, name: 'Doctor' },
+                period: `${fromStr} – ${toStr}`,
+                treatments,
+                totals,
+                dateFrom,
+                dateTo,
+                count: treatments.length,
             });
-            const total = records.reduce((s, r) => s + r.importeCobrado, 0);
-
-            // Optional daily grouping
-            if (groupByDay === 'true') {
-                const byDay = {};
-                for (const r of records) {
-                    const day = String(r.fecha).substring(0, 10);
-                    if (!byDay[day]) byDay[day] = [];
-                    byDay[day].push(r);
-                }
-                const dailyGroups = Object.entries(byDay)
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([date, dayRecords]) => ({
-                        date,
-                        records: dayRecords,
-                        dayTotal: dayRecords.reduce((s, r) => s + r.importeCobrado, 0)
-                    }));
-                return res.json({ records, dailyGroups, dateFrom, dateTo, doctorId, total });
-            }
-
-            return res.json({ records, dateFrom, dateTo, doctorId, total });
         }
 
         const monthInt = parseInt(month, 10) || new Date().getMonth() + 1;

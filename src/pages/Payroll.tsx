@@ -21,13 +21,20 @@ const Payroll: React.FC = () => {
     const [isReconciling, setIsReconciling] = useState(false);
     const [reconcileResult, setReconcileResult] = useState<{ created: number; skipped: number; errors: Array<{ id: string; error: string }> } | null>(null);
     const [splittingRowId, setSplittingRowId] = useState<string | null>(null);
+    const [filterMode, setFilterMode] = useState<'month' | 'range'>('month');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
 
     const handleSplitRow = async (rowId: string) => {
         setSplittingRowId(rowId);
         try {
             await (api.liquidations as any).split(rowId);
             // Reload full summary to reflect the new rows
-            const updated = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+            const updated = await api.liquidations.getSummary(
+                selectedDoctorId, selectedMonth, selectedYear,
+                filterMode === 'range' ? dateFrom : undefined,
+                filterMode === 'range' ? dateTo : undefined
+            );
             setLiquidations(updated);
             setEditedRecords({});
         } catch (err: any) {
@@ -41,10 +48,15 @@ const Payroll: React.FC = () => {
     useEffect(() => {
         const fetchLiquidations = async () => {
             if (!selectedDoctorId) return;
-            
+            if (filterMode === 'range' && (!dateFrom || !dateTo)) return;
+
             setIsLoading(true);
             try {
-                const data = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                const data = await api.liquidations.getSummary(
+                    selectedDoctorId, selectedMonth, selectedYear,
+                    filterMode === 'range' ? dateFrom : undefined,
+                    filterMode === 'range' ? dateTo : undefined
+                );
                 setLiquidations(data);
             } catch (e) {
                 console.error("Error fetching liquidations", e);
@@ -53,7 +65,7 @@ const Payroll: React.FC = () => {
             }
         };
         fetchLiquidations();
-    }, [selectedDoctorId, selectedMonth, selectedYear, api]);
+    }, [selectedDoctorId, selectedMonth, selectedYear, filterMode, dateFrom, dateTo, api]);
 
     const getEffectiveTotal = () => {
         if (manualAdjustment) return parseFloat(manualAdjustment);
@@ -74,7 +86,7 @@ const Payroll: React.FC = () => {
         const doc = doctors.find(d => d.id === selectedDoctorId);
         if (doc) {
             const total = getEffectiveTotal();
-            const period = new Date(selectedYear, selectedMonth - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            const period = liquidations?.period || new Date(selectedYear, selectedMonth - 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
             try {
                 await api.expenses.create({
                     date: new Date().toISOString().split('T')[0],
@@ -129,7 +141,11 @@ const Payroll: React.FC = () => {
             setReconcileResult(result);
             // Reload liquidations to reflect any newly created rows
             if (result.created > 0 && selectedDoctorId) {
-                const updated = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                const updated = await api.liquidations.getSummary(
+                    selectedDoctorId, selectedMonth, selectedYear,
+                    filterMode === 'range' ? dateFrom : undefined,
+                    filterMode === 'range' ? dateTo : undefined
+                );
                 setLiquidations(updated);
             }
         } catch (e: any) {
@@ -275,35 +291,71 @@ const Payroll: React.FC = () => {
                         </select>
                     </div>
 
-                    {/* Month Selection */}
-                    <div>
-                        <label className="text-[11px] font-bold uppercase text-slate-600 block mb-2">Mes</label>
-                        <select
-                            value={selectedMonth}
-                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                            className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
-                        >
-                            {[
-                                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-                                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-                            ].map((m, idx) => (
-                                <option key={idx} value={idx + 1} className="text-slate-900 bg-white">{m}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Year Selection */}
-                    <div>
-                        <label className="text-[11px] font-bold uppercase text-slate-600 block mb-2">Año</label>
-                        <select
-                            value={selectedYear}
-                            onChange={(e) => setSelectedYear(Number(e.target.value))}
-                            className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
-                        >
-                            {[2024, 2025, 2026, 2027].map(y => (
-                                <option key={y} value={y} className="text-slate-900 bg-white">{y}</option>
-                            ))}
-                        </select>
+                    {/* Period Filter — toggle between month/year and custom date range */}
+                    <div className="md:col-span-2">
+                        <div className="flex items-center gap-2 mb-2">
+                            <label className="text-[11px] font-bold uppercase text-slate-600">Período</label>
+                            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                                <button
+                                    onClick={() => setFilterMode('month')}
+                                    className={`px-3 py-0.5 text-xs font-bold transition ${filterMode === 'month' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                                >
+                                    Mes
+                                </button>
+                                <button
+                                    onClick={() => setFilterMode('range')}
+                                    className={`px-3 py-0.5 text-xs font-bold transition ${filterMode === 'range' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+                                >
+                                    Rango
+                                </button>
+                            </div>
+                        </div>
+                        {filterMode === 'month' ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <select
+                                    value={selectedMonth}
+                                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                                    className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
+                                >
+                                    {[
+                                        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+                                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+                                    ].map((m, idx) => (
+                                        <option key={idx} value={idx + 1} className="text-slate-900 bg-white">{m}</option>
+                                    ))}
+                                </select>
+                                <select
+                                    value={selectedYear}
+                                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                                    className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 appearance-none cursor-pointer"
+                                >
+                                    {[2024, 2025, 2026, 2027].map(y => (
+                                        <option key={y} value={y} className="text-slate-900 bg-white">{y}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Desde</label>
+                                    <input
+                                        type="date"
+                                        value={dateFrom}
+                                        onChange={(e) => setDateFrom(e.target.value)}
+                                        className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">Hasta</label>
+                                    <input
+                                        type="date"
+                                        value={dateTo}
+                                        onChange={(e) => setDateTo(e.target.value)}
+                                        className="w-full bg-white border-2 border-slate-300 text-slate-900 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Action Buttons */}
@@ -422,7 +474,11 @@ const Payroll: React.FC = () => {
                                                                             ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
                                                                         });
                                                                         // Reload from DB to confirm the save persisted
-                                                                        const refreshed = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                                                                        const refreshed = await api.liquidations.getSummary(
+                                                                            selectedDoctorId, selectedMonth, selectedYear,
+                                                                            filterMode === 'range' ? dateFrom : undefined,
+                                                                            filterMode === 'range' ? dateTo : undefined
+                                                                        );
                                                                         setLiquidations(refreshed);
                                                                         setEditedRecords({});
                                                                         setEditingRow(null);
@@ -469,7 +525,11 @@ const Payroll: React.FC = () => {
                                                                                 ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
                                                                             });
                                                                             // Reload from DB to confirm the save persisted
-                                                                            const refreshed = await api.liquidations.getSummary(selectedDoctorId, selectedMonth, selectedYear);
+                                                                            const refreshed = await api.liquidations.getSummary(
+                                                                                selectedDoctorId, selectedMonth, selectedYear,
+                                                                                filterMode === 'range' ? dateFrom : undefined,
+                                                                                filterMode === 'range' ? dateTo : undefined
+                                                                            );
                                                                             setLiquidations(refreshed);
                                                                             setEditedRecords({});
                                                                         } catch (err) {
