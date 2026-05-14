@@ -39,64 +39,67 @@ router.post('/whatsapp-reminders', async (req, res) => {
         followups:  { sent: 0, failed: 0, skipped: 0 }
     };
 
-    // ── BLOQUE 1: Recordatorios de citas (mañana) ────────────────────────────
+    // ── BLOQUE 1: Recordatorios de citas (12 horas antes) ───────────────────
     try {
-        console.log('[MASTER CRON] ▶️ Bloque 1 — Recordatorios de citas...');
+        console.log('[MASTER CRON] ▶️ Bloque 1 — Recordatorios de citas 12h antes...');
 
-        const nowMadrid = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Madrid' }));
-        const tomorrowMadrid = new Date(nowMadrid);
-        tomorrowMadrid.setDate(tomorrowMadrid.getDate() + 1);
-
-        const madridOffset = nowMadrid.getTime() - new Date().getTime();
-        const startOfTomorrowMadrid = new Date(new Date(tomorrowMadrid).setHours(0, 0, 0, 0));
-        const endOfTomorrowMadrid   = new Date(new Date(tomorrowMadrid).setHours(23, 59, 59, 999));
-        const startWindow = new Date(startOfTomorrowMadrid.getTime() - madridOffset);
-        const endWindow   = new Date(endOfTomorrowMadrid.getTime() - madridOffset);
+        // Ventana: citas entre now+11h y now+13h (±1h para tolerar retrasos del cron).
+        // El cron corre cada hora → cada cita recibe exactamente 1 recordatorio.
+        // whatsappSent=false actúa de barrera anti-duplicados.
+        const startWindow = new Date(Date.now() + 11 * 60 * 60 * 1000);
+        const endWindow   = new Date(Date.now() + 13 * 60 * 60 * 1000);
 
         const appointments = await prisma.appointment.findMany({
             where: {
                 status: { in: ['Scheduled', 'Confirmed'] },
                 date: { gte: startWindow, lte: endWindow },
-                whatsappSent: false
+                whatsappSent: false,
+                deleted_at: null,
             },
             include: { patient: true, treatment: true }
         });
 
-        console.log(`[MASTER CRON] Citas encontradas: ${appointments.length}`);
+        console.log(`[MASTER CRON] Citas en ventana 12h: ${appointments.length} (${startWindow.toISOString()} → ${endWindow.toISOString()})`);
 
         const reminderTemplate = await prisma.whatsAppTemplate.findFirst({
             where: { triggerType: 'APPOINTMENT_REMINDER' }
         });
 
-        if (reminderTemplate) {
-            for (const appt of appointments) {
-                if (!appt.patient?.phone) { globalStats.reminders.skipped++; continue; }
+        // Template por defecto si no hay ninguno configurado en BD
+        const defaultTemplate = 'Hola {{nombre}}, te recordamos tu cita mañana el {{fecha}} a las {{hora}} para {{tratamiento}}. ¡Te esperamos!\n\n_Responde "NO" para dejar de recibir avisos_';
 
-                const appointmentDate = new Date(appt.date);
-                const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Madrid' });
-                const formattedTime = appt.time ? appt.time.substring(0, 5)
-                    : appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Madrid' });
-                const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta General';
+        for (const appt of appointments) {
+            if (!appt.patient?.phone) { globalStats.reminders.skipped++; continue; }
 
-                const message = reminderTemplate.content
-                    .replace(/{{nombre}}/g, appt.patient.name)
-                    .replace(/{{fecha}}/g, formattedDate)
-                    .replace(/{{hora}}/g, formattedTime)
-                    .replace(/{{tratamiento}}/g, treatmentName);
+            const appointmentDate = new Date(appt.date);
+            const formattedDate = appointmentDate.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Madrid' });
+            const formattedTime = appt.time ? appt.time.substring(0, 5)
+                : appointmentDate.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Europe/Madrid' });
+            const treatmentName = appt.treatmentName || appt.treatment?.name || 'Consulta General';
 
-                let number = appt.patient.phone.replace(/[^0-9]/g, '');
-                if (number.length === 9) number = '34' + number;
-                const messageWithOptOut = message + '\n\n_Responde "NO" para dejar de recibir avisos_';
+            const templateContent = reminderTemplate?.content || defaultTemplate;
+            const message = templateContent
+                .replace(/{{nombre}}/g, appt.patient.name)
+                .replace(/{{fecha}}/g, formattedDate)
+                .replace(/{{hora}}/g, formattedTime)
+                .replace(/{{tratamiento}}/g, treatmentName);
 
-                await prisma.whatsAppQueue.create({
-                    data: { phone: number, message: messageWithOptOut, status: 'PENDING' }
-                });
-                await prisma.appointment.update({ where: { id: appt.id }, data: { whatsappSent: true } });
-                await prisma.whatsAppLog.create({
-                    data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'PENDING', content: messageWithOptOut, sentAt: new Date() }
-                });
-                globalStats.reminders.sent++;
-            }
+            let number = appt.patient.phone.replace(/[^0-9]/g, '');
+            if (number.length === 9) number = '34' + number;
+
+            // Asegurar que el mensaje ya incluye opt-out (no añadir si el template lo tiene)
+            const messageWithOptOut = message.includes('dejar de recibir')
+                ? message
+                : message + '\n\n_Responde "NO" para dejar de recibir avisos_';
+
+            await prisma.whatsAppQueue.create({
+                data: { phone: number, message: messageWithOptOut, status: 'PENDING', appointmentId: appt.id }
+            });
+            await prisma.appointment.update({ where: { id: appt.id }, data: { whatsappSent: true } });
+            await prisma.whatsAppLog.create({
+                data: { patientId: appt.patientId, type: 'APPOINTMENT_REMINDER', status: 'PENDING', content: messageWithOptOut, sentAt: new Date() }
+            });
+            globalStats.reminders.sent++;
         }
 
         console.log('[MASTER CRON] ✅ Bloque 1 completado:', globalStats.reminders);

@@ -386,10 +386,18 @@ router.put('/:id', async (req, res) => {
                     where: { appointmentId: id, status: 'PENDING' },
                 });
             } else if (updates.date || updates.time) {
-                // Reagendar: borrar el antiguo y crear uno nuevo con fecha/hora actualizada
+                // Reagendar: borrar cola antigua, resetear whatsappSent y crear nueva confirmación.
+                // El reset de whatsappSent es imprescindible: sin él, el cron de recordatorios 12h
+                // nunca volvería a enviar aviso para la nueva fecha/hora de la cita.
                 await prisma.whatsAppQueue.deleteMany({
                     where: { appointmentId: id, status: 'PENDING' },
                 });
+                // Reset para que el cron de recordatorios vuelva a considerar esta cita
+                await supabase
+                    .from('Appointment')
+                    .update({ whatsapp_sent: false })
+                    .eq('id', id);
+
                 const patientId = data.patientId || oldRecord?.patientId;
                 if (patientId) {
                     const { data: patient } = await supabase

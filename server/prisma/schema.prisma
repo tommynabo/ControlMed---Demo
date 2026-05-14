@@ -561,7 +561,7 @@ model WhatsAppQueue {
   message       String
   status        String   @default("PENDING") // PENDING | SENT | FAILED
   errorMessage  String?
-  appointmentId String?
+  appointmentId String?  @map("appointment_id")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
