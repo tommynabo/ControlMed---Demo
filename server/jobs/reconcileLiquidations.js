@@ -50,6 +50,8 @@ async function runReconciliation({ lookbackDays = 180 } = {}) {
         .is('deleted_at', null)
         .gt('amount', 0)
         .not('doctorId', 'is', null)
+        // Only create liquidations for completed treatments, never for budget-only appointments
+        .in('status', ['COMPLETADO', 'Completed'])
         .gte('date', sinceIso);
 
     if (apptErr) {

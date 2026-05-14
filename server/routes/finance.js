@@ -358,11 +358,13 @@ router.get('/liquidations/summary', async (req, res) => {
             if (supabase2) {
                 const { data: liqRows } = await supabase2
                     .from('Liquidation')
-                    .select('*, appointment:Appointment(date)')
+                    .select('*, appointment:Appointment(date, status)')
                     .eq('doctorId', doctorId)
                     .order('createdAt', { ascending: true });
 
                 liquidations = (liqRows || []).filter(l => {
+                    // Never show liquidations for appointments that are only quotes/estimates
+                    if (l.appointment?.status === 'PRESUPUESTADO') return false;
                     const refDate = l.appointment?.date
                         ? new Date(l.appointment.date)
                         : new Date(l.createdAt);
@@ -995,6 +997,28 @@ router.post('/payments/create', async (req, res) => {
             // Single-concept appointments continue to create one row with itemIndex = null.
             let liquidation = null;
             if (type !== 'ADVANCE_PAYMENT') {
+                // Guard: do not create a Liquidation for appointments that are purely
+                // budget estimates (PRESUPUESTADO) and were NOT completed by this payment.
+                // A payment that updates the appointment to Completed is allowed through.
+                if (appointmentId && !isPartialPayment) {
+                    try {
+                        const { data: apptStatusCheck } = await supabase
+                            .from('Appointment')
+                            .select('status')
+                            .eq('id', appointmentId)
+                            .single();
+                        // After payment update above the status is now 'Completed'; if it's
+                        // still 'PRESUPUESTADO' that means the update failed or was skipped —
+                        // in that case log a warning but do NOT block the payment.
+                        if (apptStatusCheck?.status === 'PRESUPUESTADO') {
+                            console.warn(
+                                `[finance] ⚠️  Cita ${appointmentId} sigue en estado PRESUPUESTADO tras el cobro. ` +
+                                `La liquidación se creará de todas formas pero el estado de la cita debe revisarse.`
+                            );
+                        }
+                    } catch (_) {}
+                }
+
                 if (!doctor) {
                     throw new Error(
                         `No se puede crear el pago: doctor no encontrado para la cita/pago ` +
@@ -1038,8 +1062,10 @@ router.post('/payments/create', async (req, res) => {
                                     budgetItems = budgetItems.filter(item => specificIds.includes(item.id));
                                 }
                             }
-                        } catch (_) {
-                            // If parsing fails, fall through with full list (safe degradation)
+                        } catch (filterErr) {
+                            // Parsing failed — log clearly so this is never silently wrong.
+                            // Fall through with full budget list as degraded behavior.
+                            console.error(`[finance] ⚠️  budgetItemIds filter failed for appointment ${appointmentId}:`, filterErr?.message);
                         }
                     }
 
