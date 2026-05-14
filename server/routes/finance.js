@@ -817,6 +817,8 @@ router.post('/payments/create', async (req, res) => {
         // Doctor's base = baseAmount minus items that go to the clinic (e.g. OPG).
         // If the appointment has a service_breakdown, sum only billable services.
         let doctorBaseAmount = baseAmount;
+        // Capture service_breakdown items so we can create per-concept Liquidation rows below.
+        let breakdownServices = [];
         if (appointmentId) {
             try {
                 const { data: apptRow } = await supabase
@@ -825,6 +827,7 @@ router.post('/payments/create', async (req, res) => {
                     .eq('id', appointmentId)
                     .single();
                 if (apptRow?.service_breakdown && Array.isArray(apptRow.service_breakdown) && apptRow.service_breakdown.length > 0) {
+                    breakdownServices = apptRow.service_breakdown;
                     const billableTotal = apptRow.service_breakdown
                         .filter(s => !s.excludeFromLiquidation)
                         .reduce((sum, s) => sum + (Number(s.price) || 0), 0);
@@ -1119,6 +1122,57 @@ router.post('/payments/create', async (req, res) => {
                             }
                         }
                         liquidation = true; // multi-item handled; no single row to return
+
+                    } else if (breakdownServices.length >= 2) {
+                        // ── Service-breakdown multi-concept path ──────────────────────────
+                        // Appointment has no budget but multiple services in service_breakdown.
+                        // Create one Liquidation row per service, proportional to its price.
+                        // Services with excludeFromLiquidation=true get commissionRate=0.
+                        const svcTotal = breakdownServices.reduce((s, svc) => s + (Number(svc.price) || 0), 0);
+                        // Remove any legacy single-concept row (itemIndex IS NULL) for this appointment
+                        await tx.liquidation.deleteMany({
+                            where: { appointmentId, doctorId: doctor.id, itemIndex: null }
+                        });
+                        for (let i = 0; i < breakdownServices.length; i++) {
+                            const svc = breakdownServices[i];
+                            const svcGross = svcTotal > 0
+                                ? (Number(svc.price) / svcTotal) * grossForLiquidation
+                                : Number(svc.price);
+                            const svcRate = svc.excludeFromLiquidation ? 0 : rawRate;
+                            const svcFinal = svcGross * (svcRate / 100);
+                            const existingItem = await tx.liquidation.findFirst({
+                                where: { appointmentId, doctorId: doctor.id, itemIndex: i }
+                            });
+                            if (existingItem) {
+                                const itemUpdateData = existingItem.manuallyEdited
+                                    ? { paymentId: payment.id, treatmentName: svc.name, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING' }
+                                    : { paymentId: payment.id, grossAmount: svcGross, baseAmount: svcGross, commissionRate: svcRate, finalAmount: svcFinal, treatmentName: svc.name, patientName: patient?.name || 'Paciente', paymentMethod: method, status: 'PENDING' };
+                                await tx.liquidation.update({ where: { id: existingItem.id }, data: itemUpdateData });
+                            } else {
+                                await tx.liquidation.create({
+                                    data: {
+                                        id: crypto.randomUUID(),
+                                        doctorId: doctor.id,
+                                        appointmentId,
+                                        itemIndex: i,
+                                        paymentId: payment.id,
+                                        grossAmount: svcGross,
+                                        baseAmount: svcGross,
+                                        labCost: 0,
+                                        commissionRate: svcRate,
+                                        finalAmount: svcFinal,
+                                        referralCommission: 0,
+                                        referralEntityName: null,
+                                        treatmentName: svc.name,
+                                        patientName: patient?.name || 'Paciente',
+                                        paymentMethod: method,
+                                        status: 'PENDING',
+                                        createdAt: effectiveDateISO
+                                    }
+                                });
+                            }
+                        }
+                        liquidation = true; // multi-item handled
 
                     } else {
                         // ── Single-concept path: one Liquidation row (existing behavior) ─
