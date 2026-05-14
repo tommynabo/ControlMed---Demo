@@ -304,7 +304,7 @@ const Agenda: React.FC = () => {
                 morning_only: 'solo mañana',
                 afternoon_only: 'solo tarde'
             };
-            alert(`✅ Agenda cerrada (${labels[closureTypeSelection] || closureTypeSelection}) correctamente`);
+            toast.success(`Agenda cerrada (${labels[closureTypeSelection] || closureTypeSelection}) correctamente`);
         } catch (e: any) {
             alert('Error: ' + (e.message || e));
         } finally {
@@ -317,9 +317,9 @@ const Agenda: React.FC = () => {
             await api.agendaClosures.delete(closureId);
             const data = await api.agendaClosures.getAll();
             setAgendaClosures(data || []);
-            alert('✅ Agenda abierta correctamente');
+            toast.success('Agenda abierta correctamente');
         } catch (e: any) {
-            alert('Error: ' + (e.message || e));
+            toast.error('Error: ' + (e.message || e));
         }
     };
 
@@ -330,9 +330,9 @@ const Agenda: React.FC = () => {
             const data = await api.agendaClosures.getAll();
             setAgendaClosures(data || []);
             const label = newType === 'morning_only' ? 'solo mañana abierta' : 'solo tarde abierta';
-            alert(`✅ Agenda actualizada: ${label}`);
+            toast.success(`Agenda actualizada: ${label}`);
         } catch (e: any) {
-            alert('Error: ' + (e.message || e));
+            toast.error('Error: ' + (e.message || e));
         }
     };
 
@@ -1237,6 +1237,10 @@ const Agenda: React.FC = () => {
                     const activeDoctorForClosure = selectedDoctorId !== 'all' ? selectedDoctorId : undefined;
                     const closure = getClosureForDate(currentDate, activeDoctorForClosure)
                         ?? getClosureForDate(currentDate, undefined);
+                    // In 'all doctors' view: count how many individual doctor closures exist today
+                    const doctorClosureCount = selectedDoctorId === 'all'
+                        ? doctors.filter(d => isDateClosedForDoctor(currentDate, d.id)).length
+                        : 0;
                     if (closure) {
                         const cType = closure.closure_type || 'full_day';
                         return (
@@ -1285,12 +1289,24 @@ const Agenda: React.FC = () => {
                         );
                     }
                     return (
-                        <button
-                            onClick={() => setShowClosureModal(true)}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:border-red-300 hover:text-red-600 transition-all"
-                        >
-                            <Lock size={14} /> Cerrar Agenda
-                        </button>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                onClick={() => {
+                                    setClosureDoctorId('');
+                                    setClosureTypeSelection('full_day');
+                                    setClosureReason('');
+                                    setShowClosureModal(true);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-slate-500 border border-slate-200 hover:border-red-300 hover:text-red-600 transition-all"
+                            >
+                                <Lock size={14} /> Cerrar Agenda
+                            </button>
+                            {doctorClosureCount > 0 && (
+                                <span className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    <Lock size={12} /> {doctorClosureCount} doctor{doctorClosureCount !== 1 ? 'es' : ''} con agenda cerrada — usa los iconos en las columnas
+                                </span>
+                            )}
+                        </div>
                     );
                 })()}
 
@@ -1509,20 +1525,54 @@ const Agenda: React.FC = () => {
                     <div className="flex w-max min-w-full">
                         {/* TIME COLUMN HEADER - Empty space for layout match */}
                         <div className="w-16 flex-shrink-0 pr-4 bg-white">
-                            <div className="h-[48px] flex items-end pb-3 ml-2 font-black text-xs text-slate-800">Hora</div>
+                            <div className="min-h-[56px] h-auto flex items-end pb-3 ml-2 font-black text-xs text-slate-800">Hora</div>
                         </div>
                         
                         {/* DOCTORS / DAYS HEADER */}
                         <div className="flex-1 overflow-visible">
-                            <div className="flex h-[48px] min-w-max">
+                            <div className="flex min-h-[56px] h-auto min-w-max">
                                 {viewMode === 'daily' ? (
                                     selectedDoctorId === 'all' ? (
-                                        doctorsOnDuty.map(doc => (
-                                            <div key={doc.id} className={`min-w-[180px] flex-1 text-center pb-3 font-black uppercase tracking-wide text-xs flex items-end justify-center px-3 whitespace-nowrap ${isDateFullyClosedForDoctor(currentDate, doc.id) ? 'text-red-400 line-through' : isDateClosedForDoctor(currentDate, doc.id) ? 'text-amber-500' : 'text-slate-900'
-                                                }`}>
-                                                {doc.name}
-                                            </div>
-                                        ))
+                                        doctorsOnDuty.map(doc => {
+                                            const docClosure = getClosureForDate(currentDate, doc.id);
+                                            const isFullyClosed = isDateFullyClosedForDoctor(currentDate, doc.id);
+                                            const isPartiallyClosed = isDateClosedForDoctor(currentDate, doc.id) && !isFullyClosed;
+                                            const cType = docClosure?.closure_type;
+                                            return (
+                                                <div key={doc.id} className="min-w-[180px] flex-1 pb-2 font-black uppercase tracking-wide text-xs flex flex-col items-center justify-end px-3 gap-0.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`whitespace-nowrap ${isFullyClosed ? 'text-red-400 line-through' : isPartiallyClosed ? 'text-amber-500' : 'text-slate-900'}`}>{doc.name}</span>
+                                                        {(currentUserRole === 'ADMIN' || currentUserRole === 'RECEPTION') && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (docClosure) {
+                                                                        handleOpenAgenda(docClosure.id);
+                                                                    } else {
+                                                                        setClosureDoctorId(doc.id);
+                                                                        setClosureTypeSelection('full_day');
+                                                                        setClosureReason('');
+                                                                        setShowClosureModal(true);
+                                                                    }
+                                                                }}
+                                                                className={`flex-shrink-0 rounded-md p-0.5 transition-all ${isFullyClosed ? 'text-red-500 hover:bg-red-50' : isPartiallyClosed ? 'text-amber-500 hover:bg-amber-50' : 'text-slate-300 hover:text-red-400 hover:bg-red-50'}`}
+                                                                title={docClosure ? 'Abrir agenda de este doctor' : 'Cerrar agenda de este doctor'}
+                                                            >
+                                                                {docClosure ? <Unlock size={12} /> : <Lock size={12} />}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {isPartiallyClosed && cType && (
+                                                        <span className="text-[9px] text-amber-500 font-bold normal-case">
+                                                            {cType === 'morning_only' ? '🌅 Mañana cerrada' : '🌆 Tarde cerrada'}
+                                                        </span>
+                                                    )}
+                                                    {isFullyClosed && (
+                                                        <span className="text-[9px] text-red-400 font-bold normal-case">🔒 Cerrada</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })
                                     ) : (
                                         <div className="flex-1 min-w-[180px] text-center pb-3 font-black text-slate-900 uppercase flex items-end justify-center">
                                             {(selectedDoctorId && selectedDoctorId !== 'all' ? doctors.find(d => d.id === selectedDoctorId)?.name : 'Hoy')}
