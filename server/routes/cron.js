@@ -86,8 +86,8 @@ router.get('/whatsapp-reminders', async (req, res) => {
                 .replace(/{{hora}}/g, formattedTime)
                 .replace(/{{tratamiento}}/g, treatmentName);
 
-            let number = appt.patient.phone.replace(/[^0-9]/g, '');
-            if (number.length === 9) number = '34' + number;
+            // formatPhone() en whatsappService normaliza el número al enviar — no pre-procesar aquí
+            const number = appt.patient.phone;
 
             // Asegurar que el mensaje ya incluye opt-out (no añadir si el template lo tiene)
             const messageWithOptOut = message.includes('dejar de recibir')
@@ -229,8 +229,8 @@ router.get('/whatsapp-reminders', async (req, res) => {
                 .replace(/{{nombre}}/g, patient.name)
                 .replace(/{{PACIENTE}}/g, patient.name);
 
-            let number = patient.phone.replace(/[^0-9]/g, '');
-            if (number.length === 9) number = '34' + number;
+            // formatPhone() en whatsappService normaliza el número al enviar — no pre-procesar aquí
+            const number = patient.phone;
             const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
             await prisma.whatsAppQueue.create({
@@ -282,8 +282,8 @@ router.get('/whatsapp-reminders', async (req, res) => {
                     .replace(/{{tratamiento}}/g, treatmentName)
                     .replace(/{{TRATAMIENTO}}/g, treatmentName);
 
-                let number = appt.patient.phone.replace(/[^0-9]/g, '');
-                if (number.length === 9) number = '34' + number;
+                // formatPhone() en whatsappService normaliza el número al enviar — no pre-procesar aquí
+                const number = appt.patient.phone;
                 const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
                 await prisma.whatsAppQueue.create({
@@ -343,8 +343,8 @@ router.post('/whatsapp-birthdays', async (req, res) => {
                 .replace(/{{nombre}}/g, patient.name)
                 .replace(/{{PACIENTE}}/g, patient.name);
 
-            let number = patient.phone.replace(/[^0-9]/g, '');
-            if (number.length === 9) number = '34' + number;
+            // formatPhone() en whatsappService normaliza el número al enviar — no pre-procesar aquí
+            const number = patient.phone;
             const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
             await prisma.whatsAppQueue.create({
@@ -405,8 +405,8 @@ router.post('/whatsapp-followups', async (req, res) => {
                     .replace(/{{tratamiento}}/g, treatmentName)
                     .replace(/{{TRATAMIENTO}}/g, treatmentName);
 
-                let number = appt.patient.phone.replace(/[^0-9]/g, '');
-                if (number.length === 9) number = '34' + number;
+                // formatPhone() en whatsappService normaliza el número al enviar — no pre-procesar aquí
+                const number = appt.patient.phone;
                 const contentWithOptOut = content + '\n\n_Responde "NO" para dejar de recibir avisos_';
 
                 await prisma.whatsAppQueue.create({

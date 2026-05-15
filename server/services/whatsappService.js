@@ -36,7 +36,12 @@ const formatPhone = (phone) => {
     if (normalized.startsWith('0034')) {
         normalized = '+' + normalized.slice(2);
     }
-    // Si no empieza con + asumir España
+    // Número ya contiene prefijo España (34XXXXXXXXX, 11 dígitos) pero sin +
+    // Evita el doble prefijo +3434XXXXXXXXX
+    if (!normalized.startsWith('+') && /^34\d{9}$/.test(normalized)) {
+        normalized = '+' + normalized;
+    }
+    // Sin ningún prefijo: asumir España
     if (!normalized.startsWith('+')) {
         normalized = '+34' + normalized;
     }
