@@ -31,7 +31,8 @@ function validateCronSecret(req, res) {
 }
 
 // ─── MASTER CRON: Appointment reminders + Birthdays + Follow-ups ─────────────
-router.post('/whatsapp-reminders', async (req, res) => {
+// GET porque Vercel Cron Jobs envía GET, no POST
+router.get('/whatsapp-reminders', async (req, res) => {
     if (!validateCronSecret(req, res)) return;
 
     const globalStats = {
@@ -428,7 +429,8 @@ router.post('/whatsapp-followups', async (req, res) => {
 // ─── CRON WORKER: Procesa UN mensaje pendiente de la cola ───────────────────
 // Diseñado para Vercel Serverless: cada ejecución dura milisegundos (1 mensaje).
 // Se invoca automáticamente cada 2 minutos via vercel.json crons.
-router.post('/process-whatsapp-queue', async (req, res) => {
+// GET porque Vercel Cron Jobs envía GET, no POST
+router.get('/process-whatsapp-queue', async (req, res) => {
     if (!validateCronSecret(req, res)) return;
 
     try {
