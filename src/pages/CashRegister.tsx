@@ -782,8 +782,15 @@ const CashRegister: React.FC = () => {
                                                     </span>
                                                 </td>
                                                 <td className="p-6 max-w-[180px]">
-                                                    {appt?.treatmentName
-                                                        ? <span className="text-xs font-medium text-slate-600 line-clamp-2">{appt.treatmentName}</span>
+                                                    {(p.treatmentName || appt?.treatmentName)
+                                                        ? <>
+                                                            <span className="text-xs font-medium text-slate-600 line-clamp-2">{p.treatmentName || appt?.treatmentName}</span>
+                                                            {p.notes && p.notes.startsWith('[PDTE:') && (
+                                                                <span className="block text-[10px] text-amber-600 font-medium mt-0.5 line-clamp-1">
+                                                                    {p.notes.replace('[PDTE:', 'Pdte:').replace(']', '')}
+                                                                </span>
+                                                            )}
+                                                          </>
                                                         : <span className="text-xs text-slate-300">—</span>}
                                                 </td>
                                                 <td className="p-6">

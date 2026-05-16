@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CreditCard, DollarSign, Wallet, X, Check, FileText, ArrowRightLeft, Lock, AlertTriangle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -72,6 +72,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     // Payment date — defaults to today but can be set to a past date for back-dated payments
     const [paymentDate, setPaymentDate] = useState<string>('');
 
+    // Concept for the pending instalment (partial payments only)
+    const [pendingNotes, setPendingNotes] = useState<string>('');
+
+    // Guard: only initialize fields once per modal open — prevents concept from resetting
+    // if the parent re-renders while the user is typing (e.g. after async alreadyPaid fetch).
+    const initializedRef = useRef(false);
+
     const availableWallet = patient.wallet || 0;
 
     // ── Shared treatment split detection ─────────────────────────────────────
@@ -95,13 +102,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     const isSplitPayment = doctorSplits.length >= 2;
 
     useEffect(() => {
-        if (isOpen) {
+        if (isOpen && !initializedRef.current) {
+            // Mark as initialized so that any subsequent prop changes (e.g. async
+            // alreadyPaidAmount update from parent) never overwrite what the user typed.
+            initializedRef.current = true;
+
             const amt = defaultAmount ? defaultAmount.toString() : '';
             setTotalAmount(amt);
             // originalAmount must always represent the FULL treatment cost so that
             // partial-payment detection (numericAmount + alreadyPaidAmount < originalAmount) works correctly.
             setOriginalAmount((defaultAmount || 0) + alreadyPaidAmount);
             setConcept(defaultConcept || (appointment ? `Pago Cita ${appointment.date}` : 'Anticipo / Saldo de Cuenta'));
+            setPendingNotes('');
             setPrimaryMethod('card');
             setNotes('');
             setUseCombinedPayment(false);
@@ -125,6 +137,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             if (!appointment) {
                 api.getDoctors().then(setDoctors).catch(console.error);
             }
+        } else if (!isOpen) {
+            // Reset the guard when the modal is closed so the next open reinitialises.
+            initializedRef.current = false;
         }
     }, [isOpen, defaultAmount, defaultConcept, appointment]);
 
@@ -241,6 +256,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
             let response: any;
 
+            // Append pending-session note to notes when it's a partial payment.
+            const effectiveNotes = isPartialPayment && pendingNotes.trim()
+                ? `[PDTE: ${pendingNotes.trim()}]${notes ? ' ' + notes : ''}`
+                : notes || undefined;
+
             if (isSplitPayment && !isPartialPayment) {
                 // Proportionally scale split amounts to the actual payment amount
                 const splitTotal = doctorSplits.reduce((s, x) => s + x.amount, 0);
@@ -259,7 +279,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     appointmentId: appointment?.id,
                     budgetId: (appointment as any)?.budgetId || undefined,
                     concept,
-                    notes: notes || undefined,
+                    notes: effectiveNotes,
                     idempotencyKey,
                     paymentDate: paymentDate || undefined,
                     splits: scaledSplits
@@ -274,7 +294,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     budgetId: selectedBudgetId || (appointment as any)?.budgetId || (appointment as any)?.budget?.id || undefined,
                     doctorId: appointment?.doctorId || selectedDoctorId,
                     treatmentName: concept,
-                    notes: notes || undefined,
+                    notes: effectiveNotes,
                     isPartial: isPartialPayment,
                     originalAmount: isPartialPayment ? originalAmount : undefined,
                     idempotencyKey,
@@ -583,12 +603,24 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             />
                             {/* Partial payment indicator */}
                             {isDirectPayment && originalAmount > 0 && parseFloat(totalAmount) > 0 && parseFloat(totalAmount) < originalAmount && (
-                                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
                                     <p className="text-[10px] font-black text-amber-700 uppercase">Importe Original: {originalAmount.toFixed(2)}€</p>
-                                    <p className="text-xs font-black text-red-600 mt-0.5">
+                                    <p className="text-xs font-black text-red-600">
                                         Pendiente tras este cobro: {(originalAmount - (parseFloat(totalAmount) || 0)).toFixed(2)}€
                                     </p>
-                                    <p className="text-[10px] text-amber-600 mt-0.5 font-medium">La visita quedará en estado "Pago Parcial"</p>
+                                    <p className="text-[10px] text-amber-600 font-medium">La visita quedará en estado "Pago Parcial"</p>
+                                    <div className="pt-1">
+                                        <label className="text-[10px] font-black uppercase text-amber-700 mb-1 block">
+                                            ¿Qué queda pendiente? (opcional)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={pendingNotes}
+                                            onChange={(e) => setPendingNotes(e.target.value)}
+                                            placeholder={`Ej. Segunda sesión — ${(originalAmount - (parseFloat(totalAmount) || 0)).toFixed(2)}€ pendientes`}
+                                            className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-amber-300 placeholder:text-amber-400"
+                                        />
+                                    </div>
                                 </div>
                             )}
                             {isDirectPayment && originalAmount > 0 && parseFloat(totalAmount) >= originalAmount && originalAmount > 0 && (
