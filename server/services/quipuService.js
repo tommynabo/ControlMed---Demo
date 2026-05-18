@@ -127,7 +127,7 @@ async function getOrCreateContact(patient) {
 // Items use Quipu JSON:API field names; prices are numbers (parseFloat).
 // Errors are NOT caught here — they propagate to the endpoint catch block.
 // ─────────────────────────────────────────────────────────────────────────────
-async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'cash', filingNumber = null) {
+async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'cash', filingNumber = null, notes = null) {
     // Payment method mapping to Quipu accepted values
     const methodMap = {
         card:           'bank_card',
@@ -161,6 +161,9 @@ async function createInvoice(contactId, items, date, dueDate, paymentMethod = 'c
         kind:           'income',
         payment_method: finalMethod
     };
+    if (notes) {
+        invoiceAttributes.notes = notes;
+    }
     if (date) {
         invoiceAttributes.issue_date    = date;
         invoiceAttributes.due_dates     = [dueDate || date];

@@ -156,6 +156,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         }
     }, [useCombinedPayment, firstSplitMethod]);
 
+    // Auto-pick a different second method if firstSplitMethod changes to match primaryMethod
+    useEffect(() => {
+        if (useCombinedPayment && firstSplitMethod === primaryMethod) {
+            const fallback = (['cash', 'card', 'transfer'] as const).find(
+                m => m !== firstSplitMethod
+            );
+            if (fallback) setPrimaryMethod(fallback);
+        }
+    }, [firstSplitMethod]);
+
     const getPaymentBreakdown = (): PaymentSplit[] => {
         if (!useCombinedPayment) {
             return [{ method: primaryMethod, amount: parseFloat(totalAmount) || 0 }];
@@ -706,34 +716,58 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                     )}
 
-                    {/* Combined Payment: multi-method split */}
+                    {/* Combined Payment: fully self-contained — both method selectors + amounts */}
                     {useCombinedPayment && (
                         <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl p-5 border border-purple-200 space-y-4">
                             <h4 className="text-xs font-black text-purple-700 uppercase tracking-wide flex items-center gap-2">
                                 <ArrowRightLeft size={14} /> Desglose de Pago Combinado
                             </h4>
-                            {/* First method selector */}
-                            <div>
-                                <label className="text-[10px] font-bold text-purple-600 mb-2 block">Primer Método</label>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {(['cash', 'card', 'transfer', 'wallet'] as const).map(m => (
-                                        <button
-                                            key={m}
-                                            onClick={() => setFirstSplitMethod(m)}
-                                            disabled={m === 'wallet' && availableWallet <= 0}
-                                            className={`p-2 rounded-lg border-2 text-xs font-black uppercase transition-all ${
-                                                firstSplitMethod === m
-                                                    ? 'bg-purple-700 text-white border-purple-700'
-                                                    : m === 'wallet' && availableWallet <= 0
-                                                        ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-purple-400'
-                                            }`}
-                                        >
-                                            {METHOD_LABELS[m]}
-                                        </button>
-                                    ))}
+                            {/* Both method selectors side-by-side */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-purple-600 mb-2 block">Primer Método</label>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        {(['cash', 'card', 'transfer', 'wallet'] as const).map(m => (
+                                            <button
+                                                key={m}
+                                                onClick={() => setFirstSplitMethod(m)}
+                                                disabled={m === 'wallet' && availableWallet <= 0}
+                                                className={`p-2 rounded-lg border-2 text-[10px] font-black uppercase transition-all ${
+                                                    firstSplitMethod === m
+                                                        ? 'bg-purple-700 text-white border-purple-700'
+                                                        : m === 'wallet' && availableWallet <= 0
+                                                            ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                                                            : 'bg-white text-slate-600 border-slate-200 hover:border-purple-400'
+                                                }`}
+                                            >
+                                                {METHOD_LABELS[m]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-purple-600 mb-2 block">Segundo Método</label>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        {(['cash', 'card', 'transfer', 'wallet'] as const).map(m => (
+                                            <button
+                                                key={m}
+                                                onClick={() => setPrimaryMethod(m)}
+                                                disabled={(m === 'wallet' && availableWallet <= 0) || m === firstSplitMethod}
+                                                className={`p-2 rounded-lg border-2 text-[10px] font-black uppercase transition-all ${
+                                                    primaryMethod === m && m !== firstSplitMethod
+                                                        ? 'bg-purple-700 text-white border-purple-700'
+                                                        : (m === 'wallet' && availableWallet <= 0) || m === firstSplitMethod
+                                                            ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                                                            : 'bg-white text-slate-600 border-slate-200 hover:border-purple-400'
+                                                }`}
+                                            >
+                                                {METHOD_LABELS[m]}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
+                            {/* Amount inputs */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-[10px] font-bold text-purple-600 mb-1 block">
@@ -757,8 +791,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-500 mb-1 block">
-                                        Restante ({METHOD_LABELS[primaryMethod]})
+                                    <label className="text-[10px] font-bold text-purple-600 mb-1 block">
+                                        Restante ({METHOD_LABELS[primaryMethod !== firstSplitMethod ? primaryMethod : (firstSplitMethod === 'cash' ? 'card' : 'cash')]})
                                     </label>
                                     <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-lg font-bold text-slate-600">
                                         {(remainingAfterWallet > 0 ? remainingAfterWallet : 0).toFixed(2)}€
@@ -768,12 +802,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                         </div>
                     )}
 
-                    {/* Payment Method Selection */}
-                    <div>
+                    {/* Payment Method Selection — only for single-method payments */}
+                    {!useCombinedPayment && <div>
                         <label className="text-[10px] font-black uppercase text-slate-400 mb-3 block">
-                            {useCombinedPayment ? 'Método para el Restante' : 'Método de Pago'}
+                            Método de Pago
                         </label>
-                        <div className={`grid gap-3 ${useCombinedPayment ? 'grid-cols-3' : 'grid-cols-4'}`}>
+                        <div className="grid gap-3 grid-cols-4">
                             <button
                                 onClick={() => setPrimaryMethod('cash')}
                                 className={`p-4 rounded-xl border-2 text-xs font-black uppercase transition-all ${primaryMethod === 'cash'
@@ -804,7 +838,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 <ArrowRightLeft className="inline mb-1" size={18} />
                                 <br />Transfer
                             </button>
-                            {!useCombinedPayment && isDirectPayment && (
+                            {isDirectPayment && (
                                 <button
                                     onClick={() => setPrimaryMethod('wallet')}
                                     disabled={availableWallet <= 0}
@@ -818,7 +852,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 </button>
                             )}
                         </div>
-                    </div>
+                    </div>}
 
                     <div>
                         <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">

@@ -786,11 +786,24 @@ router.post('/payments/create', async (req, res) => {
                     const histSuffix = patient.historyNumber ? ` — Nº Historia: ${patient.historyNumber}` : '';
                     // For consolidated invoices use the full appointment amount; otherwise use the current payment amount
                     const invoiceAmount = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
+                    // Build payment breakdown info for combined payments
+                    const quipuMethodLabels = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', wallet: 'Monedero' };
+                    const quipuBreakdownText = incomingBreakdown
+                        ? incomingBreakdown.map(b => `${quipuMethodLabels[b.method] || b.method} ${parseFloat(b.amount).toFixed(2)}€`).join(' + ')
+                        : null;
+                    const quipuItemName = quipuBreakdownText
+                        ? `${solvedTreatmentName}${histSuffix} (${quipuBreakdownText})`
+                        : `${solvedTreatmentName}${histSuffix}`;
+                    const quipuNotes = quipuBreakdownText
+                        ? `Pago combinado: ${quipuBreakdownText}`
+                        : null;
                     quipuResult = await quipuService.createInvoice(
                         contact.id,
-                        [{ name: `${solvedTreatmentName}${histSuffix}`, quantity: 1, price: invoiceAmount }],
+                        [{ name: quipuItemName, quantity: 1, price: invoiceAmount }],
                         today, today,
-                        method === 'card' ? 'credit_card' : method
+                        method === 'card' ? 'credit_card' : method,
+                        null,
+                        quipuNotes
                     );
                 }
             } catch (qErr) {
