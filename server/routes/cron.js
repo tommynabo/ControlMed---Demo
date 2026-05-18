@@ -35,6 +35,13 @@ function validateCronSecret(req, res) {
 router.get('/whatsapp-reminders', async (req, res) => {
     if (!validateCronSecret(req, res)) return;
 
+    // ── MOTOR SWITCH ─────────────────────────────────────────────────────────
+    // Para pausar todos los envíos sin eliminar lógica, pon WHATSAPP_ENABLED=false en .env
+    if (process.env.WHATSAPP_ENABLED === 'false') {
+        console.log('[MASTER CRON] ⏸️  Motor WhatsApp desactivado (WHATSAPP_ENABLED=false). Saltando ejecución.');
+        return res.json({ message: 'WhatsApp engine disabled', stats: { reminders: { sent: 0, failed: 0, skipped: 0 }, birthdays: { sent: 0, failed: 0, skipped: 0 }, followups: { sent: 0, failed: 0, skipped: 0 } } });
+    }
+
     const globalStats = {
         reminders: { sent: 0, failed: 0, skipped: 0 },
         birthdays:  { sent: 0, failed: 0, skipped: 0 },
@@ -432,6 +439,13 @@ router.post('/whatsapp-followups', async (req, res) => {
 // GET porque Vercel Cron Jobs envía GET, no POST
 router.get('/process-whatsapp-queue', async (req, res) => {
     if (!validateCronSecret(req, res)) return;
+
+    // ── MOTOR SWITCH ─────────────────────────────────────────────────────────
+    // Para pausar el envío de la cola, pon WHATSAPP_ENABLED=false en .env
+    if (process.env.WHATSAPP_ENABLED === 'false') {
+        console.log('[QUEUE WORKER] ⏸️  Motor WhatsApp desactivado (WHATSAPP_ENABLED=false). Cola en pausa.');
+        return res.json({ message: 'WhatsApp engine disabled', processed: 0 });
+    }
 
     try {
         // Tomar ÚNICAMENTE el mensaje más antiguo en estado PENDING
