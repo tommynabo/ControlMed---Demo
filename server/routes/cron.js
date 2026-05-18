@@ -58,17 +58,44 @@ router.get('/whatsapp-reminders', async (req, res) => {
         const startWindow = new Date(Date.now() + 11 * 60 * 60 * 1000);
         const endWindow   = new Date(Date.now() + 13 * 60 * 60 * 1000);
 
-        const appointments = await prisma.appointment.findMany({
+        // BUGFIX: el campo `date` almacena siempre medianoche UTC, no la hora real de la cita.
+        // La hora real está en el campo `time` (texto "HH:MM") en zona Europe/Madrid.
+        // Con la ventana original (date gte/lte), TODAS las citas del mismo día caían dentro
+        // del rango a la vez → burst de mensajes erróneos.
+        // Solución: ampliar la ventana SQL y filtrar en JS combinando date+time → UTC real.
+        const candidateStart = new Date(Date.now() +  8 * 60 * 60 * 1000); // 8h adelante
+        const candidateEnd   = new Date(Date.now() + 30 * 60 * 60 * 1000); // 30h adelante
+
+        const allCandidates = await prisma.appointment.findMany({
             where: {
                 status: { in: ['Scheduled', 'Confirmed'] },
-                date: { gte: startWindow, lte: endWindow },
+                date: { gte: candidateStart, lte: candidateEnd },
                 whatsappSent: false,
                 deleted_at: null,
             },
             include: { patient: true, treatment: true }
         });
 
-        console.log(`[MASTER CRON] Citas en ventana 12h: ${appointments.length} (${startWindow.toISOString()} → ${endWindow.toISOString()})`);
+        // Convierte date (UTC midnight) + time ("HH:MM" Madrid) → UTC datetime real
+        const getSpainUTCOffset = (dateStr) => {
+            const ref   = new Date(`${dateStr}T12:00:00Z`);
+            const parts = new Intl.DateTimeFormat('en-US', {
+                timeZone: 'Europe/Madrid', hour: '2-digit', hour12: false,
+            }).formatToParts(ref);
+            return parseInt(parts.find(p => p.type === 'hour').value, 10) - 12; // +2 CEST, +1 CET
+        };
+
+        const appointments = allCandidates.filter(appt => {
+            if (!appt.time) return false;
+            const dateStr      = new Date(appt.date).toISOString().split('T')[0];
+            const [hh, mm]     = appt.time.substring(0, 5).split(':').map(Number);
+            const offset       = getSpainUTCOffset(dateStr);
+            const apptUTC      = new Date(`${dateStr}T00:00:00Z`);
+            apptUTC.setUTCHours(hh - offset, mm, 0, 0);
+            return apptUTC >= startWindow && apptUTC <= endWindow;
+        });
+
+        console.log(`[MASTER CRON] Citas en ventana 12h (fecha+hora reales): ${appointments.length} (${startWindow.toISOString()} → ${endWindow.toISOString()})`);
 
         const reminderTemplate = await prisma.whatsAppTemplate.findFirst({
             where: { triggerType: 'APPOINTMENT_REMINDER' }
@@ -129,17 +156,39 @@ router.get('/whatsapp-reminders', async (req, res) => {
             const startWindow1b = new Date(Date.now() + 11 * 60 * 60 * 1000);
             const endWindow1b   = new Date(Date.now() + 13 * 60 * 60 * 1000);
 
-            const apptsByEmail = await prisma.appointment.findMany({
+            // Misma corrección que Bloque 1: ventana SQL amplia + filtro JS por datetime real
+            const candidateStart1b = new Date(Date.now() +  8 * 60 * 60 * 1000);
+            const candidateEnd1b   = new Date(Date.now() + 30 * 60 * 60 * 1000);
+
+            const allCandidatesEmail = await prisma.appointment.findMany({
                 where: {
                     status: { in: ['Scheduled', 'Confirmed'] },
-                    date: { gte: startWindow1b, lte: endWindow1b },
+                    date: { gte: candidateStart1b, lte: candidateEnd1b },
                     deleted_at: null,
                     patient: { email: { not: null } },
                 },
                 include: { patient: true, treatment: true },
             });
 
-            console.log(`[MASTER CRON] Citas con email en ventana 12h: ${apptsByEmail.length}`);
+            const getSpainUTCOffset1b = (dateStr) => {
+                const ref   = new Date(`${dateStr}T12:00:00Z`);
+                const parts = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'Europe/Madrid', hour: '2-digit', hour12: false,
+                }).formatToParts(ref);
+                return parseInt(parts.find(p => p.type === 'hour').value, 10) - 12;
+            };
+
+            const apptsByEmail = allCandidatesEmail.filter(appt => {
+                if (!appt.time) return false;
+                const dateStr  = new Date(appt.date).toISOString().split('T')[0];
+                const [hh, mm] = appt.time.substring(0, 5).split(':').map(Number);
+                const offset   = getSpainUTCOffset1b(dateStr);
+                const apptUTC  = new Date(`${dateStr}T00:00:00Z`);
+                apptUTC.setUTCHours(hh - offset, mm, 0, 0);
+                return apptUTC >= startWindow1b && apptUTC <= endWindow1b;
+            });
+
+            console.log(`[MASTER CRON] Citas con email en ventana 12h (fecha+hora reales): ${apptsByEmail.length}`);
             const emailStats = { sent: 0, skipped: 0, failed: 0 };
 
             for (const appt of apptsByEmail) {
