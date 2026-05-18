@@ -165,6 +165,19 @@ router.put('/liquidations/:id', async (req, res) => {
     }
 });
 
+router.delete('/liquidations/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const existing = await prisma.liquidation.findUnique({ where: { id } });
+        if (!existing) return res.status(404).json({ error: 'Liquidación no encontrada' });
+        await prisma.liquidation.delete({ where: { id } });
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Error deleting liquidation:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // POST /finance/liquidations/:id/split
 // Divide una liquidación única (itemIndex=null) en N filas — una por BudgetLineItem
 router.post('/liquidations/:id/split', async (req, res) => {

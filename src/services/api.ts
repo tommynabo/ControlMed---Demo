@@ -1446,6 +1446,14 @@ export const api = {
             }
             return res.json();
         },
+        delete: async (id: string) => {
+            const res = await fetch(`${API_URL}/finance/liquidations/${id}`, { method: 'DELETE', headers });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || 'Failed to delete liquidation');
+            }
+            return res.json();
+        },
         split: async (id: string) => {
             const res = await fetch(`${API_URL}/finance/liquidations/${id}/split`, { method: 'POST', headers });
             if (!res.ok) {

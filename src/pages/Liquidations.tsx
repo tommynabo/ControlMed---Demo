@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Check, Pencil, X, Building2, AlertTriangle } from 'lucide-react';
+import { Download, Filter, RefreshCw, TrendingUp, Users, Wallet, ChevronDown, Percent, Pencil, Check, Building2, AlertTriangle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { useAppContext } from '../context/AppContext';
+import { LiquidationEditModal } from '../components/LiquidationEditModal';
 
 interface Doctor {
     id: string;
@@ -40,8 +41,7 @@ export const Liquidations: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [commissionRate, setCommissionRate] = useState<number>(40);
     const [labCosts, setLabCosts] = useState<Record<string, number>>({});
-    const [editingRow, setEditingRow] = useState<{ id: string; concepto: string; doctorId: string; importe: number } | null>(null);
-    const [savingId, setSavingId] = useState<string | null>(null);
+    const [editingRow, setEditingRow] = useState<{ id: string; concepto: string; doctorId: string; importe: number; nombrePaciente?: string; fecha?: string } | null>(null);
     const [groupByDay, setGroupByDay] = useState<boolean>(false);
     const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
@@ -702,82 +702,23 @@ export const Liquidations: React.FC = () => {
                                 <tbody className="divide-y divide-slate-200">
                                     {records.map((record) => {
                                         const lab = labCosts[record.id] || 0;
-                                        const isEditing = editingRow?.id === record.id;
-                                        const isSaving = savingId === record.id;
-                                        const net = (isEditing ? editingRow!.importe : record.importeCobrado) - lab;
+                                        const net = record.importeCobrado - lab;
                                         return (
-                                        <tr key={record.id} className={`transition-colors ${isEditing ? 'bg-amber-50 border-l-4 border-l-amber-400' : 'hover:bg-blue-50/30'}`}>
-                                            {/* Pencil / Save+Cancel column */}
+                                        <tr key={record.id} className="transition-colors hover:bg-blue-50/30">
+                                            {/* Pencil column — opens modal */}
                                             <td className="px-3 py-2 text-center">
-                                                {isEditing ? (
-                                                    <div className="flex flex-col gap-1 items-center">
-                                                        <button
-                                                            onClick={async () => {
-                                                                if (!editingRow) return;
-                                                                setSavingId(record.id);
-                                                                try {
-                                                                    const doctorChanged = editingRow.doctorId !== record.doctorId;
-                                                                    await api.liquidations.update(record.id, {
-                                                                        treatmentName: editingRow.concepto,
-                                                                        doctorId: editingRow.doctorId,
-                                                                        grossAmount: editingRow.importe,
-                                                                    });
-                                                                    if (doctorChanged) {
-                                                                        setRecords(prev => prev.filter(r => r.id !== record.id));
-                                                                    } else {
-                                                                        setRecords(prev => prev.map(r => r.id === record.id
-                                                                            ? { ...r, concepto: editingRow.concepto, doctorId: editingRow.doctorId, importeCobrado: editingRow.importe }
-                                                                            : r
-                                                                        ));
-                                                                    }
-                                                                    setEditingRow(null);
-                                                                } catch (err) {
-                                                                    console.error('Error saving row:', err);
-                                                                    setError('Error al guardar los cambios');
-                                                                } finally {
-                                                                    setSavingId(null);
-                                                                }
-                                                            }}
-                                                            disabled={isSaving}
-                                                            className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white transition-colors"
-                                                            title="Guardar cambios"
-                                                        >
-                                                            {isSaving ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setEditingRow(null)}
-                                                            disabled={isSaving}
-                                                            className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-600 transition-colors"
-                                                            title="Cancelar"
-                                                        >
-                                                            <X size={13} />
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => setEditingRow({ id: record.id, concepto: record.concepto, doctorId: record.doctorId ?? '', importe: record.importeCobrado })}
-                                                        className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                                        title="Editar fila"
-                                                    >
-                                                        <Pencil size={14} />
-                                                    </button>
-                                                )}
+                                                <button
+                                                    onClick={() => setEditingRow({ id: record.id, concepto: record.concepto, doctorId: record.doctorId ?? '', importe: record.importeCobrado, nombrePaciente: record.nombrePaciente, fecha: record.fecha })}
+                                                    className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                    title="Editar / Eliminar"
+                                                >
+                                                    <Pencil size={14} />
+                                                </button>
                                             </td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">{record.fecha}</td>
                                             {/* Concepto */}
                                             <td className="px-3 py-2">
-                                                {isEditing ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editingRow!.concepto}
-                                                        onChange={(e) => setEditingRow(prev => prev ? { ...prev, concepto: e.target.value } : prev)}
-                                                        disabled={isSaving}
-                                                        autoFocus
-                                                        className="bg-white border border-amber-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-amber-400 w-44"
-                                                    />
-                                                ) : (
-                                                    <span className="text-xs font-semibold text-slate-700">{record.concepto}</span>
-                                                )}
+                                                <span className="text-xs font-semibold text-slate-700">{record.concepto}</span>
                                             </td>
                                             <td className="px-6 py-4 text-slate-700 font-semibold">
                                                 <div className="flex items-center gap-2">
@@ -790,34 +731,11 @@ export const Liquidations: React.FC = () => {
                                             <td className="px-6 py-4 text-slate-500 text-xs font-bold">{record.numeroHistoria}</td>
                                             {/* Doctor */}
                                             <td className="px-4 py-2">
-                                                {isEditing ? (
-                                                    <select
-                                                        value={editingRow!.doctorId}
-                                                        onChange={(e) => setEditingRow(prev => prev ? { ...prev, doctorId: e.target.value } : prev)}
-                                                        disabled={isSaving}
-                                                        className="bg-white border border-amber-300 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-amber-400 max-w-[160px]"
-                                                    >
-                                                        {doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                                    </select>
-                                                ) : (
-                                                    <span className="text-xs font-semibold text-slate-700">{doctors.find(d => d.id === record.doctorId)?.name ?? record.doctorId}</span>
-                                                )}
+                                                <span className="text-xs font-semibold text-slate-700">{doctors.find(d => d.id === record.doctorId)?.name ?? record.doctorId}</span>
                                             </td>
                                             {/* Importe */}
                                             <td className="px-6 py-4 text-right">
-                                                {isEditing ? (
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        step="0.01"
-                                                        value={editingRow!.importe}
-                                                        onChange={(e) => setEditingRow(prev => prev ? { ...prev, importe: Number(e.target.value) || 0 } : prev)}
-                                                        disabled={isSaving}
-                                                        className="w-24 text-right bg-white border border-amber-300 rounded-md px-2 py-1 text-sm font-black text-emerald-600 outline-none focus:ring-1 focus:ring-amber-400"
-                                                    />
-                                                ) : (
-                                                    <span className="font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</span>
-                                                )}
+                                                <span className="font-black text-emerald-600">{record.importeCobrado.toFixed(2)}€</span>
                                             </td>
                                             {/* Base Doctor */}
                                             <td className="px-6 py-4 text-right">
@@ -884,6 +802,61 @@ export const Liquidations: React.FC = () => {
                 )}
                 </> /* end liquidaciones tab */}
             </div>
+
+            {/* Edit/Delete Modal */}
+            {editingRow && (
+                <LiquidationEditModal
+                    isOpen={!!editingRow}
+                    onClose={() => setEditingRow(null)}
+                    record={{
+                        id: editingRow.id,
+                        concepto: editingRow.concepto,
+                        importe: editingRow.importe,
+                        doctorId: editingRow.doctorId,
+                        patientName: editingRow.nombrePaciente,
+                        fecha: typeof editingRow.fecha === 'string' ? editingRow.fecha.substring(0, 10) : undefined,
+                    }}
+                    doctors={doctors}
+                    showDoctorField={true}
+                    onSave={async ({ concepto, importe, doctorId }) => {
+                        const doctorChanged = doctorId !== editingRow.doctorId;
+                        await api.liquidations.update(editingRow.id, {
+                            treatmentName: concepto,
+                            doctorId: doctorId,
+                            grossAmount: importe,
+                        });
+                        if (doctorChanged) {
+                            setRecords(prev => prev.filter(r => r.id !== editingRow.id));
+                            setDailyGroups(prev => prev.map(g => ({
+                                ...g,
+                                records: g.records.filter(r => r.id !== editingRow.id),
+                            })).filter(g => g.records.length > 0));
+                        } else {
+                            setRecords(prev => prev.map(r => r.id === editingRow.id
+                                ? { ...r, concepto, doctorId: doctorId ?? r.doctorId, importeCobrado: importe }
+                                : r
+                            ));
+                            setDailyGroups(prev => prev.map(g => ({
+                                ...g,
+                                records: g.records.map(r => r.id === editingRow.id
+                                    ? { ...r, concepto, doctorId: doctorId ?? r.doctorId, importeCobrado: importe }
+                                    : r
+                                ),
+                                dayTotal: g.records.map(r => r.id === editingRow.id ? importe : r.importeCobrado).reduce((s, v) => s + v, 0),
+                            })));
+                        }
+                    }}
+                    onDelete={async (id) => {
+                        await (api.liquidations as any).delete(id);
+                        setRecords(prev => prev.filter(r => r.id !== id));
+                        setDailyGroups(prev => prev.map(g => ({
+                            ...g,
+                            records: g.records.filter(r => r.id !== id),
+                            dayTotal: g.records.filter(r => r.id !== id).reduce((s, r) => s + r.importeCobrado, 0),
+                        })).filter(g => g.records.length > 0));
+                    }}
+                />
+            )}
         </div>
     );
 };

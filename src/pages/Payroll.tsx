@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Download, Calendar, Pencil, Check, X, RefreshCw, Building2, ShieldCheck, AlertTriangle, Scissors } from 'lucide-react';
+import { DollarSign, Download, Calendar, Pencil, RefreshCw, Building2, ShieldCheck, AlertTriangle, Scissors } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Expense, Doctor, Specialization } from '../../types';
+import { LiquidationEditModal } from '../components/LiquidationEditModal';
 
 const Payroll: React.FC = () => {
     const { api, setExpenses, doctors } = useAppContext();
@@ -12,8 +13,7 @@ const Payroll: React.FC = () => {
     const [editedRecords, setEditedRecords] = useState<Record<string, { grossAmount?: number, labCost?: number, commissionRate?: number }>>({});
     const [manualAdjustment, setManualAdjustment] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
-    const [editingRow, setEditingRow] = useState<{ id: string; treatmentName: string; doctorId: string } | null>(null);
-    const [savingRowId, setSavingRowId] = useState<string | null>(null);
+    const [editingRow, setEditingRow] = useState<{ id: string; treatmentName: string; doctorId: string; grossAmount: number; patientName?: string; fecha?: string } | null>(null);
     const [referralData, setReferralData] = useState<any>(null);
     const [referralDateFrom, setReferralDateFrom] = useState('');
     const [referralDateTo, setReferralDateTo] = useState('');
@@ -452,152 +452,40 @@ const Payroll: React.FC = () => {
                                         const lab = edit.labCost !== undefined ? edit.labCost : r.labCost;
                                         const rate = edit.commissionRate !== undefined ? edit.commissionRate : r.commissionRate;
                                         const final = (gross - lab) * (rate / 100);
-                                        const isEditingThis = editingRow?.id === r.id;
-                                        const isSavingThis = savingRowId === r.id;
 
                                         return (
-                                            <tr key={r.id} className={`transition ${isEditingThis ? 'bg-amber-50 border-l-4 border-l-amber-400' : 'hover:bg-slate-50'}`}>
-                                                {/* Pencil / Save+Cancel column */}
+                                            <tr key={r.id} className="hover:bg-slate-50 transition">
+                                                {/* Pencil column — opens modal */}
                                                 <td className="px-3 py-4 text-center">
-                                                    {isEditingThis ? (
-                                                        <div className="flex flex-col gap-1 items-center">
+                                                    <div className="flex flex-col gap-1 items-center">
+                                                        <button
+                                                            onClick={() => setEditingRow({ id: r.id, treatmentName: r.treatmentName || '', doctorId: r.doctorId || '', grossAmount: gross, patientName: r.patientName, fecha: r.appointment?.date || r.fecha || r.createdAt })}
+                                                            className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                                            title="Editar / Eliminar concepto"
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </button>
+                                                        {/* Split button — only for unsplit rows with appointment */}
+                                                        {r.itemIndex === null && r.appointmentId && (
                                                             <button
-                                                                onClick={async () => {
-                                                                    if (!editingRow) return;
-                                                                    setSavingRowId(r.id);
-                                                                    try {
-                                                                        await api.liquidations.update(r.id, {
-                                                                            treatmentName: editingRow.treatmentName,
-                                                                            doctorId: editingRow.doctorId || undefined,
-                                                                            ...(edit.grossAmount    !== undefined && { grossAmount:    edit.grossAmount }),
-                                                                            ...(edit.labCost        !== undefined && { labCost:        edit.labCost }),
-                                                                            ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
-                                                                        });
-                                                                        // Reload from DB to confirm the save persisted
-                                                                        const refreshed = await api.liquidations.getSummary(
-                                                                            selectedDoctorId, selectedMonth, selectedYear,
-                                                                            filterMode === 'range' ? dateFrom : undefined,
-                                                                            filterMode === 'range' ? dateTo : undefined
-                                                                        );
-                                                                        setLiquidations(refreshed);
-                                                                        setEditedRecords({});
-                                                                        setEditingRow(null);
-                                                                    } catch (err) {
-                                                                        console.error('Error saving liquidation:', err);
-                                                                        alert('Error al guardar los cambios');
-                                                                    } finally {
-                                                                        setSavingRowId(null);
-                                                                    }
-                                                                }}
-                                                                disabled={isSavingThis}
-                                                                className="p-1.5 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white transition-colors"
-                                                                title="Guardar"
+                                                                onClick={() => handleSplitRow(r.id)}
+                                                                disabled={splittingRowId === r.id}
+                                                                className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                                title="Dividir en un concepto por tratamiento"
                                                             >
-                                                                {isSavingThis ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+                                                                {splittingRowId === r.id
+                                                                    ? <RefreshCw size={13} className="animate-spin" />
+                                                                    : <Scissors size={13} />}
                                                             </button>
-                                                            <button
-                                                                onClick={() => setEditingRow(null)}
-                                                                disabled={isSavingThis}
-                                                                className="p-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-40 text-slate-600 transition-colors"
-                                                                title="Cancelar"
-                                                            >
-                                                                <X size={13} />
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-1 items-center">
-                                                            <button
-                                                                onClick={() => setEditingRow({ id: r.id, treatmentName: r.treatmentName || '', doctorId: r.doctorId || '' })}
-                                                                className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                                                                title="Editar nombre/doctor"
-                                                            >
-                                                                <Pencil size={14} />
-                                                            </button>
-                                                            {/* Direct save for numeric-only changes */}
-                                                            {Object.keys(editedRecords[r.id] || {}).length > 0 && (
-                                                                <button
-                                                                    onClick={async () => {
-                                                                        setSavingRowId(r.id);
-                                                                        try {
-                                                                            await api.liquidations.update(r.id, {
-                                                                                ...(edit.grossAmount    !== undefined && { grossAmount:    edit.grossAmount }),
-                                                                                ...(edit.labCost        !== undefined && { labCost:        edit.labCost }),
-                                                                                ...(edit.commissionRate !== undefined && { commissionRate: edit.commissionRate }),
-                                                                            });
-                                                                            // Reload from DB to confirm the save persisted
-                                                                            const refreshed = await api.liquidations.getSummary(
-                                                                                selectedDoctorId, selectedMonth, selectedYear,
-                                                                                filterMode === 'range' ? dateFrom : undefined,
-                                                                                filterMode === 'range' ? dateTo : undefined
-                                                                            );
-                                                                            setLiquidations(refreshed);
-                                                                            setEditedRecords({});
-                                                                        } catch (err) {
-                                                                            alert('Error al guardar los importes');
-                                                                        } finally {
-                                                                            setSavingRowId(null);
-                                                                        }
-                                                                    }}
-                                                                    disabled={savingRowId === r.id}
-                                                                    className="p-1.5 rounded-md bg-emerald-100 hover:bg-emerald-500 hover:text-white text-emerald-600 transition-colors"
-                                                                    title="Guardar importes"
-                                                                >
-                                                                    {savingRowId === r.id ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
-                                                                </button>
-                                                            )}
-                                                            {/* Split button — only for unsplit rows with appointment */}
-                                                            {r.itemIndex === null && r.appointmentId && Object.keys(editedRecords[r.id] || {}).length === 0 && (
-                                                                <button
-                                                                    onClick={() => handleSplitRow(r.id)}
-                                                                    disabled={splittingRowId === r.id}
-                                                                    className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                                                    title="Dividir en un concepto por tratamiento"
-                                                                >
-                                                                    {splittingRowId === r.id
-                                                                        ? <RefreshCw size={13} className="animate-spin" />
-                                                                        : <Scissors size={13} />}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                        )}
+                                                    </div>
                                                 </td>
-                                                <td className="px-6 py-4 font-bold text-slate-900">{r.patientName || '-'}</td>
                                                 <td className="px-6 py-4 font-medium text-slate-700">
-                                                    {isEditingThis ? (
-                                                        <div className="space-y-2">
-                                                            <input
-                                                                type="text"
-                                                                value={editingRow!.treatmentName}
-                                                                onChange={(e) => setEditingRow(prev => prev ? { ...prev, treatmentName: e.target.value } : prev)}
-                                                                disabled={isSavingThis}
-                                                                autoFocus
-                                                                placeholder="Concepto del tratamiento"
-                                                                className="w-full bg-white border border-amber-300 rounded px-2 py-1 text-sm font-medium text-slate-700 outline-none focus:ring-1 focus:ring-amber-400"
-                                                            />
-                                                            <select
-                                                                value={editingRow!.doctorId}
-                                                                onChange={(e) => setEditingRow(prev => prev ? { ...prev, doctorId: e.target.value } : prev)}
-                                                                disabled={isSavingThis}
-                                                                className="w-full bg-white border border-amber-300 rounded px-2 py-1 text-sm font-semibold text-slate-700 outline-none focus:ring-1 focus:ring-amber-400"
-                                                            >
-                                                                <option value="">-- Sin doctor --</option>
-                                                                {doctors.map((d: any) => (
-                                                                    <option key={d.id} value={d.id}>{d.name}</option>
-                                                                ))}
-                                                            </select>
-                                                        </div>
-                                                    ) : (
-                                                        r.treatmentName || '-'
-                                                    )}
+                                                    {r.treatmentName || '-'}
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-600">{(r.appointment?.date || r.fecha || r.createdAt) ? new Date(r.appointment?.date || r.fecha || r.createdAt).toLocaleDateString('es-ES') : '-'}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <input
-                                                        type="number"
-                                                        className="w-24 text-right bg-transparent hover:bg-slate-50 border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none rounded px-1 font-bold transition-all"
-                                                        value={gross}
-                                                        onChange={e => updateRecord(r.id, 'grossAmount', Number(e.target.value))}
-                                                    />€
+                                                    <span className="font-bold">{gross.toFixed(2)}</span>€
                                                 </td>
                                                 <td className="px-6 py-4 text-right text-red-500 font-bold">
                                                     -<input
@@ -769,6 +657,49 @@ const Payroll: React.FC = () => {
                     )}
                 </div>
             </div>
+        </div>
+
+            {/* Edit/Delete Modal */}
+            {editingRow && (
+                <LiquidationEditModal
+                    isOpen={!!editingRow}
+                    onClose={() => setEditingRow(null)}
+                    record={{
+                        id: editingRow.id,
+                        concepto: editingRow.treatmentName,
+                        importe: editingRow.grossAmount,
+                        doctorId: editingRow.doctorId,
+                        patientName: editingRow.patientName,
+                        fecha: editingRow.fecha ? new Date(editingRow.fecha).toLocaleDateString('es-ES') : undefined,
+                    }}
+                    doctors={doctors}
+                    showDoctorField={true}
+                    onSave={async ({ concepto, importe, doctorId }) => {
+                        await api.liquidations.update(editingRow.id, {
+                            treatmentName: concepto,
+                            grossAmount: importe,
+                            doctorId: doctorId || undefined,
+                        });
+                        const refreshed = await api.liquidations.getSummary(
+                            selectedDoctorId, selectedMonth, selectedYear,
+                            filterMode === 'range' ? dateFrom : undefined,
+                            filterMode === 'range' ? dateTo : undefined
+                        );
+                        setLiquidations(refreshed);
+                        setEditedRecords({});
+                    }}
+                    onDelete={async (id) => {
+                        await (api.liquidations as any).delete(id);
+                        const refreshed = await api.liquidations.getSummary(
+                            selectedDoctorId, selectedMonth, selectedYear,
+                            filterMode === 'range' ? dateFrom : undefined,
+                            filterMode === 'range' ? dateTo : undefined
+                        );
+                        setLiquidations(refreshed);
+                        setEditedRecords({});
+                    }}
+                />
+            )}
         </div>
     );
 };
