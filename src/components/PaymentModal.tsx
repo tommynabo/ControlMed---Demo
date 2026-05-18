@@ -56,6 +56,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     // Combined payment state
     const [useCombinedPayment, setUseCombinedPayment] = useState(false);
     const [primaryMethod, setPrimaryMethod] = useState<'cash' | 'card' | 'transfer' | 'wallet'>('card');
+    const [firstSplitMethod, setFirstSplitMethod] = useState<'cash' | 'card' | 'transfer' | 'wallet'>('cash');
     const [splits, setSplits] = useState<PaymentSplit[]>([]);
     const [walletAmount, setWalletAmount] = useState('');
 
@@ -117,6 +118,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             setPrimaryMethod('card');
             setNotes('');
             setUseCombinedPayment(false);
+            setFirstSplitMethod('cash');
             setSplits([]);
             setWalletAmount('');
             setSelectedBudgetId('');
@@ -143,26 +145,28 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         }
     }, [isOpen, defaultAmount, defaultConcept, appointment]);
 
-    // Auto-suggest wallet split when patient has balance and it's a direct payment
+    // Auto-suggest wallet amount when wallet is selected as first method and patient has balance
     useEffect(() => {
-        if (useCombinedPayment && availableWallet > 0 && isDirectPayment) {
+        if (useCombinedPayment && firstSplitMethod === 'wallet' && availableWallet > 0 && isDirectPayment) {
             const total = parseFloat(totalAmount) || 0;
             const walletUse = Math.min(availableWallet, total);
             setWalletAmount(walletUse.toString());
+        } else if (useCombinedPayment && firstSplitMethod !== 'wallet') {
+            setWalletAmount('');
         }
-    }, [useCombinedPayment]);
+    }, [useCombinedPayment, firstSplitMethod]);
 
     const getPaymentBreakdown = (): PaymentSplit[] => {
         if (!useCombinedPayment) {
             return [{ method: primaryMethod, amount: parseFloat(totalAmount) || 0 }];
         }
-        const walletAmt = parseFloat(walletAmount) || 0;
+        const firstAmt = parseFloat(walletAmount) || 0;
         const total = parseFloat(totalAmount) || 0;
-        const remaining = total - walletAmt;
+        const remaining = total - firstAmt;
 
         const breakdown: PaymentSplit[] = [];
-        if (walletAmt > 0) breakdown.push({ method: 'wallet', amount: walletAmt });
-        if (remaining > 0) breakdown.push({ method: primaryMethod === 'wallet' ? 'card' : primaryMethod, amount: remaining });
+        if (firstAmt > 0) breakdown.push({ method: firstSplitMethod, amount: firstAmt });
+        if (remaining > 0) breakdown.push({ method: primaryMethod, amount: remaining });
         return breakdown;
     };
 
@@ -187,6 +191,18 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         if (walletUsed && walletUsed.amount > availableWallet) {
             alert(`Saldo insuficiente en monedero (${availableWallet.toFixed(2)}€ disponibles)`);
             return;
+        }
+
+        if (useCombinedPayment && firstSplitMethod === primaryMethod) {
+            alert('Los dos métodos del pago combinado deben ser diferentes.');
+            return;
+        }
+        if (useCombinedPayment) {
+            const firstAmt = parseFloat(walletAmount) || 0;
+            if (firstAmt <= 0 || firstAmt >= numericAmount) {
+                alert('El importe del primer método debe ser mayor que 0 y menor que el total.');
+                return;
+            }
         }
 
         // Check total matches
@@ -299,6 +315,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     originalAmount: isPartialPayment ? originalAmount : undefined,
                     idempotencyKey,
                     paymentDate: paymentDate || undefined,
+                    paymentBreakdown: breakdown.length > 1 ? breakdown : undefined,
                 };
                 response = await api.payments.create(paymentData);
             }
@@ -669,7 +686,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                     )}
 
                     {/* Combined Payment Toggle */}
-                    {isDirectPayment && availableWallet > 0 && (
+                    {isDirectPayment && (
                         <div className="flex items-center gap-3">
                             <button
                                 onClick={() => setUseCombinedPayment(!useCombinedPayment)}
@@ -679,39 +696,69 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                     }`}
                             >
                                 <ArrowRightLeft size={14} />
-                                Pago Combinado (Monedero + Otro)
+                                Pago Combinado (2 métodos)
                             </button>
-                            {useCombinedPayment && (
+                            {useCombinedPayment && firstSplitMethod === 'wallet' && availableWallet > 0 && (
                                 <span className="text-[10px] text-slate-400">
-                                    Disponible: {availableWallet.toFixed(2)}€
+                                    Monedero disponible: {availableWallet.toFixed(2)}€
                                 </span>
                             )}
                         </div>
                     )}
 
-                    {/* Combined Payment: Wallet split */}
+                    {/* Combined Payment: multi-method split */}
                     {useCombinedPayment && (
-                        <div className="bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl p-5 border border-emerald-200 space-y-4">
-                            <h4 className="text-xs font-black text-emerald-700 uppercase tracking-wide flex items-center gap-2">
-                                <Wallet size={14} /> Desglose de Pago
+                        <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl p-5 border border-purple-200 space-y-4">
+                            <h4 className="text-xs font-black text-purple-700 uppercase tracking-wide flex items-center gap-2">
+                                <ArrowRightLeft size={14} /> Desglose de Pago Combinado
                             </h4>
+                            {/* First method selector */}
+                            <div>
+                                <label className="text-[10px] font-bold text-purple-600 mb-2 block">Primer Método</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {(['cash', 'card', 'transfer', 'wallet'] as const).map(m => (
+                                        <button
+                                            key={m}
+                                            onClick={() => setFirstSplitMethod(m)}
+                                            disabled={m === 'wallet' && availableWallet <= 0}
+                                            className={`p-2 rounded-lg border-2 text-xs font-black uppercase transition-all ${
+                                                firstSplitMethod === m
+                                                    ? 'bg-purple-700 text-white border-purple-700'
+                                                    : m === 'wallet' && availableWallet <= 0
+                                                        ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-purple-400'
+                                            }`}
+                                        >
+                                            {METHOD_LABELS[m]}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="text-[10px] font-bold text-emerald-600 mb-1 block">Del Monedero</label>
+                                    <label className="text-[10px] font-bold text-purple-600 mb-1 block">
+                                        Importe ({METHOD_LABELS[firstSplitMethod]})
+                                        {firstSplitMethod === 'wallet' && availableWallet > 0 && (
+                                            <span className="ml-1 font-normal text-purple-400">máx {availableWallet.toFixed(2)}€</span>
+                                        )}
+                                    </label>
                                     <input
                                         type="number"
                                         value={walletAmount}
                                         onChange={(e) => {
-                                            const val = Math.min(parseFloat(e.target.value) || 0, availableWallet, numericTotal);
+                                            const maxVal = firstSplitMethod === 'wallet'
+                                                ? Math.min(availableWallet, numericTotal)
+                                                : numericTotal;
+                                            const val = Math.min(parseFloat(e.target.value) || 0, maxVal);
                                             setWalletAmount(val.toString());
                                         }}
-                                        max={Math.min(availableWallet, numericTotal)}
-                                        className="w-full bg-white border border-emerald-200 rounded-xl p-3 text-lg font-bold text-emerald-700 outline-none"
+                                        max={firstSplitMethod === 'wallet' ? Math.min(availableWallet, numericTotal) : numericTotal}
+                                        className="w-full bg-white border border-purple-200 rounded-xl p-3 text-lg font-bold text-purple-700 outline-none"
                                     />
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-bold text-slate-500 mb-1 block">
-                                        Restante ({METHOD_LABELS[primaryMethod === 'wallet' ? 'card' : primaryMethod]})
+                                        Restante ({METHOD_LABELS[primaryMethod]})
                                     </label>
                                     <div className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-lg font-bold text-slate-600">
                                         {(remainingAfterWallet > 0 ? remainingAfterWallet : 0).toFixed(2)}€

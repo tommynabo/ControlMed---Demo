@@ -229,6 +229,7 @@ export const api = {
             paymentDate?: string;
             isPartial?: boolean;
             originalAmount?: number;
+            paymentBreakdown?: Array<{ method: string; amount: number }>;
         }) => {
             const res = await fetch(`${API_URL}/finance/payments/create`, {
                 method: 'POST',

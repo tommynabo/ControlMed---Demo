@@ -653,6 +653,10 @@ router.post('/payments/create', async (req, res) => {
 
         const { patientId, amount, method, type, notes, appointmentId, budgetId, paymentDate } = req.body;
         const idempotencyKey = req.body.idempotencyKey || null;
+        // paymentBreakdown: provided when a single payment covers multiple methods (e.g. cash + card)
+        const incomingBreakdown = Array.isArray(req.body.paymentBreakdown) && req.body.paymentBreakdown.length > 1
+            ? req.body.paymentBreakdown
+            : null;
 
         if (!patientId || !amount || !method) {
             return res.status(400).json({ error: 'patientId, amount, and method are required' });
@@ -862,7 +866,8 @@ router.post('/payments/create', async (req, res) => {
                     referralCommission: referralCommission || 0,
                     referralEntityName: referralEntityName || null,
                     idempotencyKey: idempotencyKey || null,
-                    createdAt: effectiveDateISO
+                    createdAt: effectiveDateISO,
+                    paymentBreakdown: incomingBreakdown ? JSON.stringify(incomingBreakdown) : null
                 }
             });
 
@@ -898,9 +903,15 @@ router.post('/payments/create', async (req, res) => {
                 // Build paymentBreakdown for consolidated invoices (≥2 payments on same appointment)
                 let paymentBreakdown = null;
                 const invoiceAmount = (isFinalPayment && appointmentAmount) ? appointmentAmount : numericAmount;
-                const invoicePaymentMethod = (isFinalPayment && allPreviousPayments.length > 0) ? 'mixed' : method;
+                // 'mixed' when: single combined-method payment, or final payment aggregating multiple prior partials
+                const invoicePaymentMethod = incomingBreakdown
+                    ? 'mixed'
+                    : (isFinalPayment && allPreviousPayments.length > 0) ? 'mixed' : method;
 
-                if (isFinalPayment && allPreviousPayments.length > 0) {
+                if (incomingBreakdown) {
+                    // Single combined payment (e.g. 200€ cash + 180€ card in one transaction)
+                    paymentBreakdown = incomingBreakdown;
+                } else if (isFinalPayment && allPreviousPayments.length > 0) {
                     // Aggregate all payments (previous + current) by method
                     const breakdownMap = {};
                     for (const p of [...allPreviousPayments, { method, amount: numericAmount }]) {
