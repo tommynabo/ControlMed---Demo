@@ -657,7 +657,6 @@ const Payroll: React.FC = () => {
                     )}
                 </div>
             </div>
-        </div>
 
             {/* Edit/Delete Modal */}
             {editingRow && (
