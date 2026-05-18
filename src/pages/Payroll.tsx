@@ -480,6 +480,7 @@ const Payroll: React.FC = () => {
                                                         )}
                                                     </div>
                                                 </td>
+                                                <td className="px-6 py-4 font-bold text-slate-900">{r.patientName || '-'}</td>
                                                 <td className="px-6 py-4 font-medium text-slate-700">
                                                     {r.treatmentName || '-'}
                                                 </td>
