@@ -406,7 +406,7 @@ const CashRegister: React.FC = () => {
 
         const pendingAppts = todayAppointments.filter(a => {
             const status = a.status?.toLowerCase() || 'scheduled';
-            return !['completed', 'realizada', 'canceled', 'cancelled', 'anulada', 'noshow', 'no vino'].includes(status);
+            return !['completed', 'completado', 'realizada', 'canceled', 'cancelled', 'cancelado', 'anulada', 'noshow', 'no vino', 'presupuestado'].includes(status);
         });
 
         if (pendingAppts.length > 0) {
@@ -419,7 +419,7 @@ const CashRegister: React.FC = () => {
             return;
         }
 
-        const completedCount = todayAppointments.filter(a => ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')).length;
+        const completedCount = todayAppointments.filter(a => ['completed', 'completado', 'realizada'].includes(a.status?.toLowerCase() || '')).length;
 
         const cashDiff = physicalCashTotal - stats.expectedCash;
         const diffLabel = Math.abs(cashDiff) < 0.01
@@ -457,7 +457,7 @@ const CashRegister: React.FC = () => {
                     return apptDate === today;
                 });
                 const completedCount = todayAppointments.filter(a =>
-                    ['completed', 'realizada'].includes(a.status?.toLowerCase() || '')
+                    ['completed', 'completado', 'realizada'].includes(a.status?.toLowerCase() || '')
                 ).length;
 
                 const cashDiff = physicalCashTotal - stats.expectedCash;
