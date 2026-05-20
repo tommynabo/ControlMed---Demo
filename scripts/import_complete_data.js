@@ -931,7 +931,8 @@ async function step8_invoices(contactMap) {
     existExternal.add(idFactura);
 
     const total = parseFloat(clean(f['total'])) || 0;
-    const dateStr = parseDate(f['fecha']) || new Date().toISOString();
+    const dateStr = parseDate(f['fecha']);
+    if (!dateStr) { stat('Invoice', 'skipped'); continue; } // sin fecha válida → omitir
     const abonado = clean(f['abonado']);
 
     const invoiceId = randomUUID();
@@ -1012,7 +1013,8 @@ async function step9_payments(contactMap, invoiceIdMap) {
 
     const forma = clean(a['forma']);
     const method = parsePaymentMethod(forma);
-    const dateStr = parseDate(a['fechaApunte']) || parseDate(a['fecha']) || new Date().toISOString();
+    const dateStr = parseDate(a['fechaApunte']) || parseDate(a['fecha']);
+    if (!dateStr) { stat('Payment', 'skipped'); continue; } // sin fecha válida → omitir
     const detalles = clean(a['detalles']);
     const descripcion = clean(a['descripcion']);
 
