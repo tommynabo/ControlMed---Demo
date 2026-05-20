@@ -4,6 +4,26 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
+/**
+ * Parsea importes con notación española.
+ * "1.050"    → 1050   (punto como separador de miles)
+ * "1.050,50" → 1050.50
+ * "1050,50"  → 1050.50 (coma como decimal)
+ * "1050.50"  → 1050.50 (formato estándar)
+ */
+const parseAmount = (str: string): number => {
+    if (!str && str !== '0') return 0;
+    const s = str.toString().trim();
+    if (!s) return 0;
+    if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(s)) {
+        return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+    if (/^\d+(,\d{1,2})$/.test(s)) {
+        return parseFloat(s.replace(',', '.')) || 0;
+    }
+    return parseFloat(s) || 0;
+};
+
 const DENOMINATIONS = [
     { value: 500, label: '500€', type: 'billete' },
     { value: 200, label: '200€', type: 'billete' },
@@ -198,7 +218,7 @@ const CashRegister: React.FC = () => {
                 date: editFullDate,
                 concept: editFullConcept,
                 patientId: editFullPatientId || undefined,
-                amount: parseFloat(editFullAmount),
+                amount: parseAmount(editFullAmount),
                 paymentMethod: editFullMethod,
             });
             await refreshDayData();
@@ -218,7 +238,7 @@ const CashRegister: React.FC = () => {
                 date: editExpDate,
                 description: editExpDescription,
                 category: editExpCategory,
-                amount: parseFloat(editExpAmount),
+                amount: parseAmount(editExpAmount),
                 paymentMethod: editExpPaymentMethod,
             });
             await refreshDayData();
@@ -1071,7 +1091,9 @@ const CashRegister: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Importe (€)</label>
-                                    <input type="number" step="0.01" min="0" value={editFullAmount} onChange={e => setEditFullAmount(e.target.value)}
+                                    <input type="text" inputMode="decimal" value={editFullAmount}
+                                        onBlur={() => { const p = parseAmount(editFullAmount); if (p > 0) setEditFullAmount(p.toFixed(2)); }}
+                                        onChange={e => setEditFullAmount(e.target.value)}
                                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
                                 </div>
                                 <div>
@@ -1131,7 +1153,9 @@ const CashRegister: React.FC = () => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block mb-2">Importe (€)</label>
-                                    <input type="number" step="0.01" min="0" value={editExpAmount} onChange={e => setEditExpAmount(e.target.value)}
+                                    <input type="text" inputMode="decimal" value={editExpAmount}
+                                        onBlur={() => { const p = parseAmount(editExpAmount); if (p > 0) setEditExpAmount(p.toFixed(2)); }}
+                                        onChange={e => setEditExpAmount(e.target.value)}
                                         className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200" />
                                 </div>
                                 <div>
