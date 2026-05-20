@@ -242,6 +242,15 @@ const CashRegister: React.FC = () => {
 
         // Fresh API fetch — ensures backdated payments always appear, bypassing stale cache
         let cancelled = false;
+
+        // Fetch fresh expenses independently (context cache may be stale or not yet loaded)
+        (api as any).expenses.getAll().then((freshExpenses: any[]) => {
+            if (cancelled) return;
+            setTodayExpenses(freshExpenses.filter((e: any) =>
+                e.date && e.date.split('T')[0] === selectedDate
+            ));
+        }).catch(() => {});
+
         (api as any).invoices.getAll().then((freshInvoices: any[]) => {
             if (cancelled) return;
             const dayInvoices = freshInvoices.filter((i: any) =>
@@ -368,16 +377,18 @@ const CashRegister: React.FC = () => {
         const transferIncome = invoiceTransfer + partialTransfer;
         const totalIncome    = totalInvoiceIncome + totalPartialIncome;
 
-        const totalExpense   = todayExpenses.reduce((acc, curr) => acc + curr.amount, 0);
+        const totalExpense    = todayExpenses.reduce((acc, curr) => acc + curr.amount, 0);
         // Treat null/undefined paymentMethod as 'cash' — cash withdrawals (retiradas) may lack an explicit method
-        const cashExpenses   = todayExpenses.filter(e => !e.paymentMethod || e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
-        const netCash        = cashIncome - cashExpenses;
+        const cashExpenses    = todayExpenses.filter(e => !e.paymentMethod || e.paymentMethod === 'cash').reduce((acc, curr) => acc + curr.amount, 0);
+        const cardExpenses    = todayExpenses.filter(e => e.paymentMethod === 'card').reduce((acc, curr) => acc + curr.amount, 0);
+        const transferExpenses = todayExpenses.filter(e => e.paymentMethod === 'transfer').reduce((acc, curr) => acc + curr.amount, 0);
+        const netCash         = cashIncome - cashExpenses;
         // expectedCash = arrastre + solo efectivo de hoy (para arqueo físico)
-        const expectedCash   = (openingCash ?? 0) + netCash;
+        const expectedCash    = (openingCash ?? 0) + netCash;
         // totalCaja = arrastre + TODOS los ingresos del día (efectivo + tarjeta + transferencia)
-        const totalCaja      = (openingCash ?? 0) + totalIncome - cashExpenses;
+        const totalCaja       = (openingCash ?? 0) + totalIncome - cashExpenses;
 
-        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, netCash, expectedCash, totalCaja, balance: totalIncome - totalExpense };
+        return { totalIncome, totalExpense, cashIncome, cardIncome, transferIncome, cashExpenses, cardExpenses, transferExpenses, netCash, expectedCash, totalCaja, balance: totalIncome - totalExpense };
     }, [todayInvoices, todayPartialPayments, todayExpenses, openingCash]);
 
 
@@ -406,7 +417,7 @@ const CashRegister: React.FC = () => {
 
         const pendingAppts = todayAppointments.filter(a => {
             const status = a.status?.toLowerCase() || 'scheduled';
-            return !['completed', 'completado', 'realizada', 'canceled', 'cancelled', 'cancelado', 'anulada', 'noshow', 'no vino', 'presupuestado'].includes(status);
+            return !['completed', 'completado', 'realizada', 'canceled', 'cancelled', 'cancelado', 'anulada', 'noshow', 'no-show', 'no vino', 'presupuestado'].includes(status);
         });
 
         if (pendingAppts.length > 0) {
@@ -415,8 +426,8 @@ const CashRegister: React.FC = () => {
                 return `• ${patient?.name || 'Paciente'} - ${a.time}`;
             }).join('\n');
 
-            alert(`⚠️ No puedes cerrar la caja. Hay ${pendingAppts.length} citas pendientes:\n\n${pendingList}\n\nMarca las citas como realizadas, anuladas o no presentado antes de cerrar.`);
-            return;
+            const proceed = confirm(`⚠️ Hay ${pendingAppts.length} cita(s) sin gestionar:\n\n${pendingList}\n\n¿Cerrar la caja igualmente?`);
+            if (!proceed) return;
         }
 
         const completedCount = todayAppointments.filter(a => ['completed', 'completado', 'realizada'].includes(a.status?.toLowerCase() || '')).length;
@@ -575,12 +586,26 @@ const CashRegister: React.FC = () => {
                             <div className="p-8">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Gastos del Día</p>
                                 <p className="text-3xl font-black text-rose-500">-{stats.totalExpense.toFixed(2)}€</p>
-                                {stats.cashExpenses > 0 && (
+                                {stats.totalExpense > 0 && (
                                     <div className="mt-4 space-y-1.5">
-                                        <div className="flex justify-between text-xs">
-                                            <span className="text-slate-400 font-medium">💵 Efectivo</span>
-                                            <span className="font-bold text-rose-600">-{stats.cashExpenses.toFixed(2)}€</span>
-                                        </div>
+                                        {stats.cashExpenses > 0 && (
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-slate-400 font-medium">💵 Efectivo</span>
+                                                <span className="font-bold text-rose-600">-{stats.cashExpenses.toFixed(2)}€</span>
+                                            </div>
+                                        )}
+                                        {stats.cardExpenses > 0 && (
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-slate-400 font-medium">💳 Tarjeta</span>
+                                                <span className="font-bold text-rose-600">-{stats.cardExpenses.toFixed(2)}€</span>
+                                            </div>
+                                        )}
+                                        {stats.transferExpenses > 0 && (
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-slate-400 font-medium">🏦 Transferencia</span>
+                                                <span className="font-bold text-rose-600">-{stats.transferExpenses.toFixed(2)}€</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

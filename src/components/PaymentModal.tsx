@@ -30,6 +30,28 @@ const METHOD_LABELS: Record<string, string> = {
     wallet: 'Monedero'
 };
 
+/**
+ * Parsea importes con notación española.
+ * "1.050"    → 1050   (punto como separador de miles)
+ * "1.050,50" → 1050.50
+ * "1050,50"  → 1050.50 (coma como decimal)
+ * "1050.50"  → 1050.50 (formato estándar)
+ */
+const parseAmount = (str: string): number => {
+    if (!str && str !== '0') return 0;
+    const s = str.toString().trim();
+    if (!s) return 0;
+    // Formato español: grupos de 1-3 dígitos separados por puntos (miles) + coma decimal opcional
+    if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(s)) {
+        return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+    }
+    // Solo coma como decimal (ej. "1050,5" o "1050,50")
+    if (/^\d+(,\d{1,2})$/.test(s)) {
+        return parseFloat(s.replace(',', '.')) || 0;
+    }
+    return parseFloat(s) || 0;
+};
+
 export const PaymentModal: React.FC<PaymentModalProps> = ({
     isOpen,
     onClose,
@@ -148,7 +170,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     // Auto-suggest wallet amount when wallet is selected as first method and patient has balance
     useEffect(() => {
         if (useCombinedPayment && firstSplitMethod === 'wallet' && availableWallet > 0 && isDirectPayment) {
-            const total = parseFloat(totalAmount) || 0;
+            const total = parseAmount(totalAmount) || 0;
             const walletUse = Math.min(availableWallet, total);
             setWalletAmount(walletUse.toString());
         } else if (useCombinedPayment && firstSplitMethod !== 'wallet') {
@@ -168,10 +190,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
 
     const getPaymentBreakdown = (): PaymentSplit[] => {
         if (!useCombinedPayment) {
-            return [{ method: primaryMethod, amount: parseFloat(totalAmount) || 0 }];
+            return [{ method: primaryMethod, amount: parseAmount(totalAmount) || 0 }];
         }
-        const firstAmt = parseFloat(walletAmount) || 0;
-        const total = parseFloat(totalAmount) || 0;
+        const firstAmt = parseAmount(walletAmount) || 0;
+        const total = parseAmount(totalAmount) || 0;
         const remaining = total - firstAmt;
 
         const breakdown: PaymentSplit[] = [];
@@ -181,7 +203,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     };
 
     const handleSubmit = async () => {
-        const numericAmount = parseFloat(totalAmount);
+        const numericAmount = parseAmount(totalAmount);
         if (!numericAmount || numericAmount <= 0) {
             alert('Introduce un importe válido');
             return;
@@ -208,7 +230,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             return;
         }
         if (useCombinedPayment) {
-            const firstAmt = parseFloat(walletAmount) || 0;
+            const firstAmt = parseAmount(walletAmount) || 0;
             if (firstAmt <= 0 || firstAmt >= numericAmount) {
                 alert('El importe del primer método debe ser mayor que 0 y menor que el total.');
                 return;
@@ -265,7 +287,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     };
 
     const processPayment = async () => {
-        const numericAmount = parseFloat(totalAmount);
+        const numericAmount = parseAmount(totalAmount);
         const breakdown = getPaymentBreakdown();
 
         setIsProcessing(true);
@@ -404,8 +426,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
         );
     }
 
-    const numericTotal = parseFloat(totalAmount) || 0;
-    const walletAmt = parseFloat(walletAmount) || 0;
+    const numericTotal = parseAmount(totalAmount) || 0;
+    const walletAmt = parseAmount(walletAmount) || 0;
     const remainingAfterWallet = numericTotal - walletAmt;
     const isFullyPaid = isDirectPayment && alreadyPaidAmount > 0 && originalAmount > 0 && alreadyPaidAmount >= originalAmount;
 
@@ -536,7 +558,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                             </div>
                                             <button
                                                 onClick={() => {
-                                                    const curAmt = parseFloat(totalAmount) || 0;
+                                                    const curAmt = parseAmount(totalAmount) || 0;
                                                     const discountedLineTotal = Number(item.price) * (1 - (Number(item.discount) || 0) / 100) * (Number(item.quantity) || 1);
                                                     setTotalAmount((curAmt + discountedLineTotal).toFixed(2));
                                                     setConcept(prev => prev ? `${prev}, ${item.name}` : item.name);
@@ -622,18 +644,23 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                 Importe a Cobrar (€)
                             </label>
                             <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 value={totalAmount}
                                 onChange={(e) => setTotalAmount(e.target.value)}
+                                onBlur={() => {
+                                    const parsed = parseAmount(totalAmount);
+                                    if (parsed > 0) setTotalAmount(parsed.toFixed(2));
+                                }}
                                 placeholder="0.00"
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xl font-bold outline-none focus:ring-2 focus:ring-blue-100"
                             />
                             {/* Partial payment indicator */}
-                            {isDirectPayment && originalAmount > 0 && parseFloat(totalAmount) > 0 && parseFloat(totalAmount) < originalAmount && (
+                            {isDirectPayment && originalAmount > 0 && parseAmount(totalAmount) > 0 && parseAmount(totalAmount) < originalAmount && (
                                 <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
                                     <p className="text-[10px] font-black text-amber-700 uppercase">Importe Original: {originalAmount.toFixed(2)}€</p>
                                     <p className="text-xs font-black text-red-600">
-                                        Pendiente tras este cobro: {(originalAmount - (parseFloat(totalAmount) || 0)).toFixed(2)}€
+                                        Pendiente tras este cobro: {(originalAmount - (parseAmount(totalAmount) || 0)).toFixed(2)}€
                                     </p>
                                     <p className="text-[10px] text-amber-600 font-medium">La visita quedará en estado "Pago Parcial"</p>
                                     <div className="pt-1">
@@ -644,13 +671,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                             type="text"
                                             value={pendingNotes}
                                             onChange={(e) => setPendingNotes(e.target.value)}
-                                            placeholder={`Ej. Segunda sesión — ${(originalAmount - (parseFloat(totalAmount) || 0)).toFixed(2)}€ pendientes`}
+                                            placeholder={`Ej. Segunda sesión — ${(originalAmount - (parseAmount(totalAmount) || 0)).toFixed(2)}€ pendientes`}
                                             className="w-full bg-white border border-amber-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:ring-2 focus:ring-amber-300 placeholder:text-amber-400"
                                         />
                                     </div>
                                 </div>
                             )}
-                            {isDirectPayment && originalAmount > 0 && parseFloat(totalAmount) >= originalAmount && originalAmount > 0 && (
+                            {isDirectPayment && originalAmount > 0 && parseAmount(totalAmount) >= originalAmount && originalAmount > 0 && (
                                 <p className="text-[10px] text-emerald-600 font-black uppercase mt-1">✓ Cobro total del tratamiento</p>
                             )}
                         </div>
@@ -777,16 +804,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                                         )}
                                     </label>
                                     <input
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
                                         value={walletAmount}
-                                        onChange={(e) => {
+                                        onChange={(e) => setWalletAmount(e.target.value)}
+                                        onBlur={() => {
                                             const maxVal = firstSplitMethod === 'wallet'
                                                 ? Math.min(availableWallet, numericTotal)
                                                 : numericTotal;
-                                            const val = Math.min(parseFloat(e.target.value) || 0, maxVal);
-                                            setWalletAmount(val.toString());
+                                            const val = Math.min(parseAmount(walletAmount) || 0, maxVal);
+                                            setWalletAmount(val > 0 ? val.toFixed(2) : '');
                                         }}
-                                        max={firstSplitMethod === 'wallet' ? Math.min(availableWallet, numericTotal) : numericTotal}
                                         className="w-full bg-white border border-purple-200 rounded-xl p-3 text-lg font-bold text-purple-700 outline-none"
                                     />
                                 </div>
@@ -904,9 +932,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                             isDirectPayment ? (
                                 <>
                                     <Check size={20} />
-                                    {originalAmount > 0 && parseFloat(totalAmount) < originalAmount
-                                        ? `Cobro Parcial ${totalAmount}€`
-                                        : `Cobrar ${totalAmount}€`}
+                                    {originalAmount > 0 && parseAmount(totalAmount) < originalAmount
+                                        ? `Cobro Parcial ${parseAmount(totalAmount).toFixed(2)}€`
+                                        : `Cobrar ${parseAmount(totalAmount).toFixed(2)}€`}
                                 </>
                             ) : (
                                 <>
