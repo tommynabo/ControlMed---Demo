@@ -2438,7 +2438,7 @@ const Agenda: React.FC = () => {
                                                                     }
                                                                     setSelectedBudgetItems(newSelected);
                                                                     setBookingTreatment(newSelected.map((i: any) => i.name + (i.tooth ? ' - Diente ' + i.tooth : '')).join(', '));
-                                                                    setBookingPrice(newSelected.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0));
+                                                                    setBookingPrice(Math.round(newSelected.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0) * 100) / 100);
                                                                     setBookingBudgetItemId(newSelected.length > 0 ? (newSelected[0].id || idx.toString()) : '');
                                                                 }}
                                                             />
@@ -2483,7 +2483,7 @@ const Agenda: React.FC = () => {
                                     </div>
                                     {selectedBudgetItems.length > 0 && (
                                         <div className="mt-2 text-right text-xs font-black text-blue-600">
-                                            Total: {selectedBudgetItems.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0).toFixed(2)}€
+                                            Total: {(Math.round(selectedBudgetItems.reduce((sum: number, i: any) => sum + Number(i.price) * (1 - (Number(i.discount) || 0) / 100) * (Number(i.quantity) || 1), 0) * 100) / 100).toFixed(2)}€
                                         </div>
                                     )}
                                 </div>

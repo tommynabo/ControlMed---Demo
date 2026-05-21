@@ -33,7 +33,17 @@ router.get('/', async (req, res) => {
         if (search) {
             const safe = String(search).replace(/[%_]/g, '\\$&').slice(0, 100);
             if (searchBy === 'historyNumber') {
-                query = query.ilike('historyNumber', `%${safe}%`);
+                // Support typing "530", "HC-530", "HC-0530" — all should find the same patient.
+                // `%safe%` already matches substrings, but we additionally try the exact padded
+                // form (HC-0530) so bare numbers with fewer digits than stored also match.
+                const numericOnly = safe.replace(/^(?:HC-|HCL-)/i, '');
+                const isNumeric = /^\d+$/.test(numericOnly);
+                if (isNumeric) {
+                    const padded = 'HC-' + String(parseInt(numericOnly, 10)).padStart(4, '0');
+                    query = query.or(`historyNumber.ilike.%${safe}%,historyNumber.eq.${padded}`);
+                } else {
+                    query = query.ilike('historyNumber', `%${safe}%`);
+                }
             } else if (searchBy === 'phone') {
                 query = query.ilike('phone', `%${safe}%`);
             } else {

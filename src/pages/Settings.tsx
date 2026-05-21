@@ -125,7 +125,7 @@ const Settings: React.FC = () => {
     const [waStatus, setWaStatus] = useState<{ status: string; qrCode: string | null }>({ status: 'DISCONNECTED', qrCode: null });
     const [waTemplates, setWaTemplates] = useState<any[]>([]);
     const [waLogs, setWaLogs] = useState<any[]>([]);
-    const [waActiveTab, setWaActiveTab] = useState<'dashboard' | 'connection' | 'templates'>('dashboard');
+    const [waActiveTab, setWaActiveTab] = useState<'dashboard' | 'connection' | 'templates' | 'mensajes'>('dashboard');
     const [newWaTemplate, setNewWaTemplate] = useState({ name: '', content: '', triggerType: 'APPOINTMENT_REMINDER', triggerOffsetValue: '12', triggerOffsetUnit: 'h', triggerOffsetDirection: 'before' });
     const [isGeneratingQr, setIsGeneratingQr] = useState(false);
 
@@ -445,6 +445,7 @@ const Settings: React.FC = () => {
                             </div>
                             <div className="flex gap-2">
                                 <button onClick={() => setWaActiveTab('dashboard')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${waActiveTab === 'dashboard' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border'}`}>Dashboard</button>
+                                <button onClick={() => setWaActiveTab('mensajes')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${waActiveTab === 'mensajes' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border'}`}>Mensajes</button>
                                 <button onClick={() => setWaActiveTab('connection')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${waActiveTab === 'connection' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border'}`}>Conexión</button>
                                 <button onClick={() => setWaActiveTab('templates')} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase ${waActiveTab === 'templates' ? 'bg-slate-900 text-white' : 'bg-white text-slate-500 border'}`}>Plantillas</button>
                             </div>
@@ -577,6 +578,76 @@ const Settings: React.FC = () => {
                                 )}
                             </div>
                         )}
+
+                        {waActiveTab === 'mensajes' && (() => {
+                            const exportCSV = () => {
+                                const header = ['Fecha', 'Paciente', 'Teléfono', 'Tipo', 'Estado', 'Mensaje'].join(',');
+                                const rows = waLogs.map(log => [
+                                    new Date(log.sentAt || log.scheduledFor).toLocaleString('es-ES'),
+                                    log.patient?.name || '',
+                                    log.patient?.phone || '',
+                                    log.type === 'APPOINTMENT_REMINDER' ? 'Recordatorio' : log.type === 'BIRTHDAY' ? 'Cumpleaños' : 'Seguimiento',
+                                    log.status,
+                                    `"${(log.content || '').replace(/"/g, '""')}"`
+                                ].join(','));
+                                const csv = [header, ...rows].join('\n');
+                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `whatsapp_mensajes_${new Date().toISOString().split('T')[0]}.csv`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            };
+                            return (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <p className="text-sm font-bold text-slate-500">{waLogs.length} mensajes registrados</p>
+                                        <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold uppercase shadow transition-colors">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                            Exportar CSV
+                                        </button>
+                                    </div>
+                                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-400 whitespace-nowrap">Fecha</th>
+                                                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-400">Paciente</th>
+                                                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-400">Tipo</th>
+                                                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-400">Estado</th>
+                                                        <th className="text-left px-4 py-3 text-[10px] font-black uppercase text-slate-400">Mensaje</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {waLogs.length === 0 && (
+                                                        <tr><td colSpan={5} className="text-center py-10 text-slate-400 text-xs">No hay mensajes registrados.</td></tr>
+                                                    )}
+                                                    {waLogs.map(log => {
+                                                        const statusColor = log.status === 'SENT' ? 'bg-emerald-100 text-emerald-700' : log.status === 'PENDING' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700';
+                                                        const typeLabel = log.type === 'APPOINTMENT_REMINDER' ? 'Recordatorio' : log.type === 'BIRTHDAY' ? 'Cumpleaños' : 'Seguimiento';
+                                                        const typeColor = log.type === 'APPOINTMENT_REMINDER' ? 'bg-blue-50 text-blue-600' : log.type === 'BIRTHDAY' ? 'bg-pink-50 text-pink-600' : 'bg-purple-50 text-purple-600';
+                                                        return (
+                                                            <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                                                                <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{new Date(log.sentAt || log.scheduledFor).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <span className="text-xs font-bold text-slate-800">{log.patient?.name || '—'}</span>
+                                                                    {log.patient?.phone && <div className="text-[10px] text-slate-400">{log.patient.phone}</div>}
+                                                                </td>
+                                                                <td className="px-4 py-3"><span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${typeColor}`}>{typeLabel}</span></td>
+                                                                <td className="px-4 py-3"><span className={`text-[10px] font-black uppercase px-2 py-1 rounded-full ${statusColor}`}>{log.status}</span></td>
+                                                                <td className="px-4 py-3 max-w-sm"><p className="text-xs text-slate-600 line-clamp-2">{log.content}</p></td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {waActiveTab === 'templates' && (
                             <div className="space-y-6">
