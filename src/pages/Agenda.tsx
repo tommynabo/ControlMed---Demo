@@ -80,6 +80,8 @@ const Agenda: React.FC = () => {
     const [bookingBudgetItemId, setBookingBudgetItemId] = useState<string>('');
     const [selectedBudgetItems, setSelectedBudgetItems] = useState<any[]>([]);
     const [toothOverrides, setToothOverrides] = useState<Record<string, string>>({});
+    // Tracks which appointment+budget combo has been auto-populated to avoid overwriting user edits
+    const autoPopulatedBudgetItemsRef = useRef<string | null>(null);
     const [bookingDate, setBookingDate] = useState<string>(formatDateLocal(new Date()));
     const [bookingTime, setBookingTime] = useState<string>('08:00');
 
@@ -199,6 +201,36 @@ const Agenda: React.FC = () => {
             setPatientBudgets([]);
         }
     }, [bookingPatientId]);
+
+    // Re-sync selectedBudgetItems once patientBudgets loads (handles async timing:
+    // handleAppointmentClick runs before the budget fetch resolves)
+    useEffect(() => {
+        if (!selectedAppt || !bookingBudgetId || patientBudgets.length === 0) {
+            if (!selectedAppt || !bookingBudgetId) autoPopulatedBudgetItemsRef.current = null;
+            return;
+        }
+        const key = `${selectedAppt.id}-${bookingBudgetId}`;
+        if (autoPopulatedBudgetItemsRef.current === key) return; // already done for this appointment
+
+        const budget = patientBudgets.find((b: any) => b.id === bookingBudgetId);
+        if (!budget?.items) return;
+
+        const storedIds: string[] = (() => {
+            try {
+                const raw = (selectedAppt as any).budgetItemIds;
+                if (raw) return JSON.parse(raw) as string[];
+            } catch (_) {}
+            return (selectedAppt as any).budgetItemId ? [(selectedAppt as any).budgetItemId as string] : [];
+        })();
+
+        if (storedIds.length === 0) return; // nothing stored yet — let user select fresh
+
+        const selectedItems = budget.items.filter((item: any) => storedIds.includes(item.id));
+        if (selectedItems.length > 0) {
+            setSelectedBudgetItems(selectedItems);
+            autoPopulatedBudgetItemsRef.current = key;
+        }
+    }, [patientBudgets, selectedAppt?.id, bookingBudgetId]);
 
     // 🆕 Load real DB Services catalog for searchable selector
     useEffect(() => {
@@ -690,6 +722,7 @@ const Agenda: React.FC = () => {
         setSelectedDbServices([]);
         setBookingServiceSearch('');
         setShowServiceDropdown(false);
+        autoPopulatedBudgetItemsRef.current = null;
     };
 
     // Multi-treatment handlers
@@ -2802,6 +2835,9 @@ const Agenda: React.FC = () => {
                                                 visitDetails: bookingVisitDetails || null,
                                                 budgetId: bookingBudgetId || null,
                                                 budgetItemId: bookingBudgetItemId || null,
+                                                budgetItemIds: selectedBudgetItems.length > 0
+                                                    ? selectedBudgetItems.map((item: any) => item.id || item._idx)
+                                                    : [],
                                                 status: (selectedAppt as any).status || 'Scheduled',
                                                 isRevision: bookingIsRevision,
                                                 serviceIds: selectedDbServices.length > 0 
