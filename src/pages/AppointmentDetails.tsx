@@ -189,6 +189,21 @@ export const AppointmentDetails: React.FC = () => {
 
     const displayConcept = getTreatmentName(appointment);
 
+    // Resolve individual budget items for this appointment (from budgetItemIds + loaded budgets)
+    const appointmentBudgetItems = useMemo(() => {
+        const rawIds = (appointment as any)?.budgetItemIds;
+        if (!rawIds || !appointment?.budgetId) return [];
+        try {
+            const storedIds: string[] = JSON.parse(rawIds);
+            if (!Array.isArray(storedIds) || storedIds.length === 0) return [];
+            const linkedBudget = budgets.find(b => b.id === appointment.budgetId);
+            if (!linkedBudget?.items?.length) return [];
+            return (linkedBudget.items as any[]).filter(item => storedIds.includes(item.id));
+        } catch (_) {
+            return [];
+        }
+    }, [appointment, budgets]);
+
     const handleDownloadInvoice = async () => {
         if (!invoice) return;
         try {
@@ -667,9 +682,22 @@ export const AppointmentDetails: React.FC = () => {
                         <div className="grid grid-cols-2 gap-6 mb-6">
                             <div className="bg-blue-50 rounded-2xl p-6 border border-blue-100">
                                 <p className="text-xs font-black uppercase text-blue-600 mb-2">QUÉ SE ESTÁ HACIENDO</p>
-                                <p className="text-lg font-black text-slate-900 break-words">
-                                    {displayConcept}
-                                </p>
+                                {appointmentBudgetItems.length > 0 ? (
+                                    <div className="space-y-1.5 mt-1">
+                                        {appointmentBudgetItems.map((item: any, idx: number) => (
+                                            <div key={idx} className="flex items-start gap-2">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5"></span>
+                                                <span className="text-sm font-black text-slate-900">
+                                                    {item.name}{item.tooth ? ` — Diente ${item.tooth}` : ''}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-lg font-black text-slate-900 break-words">
+                                        {displayConcept}
+                                    </p>
+                                )}
                             </div>
 
                             <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100">
@@ -683,6 +711,9 @@ export const AppointmentDetails: React.FC = () => {
                                 <div className="bg-green-50 rounded-2xl p-6 border border-green-100">
                                     <p className="text-xs font-black uppercase text-green-600 mb-2">VINCULADO A PRESUPUESTO</p>
                                     <p className="text-sm font-black text-slate-900">✓ Presupuesto Asociado</p>
+                                    {appointmentBudgetItems.length > 0 && (
+                                        <p className="text-xs text-green-700 mt-1 font-bold">{appointmentBudgetItems.length} concepto{appointmentBudgetItems.length !== 1 ? 's' : ''} asignado{appointmentBudgetItems.length !== 1 ? 's' : ''}</p>
+                                    )}
                                 </div>
                             )}
 
