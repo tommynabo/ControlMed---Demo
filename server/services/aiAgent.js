@@ -15,8 +15,10 @@ function getOpenAI() {
 
 // Supabase client helper
 function getSupabase() {
-    const URL = process.env.SUPABASE_URL || "https://gnnacijqglcqonholpwt.supabase.co";
-    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdubmFjaWpxZ2xjcW9uaG9scHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2ODQ3NjU0NCwiZXhwIjoyMDg0MDUyNTQ0fQ.6qexkezsBpOhvTch_eRsr8lF_mixdp9sfv0ScjUmxp4";
+    const URL = process.env.SUPABASE_URL;
+    const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!URL) throw new Error('Missing environment variable: SUPABASE_URL');
+    if (!KEY) throw new Error('Missing environment variable: SUPABASE_SERVICE_ROLE_KEY');
     return createClient(URL, KEY);
 }
 

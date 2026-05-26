@@ -132,7 +132,11 @@ app.use('/api/reminders', remindersRouter);
 app.use('/api', templatesRouter);
 
 // --- Initialization ---
-whatsappService.initialize();
+if (!process.env.DEMO_RESET_SECRET) {
+  whatsappService.initialize();
+} else {
+  console.log('🧪 Demo mode: WhatsApp desactivado');
+}
 
 // --- Nightly Liquidation Reconciliation (02:30 Europe/Madrid) ----------------
 // Automatically repairs any appointments that were paid but missed a Liquidation
@@ -147,6 +151,13 @@ cron.schedule('30 2 * * *', async () => {
         console.error('[CRON] Reconciliation failed:', e.message);
     }
 }, { timezone: 'Europe/Madrid' });
+
+// --- Demo Reset Endpoint (only active when DEMO_RESET_SECRET is set) ---
+if (process.env.DEMO_RESET_SECRET) {
+  const demoRouter = require('./routes/demo');
+  app.use('/api/demo', demoRouter);
+  console.log('🧪 Demo reset endpoint activo en /api/demo/reset');
+}
 
 // --- Error Handler ---
 app.use(errorHandler);

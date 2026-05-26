@@ -9,6 +9,7 @@ import { useAppContext } from '../context/AppContext';
 import { ROLE_LABELS } from '../config/roles';
 import ChangePasswordModal from '../components/ChangePasswordModal';
 import EditDisplayNameModal from '../components/EditDisplayNameModal';
+import DemoResetButton from '../components/DemoResetButton';
 
 const Layout: React.FC = () => {
     const { currentUser, isAuthenticated, currentUserRole: role, logout, canAccessPage } = useAppContext();
@@ -143,6 +144,11 @@ const Layout: React.FC = () => {
             <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative">
                 {/* Top Header */}
                 <header className="h-16 bg-white/50 backdrop-blur-xl border-b border-slate-200/50 flex items-center justify-between px-8 z-10 sticky top-0">
+                    {import.meta.env.VITE_DEMO_MODE === 'true' && (
+                        <div className="w-full bg-orange-500 text-white text-center text-xs font-bold py-1 tracking-widest uppercase">
+                            ⚠ Entorno de demostración — Los datos son ficticios
+                        </div>
+                    )}
                     <h2 className="text-base font-black text-slate-900 tracking-tight uppercase">
                         {navItems.find(n => n.path === location.pathname)?.label || 'Panel'}
                     </h2>
@@ -171,6 +177,8 @@ const Layout: React.FC = () => {
 
             {/* Edit Display Name Modal */}
             <EditDisplayNameModal isOpen={showEditName} onClose={() => setShowEditName(false)} />
+
+            <DemoResetButton />
         </div>
     );
 };
