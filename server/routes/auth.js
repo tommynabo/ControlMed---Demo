@@ -17,7 +17,8 @@ function isDbConnectivityError(err) {
 }
 
 function canUseDemoBypass() {
-    return process.env.DEMO_BYPASS_LOGIN === 'true' && !!process.env.DEMO_RESET_SECRET;
+    if (!process.env.DEMO_RESET_SECRET) return false;
+    return process.env.DEMO_BYPASS_LOGIN !== 'false';
 }
 
 function tryDemoBypassLogin(email, password) {
@@ -50,6 +51,36 @@ async function findUserViaSupabase(email) {
 
     if (error) throw error;
     return data || null;
+}
+
+function buildDemoBypassResponse() {
+    const demoEmail = process.env.DEMO_LOGIN_EMAIL || 'demo@controlmed.local';
+    const demoPassword = process.env.DEMO_LOGIN_PASSWORD || 'demo1234';
+    const demoName = process.env.DEMO_LOGIN_NAME || 'Demo Admin';
+    const demoRole = process.env.DEMO_LOGIN_ROLE || 'admin';
+    const demoId = process.env.DEMO_LOGIN_USER_ID || 'demo-bypass-user';
+
+    const JWT_SECRET = process.env.JWT_SECRET;
+    const token = jwt.sign(
+        { sub: demoId, role: demoRole },
+        JWT_SECRET,
+        { expiresIn: '8h', issuer: 'crm-medico' }
+    );
+
+    return {
+        token,
+        user: {
+            id: demoId,
+            email: demoEmail,
+            name: demoName,
+            role: demoRole,
+            doctorId: null,
+        },
+        credentials: {
+            email: demoEmail,
+            password: demoPassword,
+        }
+    };
 }
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -155,6 +186,22 @@ router.post('/login', async (req, res) => {
     } catch (e) {
         console.error('🔥 Critical Login Error:', e);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// ─── Demo Login (no DB required) ─────────────────────────────────────────────
+router.post('/demo-login', async (_req, res) => {
+    try {
+        if (!canUseDemoBypass()) {
+            return res.status(403).json({ error: 'Demo login desactivado' });
+        }
+
+        const demo = buildDemoBypassResponse();
+        console.warn('⚠️ Demo login endpoint used.');
+        return res.json({ ...demo.user, token: demo.token, demoBypass: true, credentials: demo.credentials });
+    } catch (e) {
+        console.error('Error in demo-login:', e);
+        return res.status(500).json({ error: e.message });
     }
 });
 

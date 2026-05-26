@@ -87,7 +87,7 @@ app.use('/api/sign', signRouter); // Public — no auth required for tablet sign
 // --- Auth Middleware ---
 const authMiddleware = (req, res, next) => {
     // Cuando usamos app.use('/api', ...), req.path pierde el prefijo '/api'
-    const PUBLIC_PATHS = ['/auth/login', '/health', '/gmail/callback'];
+    const PUBLIC_PATHS = ['/auth/login', '/auth/demo-login', '/health', '/gmail/callback'];
     if (PUBLIC_PATHS.includes(req.path) || req.path.startsWith('/cron/')) return next();
 
     const authHeader = req.headers['authorization'];
