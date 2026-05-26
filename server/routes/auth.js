@@ -7,6 +7,52 @@ const { prisma, getSupabase } = require('../lib/db');
 
 const router = express.Router();
 
+function isDbConnectivityError(err) {
+    const msg = String(err?.message || err || '').toLowerCase();
+    return msg.includes("can't reach database server")
+        || msg.includes('tenant or user not found')
+        || msg.includes('tenant/user')
+        || msg.includes('enotfound')
+        || msg.includes('authentication failed against database server');
+}
+
+function canUseDemoBypass() {
+    return process.env.DEMO_BYPASS_LOGIN === 'true' && !!process.env.DEMO_RESET_SECRET;
+}
+
+function tryDemoBypassLogin(email, password) {
+    if (!canUseDemoBypass()) return null;
+
+    const demoEmail = process.env.DEMO_LOGIN_EMAIL;
+    const demoPassword = process.env.DEMO_LOGIN_PASSWORD;
+    const demoName = process.env.DEMO_LOGIN_NAME || 'Demo Admin';
+    const demoRole = process.env.DEMO_LOGIN_ROLE || 'admin';
+
+    if (!demoEmail || !demoPassword) return null;
+    if (email !== demoEmail || password !== demoPassword) return null;
+
+    return {
+        id: process.env.DEMO_LOGIN_USER_ID || 'demo-bypass-user',
+        email: demoEmail,
+        name: demoName,
+        role: demoRole,
+        doctorId: null,
+    };
+}
+
+async function findUserViaSupabase(email) {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+        .from('User')
+        .select('*')
+        .ilike('email', email)
+        .limit(1)
+        .maybeSingle();
+
+    if (error) throw error;
+    return data || null;
+}
+
 // ─── Login ────────────────────────────────────────────────────────────────────
 // Note: loginLimiter is applied at the router mount point in index.js
 router.post('/login', async (req, res) => {
@@ -15,9 +61,42 @@ router.post('/login', async (req, res) => {
     try {
         console.log(`🔐 Login attempt: ${email}`);
 
-        const user = await prisma.user.findFirst({
-            where: { email: { equals: email, mode: 'insensitive' } }
-        });
+        let user;
+        let usedSupabaseFallback = false;
+        try {
+            user = await prisma.user.findFirst({
+                where: { email: { equals: email, mode: 'insensitive' } }
+            });
+        } catch (dbErr) {
+            if (!isDbConnectivityError(dbErr)) throw dbErr;
+
+            console.warn('⚠️ Prisma DB unreachable in login, trying Supabase REST fallback...');
+            try {
+                user = await findUserViaSupabase(email);
+                usedSupabaseFallback = true;
+            } catch (fallbackErr) {
+                console.error('❌ Supabase fallback login failed:', fallbackErr?.message || fallbackErr);
+            }
+
+            if (user) {
+                console.warn('✅ Login fallback via Supabase REST is active.');
+            }
+
+            if (!user) {
+                const demoUser = tryDemoBypassLogin(email, password);
+                if (!demoUser) throw dbErr;
+
+                const JWT_SECRET = process.env.JWT_SECRET;
+                const token = jwt.sign(
+                    { sub: demoUser.id, role: demoUser.role },
+                    JWT_SECRET,
+                    { expiresIn: '8h', issuer: 'crm-medico' }
+                );
+
+                console.warn('⚠️ Demo bypass login enabled due to DB connectivity issue.');
+                return res.json({ ...demoUser, token, demoBypass: true });
+            }
+        }
 
         if (!user) {
             // Constant-time response to prevent user enumeration
@@ -34,7 +113,12 @@ router.post('/login', async (req, res) => {
             passwordValid = user.password === password;
             if (passwordValid) {
                 const newHash = await bcrypt.hash(password, 12);
-                await prisma.user.update({ where: { id: user.id }, data: { password: newHash } });
+                if (usedSupabaseFallback) {
+                    const supabase = getSupabase();
+                    await supabase.from('User').update({ password: newHash }).eq('id', user.id);
+                } else {
+                    await prisma.user.update({ where: { id: user.id }, data: { password: newHash } });
+                }
                 console.log(`🔒 Password auto-upgraded to bcrypt for: ${user.email}`);
             }
         }
