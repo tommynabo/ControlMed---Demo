@@ -23,12 +23,11 @@ function canUseDemoBypass() {
 function tryDemoBypassLogin(email, password) {
     if (!canUseDemoBypass()) return null;
 
-    const demoEmail = process.env.DEMO_LOGIN_EMAIL;
-    const demoPassword = process.env.DEMO_LOGIN_PASSWORD;
+    const demoEmail = process.env.DEMO_LOGIN_EMAIL || 'demo@controlmed.local';
+    const demoPassword = process.env.DEMO_LOGIN_PASSWORD || 'demo1234';
     const demoName = process.env.DEMO_LOGIN_NAME || 'Demo Admin';
     const demoRole = process.env.DEMO_LOGIN_ROLE || 'admin';
 
-    if (!demoEmail || !demoPassword) return null;
     if (email !== demoEmail || password !== demoPassword) return null;
 
     return {
@@ -63,38 +62,56 @@ router.post('/login', async (req, res) => {
 
         let user;
         let usedSupabaseFallback = false;
-        try {
-            user = await prisma.user.findFirst({
-                where: { email: { equals: email, mode: 'insensitive' } }
-            });
-        } catch (dbErr) {
-            if (!isDbConnectivityError(dbErr)) throw dbErr;
-
-            console.warn('⚠️ Prisma DB unreachable in login, trying Supabase REST fallback...');
+        if (process.env.DEMO_RESET_SECRET) {
+            // In demo deployments we prioritize Supabase REST to avoid hard dependency
+            // on direct Postgres connectivity for login.
             try {
                 user = await findUserViaSupabase(email);
                 usedSupabaseFallback = true;
-            } catch (fallbackErr) {
-                console.error('❌ Supabase fallback login failed:', fallbackErr?.message || fallbackErr);
+            } catch (supabaseErr) {
+                console.warn('⚠️ Demo login via Supabase REST failed, trying Prisma:', supabaseErr?.message || supabaseErr);
             }
+        }
 
-            if (user) {
-                console.warn('✅ Login fallback via Supabase REST is active.');
-            }
+        if (!user) {
+            try {
+                user = await prisma.user.findFirst({
+                    where: { email: { equals: email, mode: 'insensitive' } }
+                });
+            } catch (dbErr) {
+                if (!isDbConnectivityError(dbErr)) throw dbErr;
 
-            if (!user) {
-                const demoUser = tryDemoBypassLogin(email, password);
-                if (!demoUser) throw dbErr;
+                console.warn('⚠️ Prisma DB unreachable in login, trying Supabase REST fallback...');
+                try {
+                    user = await findUserViaSupabase(email);
+                    usedSupabaseFallback = true;
+                } catch (fallbackErr) {
+                    console.error('❌ Supabase fallback login failed:', fallbackErr?.message || fallbackErr);
+                }
 
-                const JWT_SECRET = process.env.JWT_SECRET;
-                const token = jwt.sign(
-                    { sub: demoUser.id, role: demoUser.role },
-                    JWT_SECRET,
-                    { expiresIn: '8h', issuer: 'crm-medico' }
-                );
+                if (user) {
+                    console.warn('✅ Login fallback via Supabase REST is active.');
+                }
 
-                console.warn('⚠️ Demo bypass login enabled due to DB connectivity issue.');
-                return res.json({ ...demoUser, token, demoBypass: true });
+                if (!user) {
+                    const demoUser = tryDemoBypassLogin(email, password);
+                    if (!demoUser) {
+                        return res.status(503).json({
+                            error: 'Login temporalmente no disponible por conexión de base de datos',
+                            hint: 'Activa DEMO_BYPASS_LOGIN=true o usa credenciales demo por defecto en modo demo'
+                        });
+                    }
+
+                    const JWT_SECRET = process.env.JWT_SECRET;
+                    const token = jwt.sign(
+                        { sub: demoUser.id, role: demoUser.role },
+                        JWT_SECRET,
+                        { expiresIn: '8h', issuer: 'crm-medico' }
+                    );
+
+                    console.warn('⚠️ Demo bypass login enabled due to DB connectivity issue.');
+                    return res.json({ ...demoUser, token, demoBypass: true });
+                }
             }
         }
 
