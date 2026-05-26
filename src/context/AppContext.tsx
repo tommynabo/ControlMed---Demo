@@ -5,6 +5,14 @@ import { supabase } from '../services/supabase';
 import { api, setApiAuthToken } from '../services/api';
 import { UserRole, canAccessPage, canAccessRoute, hasPermission } from '../config/roles';
 
+const normalizeRole = (role: unknown): UserRole => {
+    const value = String(role || '').trim().toUpperCase();
+    if (value === 'ADMIN' || value === 'RECEPTION' || value === 'AUXILIAR' || value === 'DOCTOR') {
+        return value as UserRole;
+    }
+    return 'ADMIN';
+};
+
 // === TabGuard: Session Storage Keys ===
 const SESSION_KEY = 'crm_session';
 const HEARTBEAT_KEY = 'crm_heartbeat';
@@ -28,6 +36,7 @@ const restoreSession = (): any | null => {
         if (!raw) return null;
         const user = JSON.parse(raw);
         if (user && user.role) {
+            user.role = normalizeRole(user.role);
             console.log('[TabGuard] ✅ Sesión restaurada desde sessionStorage:', user.name);
             return user;
         }
@@ -206,13 +215,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }, [isAuthenticated, queryClient]);
 
     const login = (user: any) => {
-        setCurrentUser(user);
-        setRole(user.role);
+        const normalizedUser = { ...user, role: normalizeRole(user?.role) };
+        setCurrentUser(normalizedUser);
+        setRole(normalizedUser.role);
         setIsAuthenticated(true);
         // Attach JWT to all subsequent API requests
-        if (user?.token) setApiAuthToken(user.token);
+        if (normalizedUser?.token) setApiAuthToken(normalizedUser.token);
         // === TabGuard: Persist session ===
-        persistSession(user);
+        persistSession(normalizedUser);
     };
 
     const logout = () => {

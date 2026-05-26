@@ -7,6 +7,12 @@ const { prisma, getSupabase } = require('../lib/db');
 
 const router = express.Router();
 
+function normalizeRole(role) {
+    const value = String(role || '').trim().toUpperCase();
+    if (['ADMIN', 'RECEPTION', 'AUXILIAR', 'DOCTOR'].includes(value)) return value;
+    return 'ADMIN';
+}
+
 function isDbConnectivityError(err) {
     const msg = String(err?.message || err || '').toLowerCase();
     return msg.includes("can't reach database server")
@@ -27,7 +33,7 @@ function tryDemoBypassLogin(email, password) {
     const demoEmail = process.env.DEMO_LOGIN_EMAIL || 'demo@controlmed.local';
     const demoPassword = process.env.DEMO_LOGIN_PASSWORD || 'demo1234';
     const demoName = process.env.DEMO_LOGIN_NAME || 'Demo Admin';
-    const demoRole = process.env.DEMO_LOGIN_ROLE || 'admin';
+    const demoRole = normalizeRole(process.env.DEMO_LOGIN_ROLE || 'ADMIN');
 
     if (email !== demoEmail || password !== demoPassword) return null;
 
@@ -57,7 +63,7 @@ function buildDemoBypassResponse() {
     const demoEmail = process.env.DEMO_LOGIN_EMAIL || 'demo@controlmed.local';
     const demoPassword = process.env.DEMO_LOGIN_PASSWORD || 'demo1234';
     const demoName = process.env.DEMO_LOGIN_NAME || 'Demo Admin';
-    const demoRole = process.env.DEMO_LOGIN_ROLE || 'admin';
+    const demoRole = normalizeRole(process.env.DEMO_LOGIN_ROLE || 'ADMIN');
     const demoId = process.env.DEMO_LOGIN_USER_ID || 'demo-bypass-user';
 
     const JWT_SECRET = process.env.JWT_SECRET;
@@ -102,6 +108,10 @@ router.post('/login', async (req, res) => {
             } catch (supabaseErr) {
                 console.warn('⚠️ Demo login via Supabase REST failed, trying Prisma:', supabaseErr?.message || supabaseErr);
             }
+        }
+
+        if (user) {
+            user = { ...user, role: normalizeRole(user.role) };
         }
 
         if (!user) {
