@@ -126,22 +126,36 @@ router.post('/login', async (req, res) => {
 
                 if (!user) {
                     const demoUser = tryDemoBypassLogin(email, password);
-                    if (!demoUser) {
+                    if (demoUser) {
+                        const JWT_SECRET = process.env.JWT_SECRET;
+                        const token = jwt.sign(
+                            { sub: demoUser.id, role: demoUser.role },
+                            JWT_SECRET,
+                            { expiresIn: '8h', issuer: 'crm-medico' }
+                        );
+
+                        console.warn('⚠️ Demo bypass login enabled due to DB connectivity issue.');
+                        return res.json({ ...demoUser, token, demoBypass: true });
+                    }
+
+                    if (canUseDemoBypass()) {
+                        const forcedDemo = buildDemoBypassResponse();
+                        console.warn('⚠️ Forced demo login issued because DB is unavailable.');
+                        return res.json({
+                            ...forcedDemo.user,
+                            token: forcedDemo.token,
+                            demoBypass: true,
+                            forcedDemoBypass: true,
+                            credentials: forcedDemo.credentials,
+                        });
+                    }
+
+                    {
                         return res.status(503).json({
                             error: 'Login temporalmente no disponible por conexión de base de datos',
                             hint: 'Activa DEMO_BYPASS_LOGIN=true o usa credenciales demo por defecto en modo demo'
                         });
                     }
-
-                    const JWT_SECRET = process.env.JWT_SECRET;
-                    const token = jwt.sign(
-                        { sub: demoUser.id, role: demoUser.role },
-                        JWT_SECRET,
-                        { expiresIn: '8h', issuer: 'crm-medico' }
-                    );
-
-                    console.warn('⚠️ Demo bypass login enabled due to DB connectivity issue.');
-                    return res.json({ ...demoUser, token, demoBypass: true });
                 }
             }
         }
